@@ -123,11 +123,11 @@ impl ClientResponse {
                         }
                         Statement::Commit { chain } => {
                             self.send_one_packet(handler, conn_info).await?;
-                            self.reset_conn_db_and_autocommit(conn_info).await?;
+                            self.reset_conn_db_and_autocommit(handler, conn_info)?;
                             conn_info.reset_cached().await?;
                         }
                         Statement::Insert { table_name, columns, source } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info).await{
+                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info){
                                 self.send_error_packet(handler, &e.to_string()).await?;
                                 return Ok(())
                             };
@@ -135,7 +135,7 @@ impl ClientResponse {
                             self.check_auto_commit_set(handler, conn_info).await?;
                         }
                         Statement::Delete { table_name, selection } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info).await{
+                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info){
                                 self.send_error_packet(handler, &e.to_string()).await?;
                                 return Ok(())
                             };
@@ -143,7 +143,7 @@ impl ClientResponse {
                             self.check_auto_commit_set(handler, conn_info).await?;
                         }
                         Statement::Update { table_name, assignments, selection } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info).await{
+                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info){
                                 self.send_error_packet(handler, &e.to_string()).await?;
                                 return Ok(())
                             };
@@ -152,11 +152,11 @@ impl ClientResponse {
                         }
                         Statement::Rollback { chain } => {
                             self.send_one_packet(handler, conn_info).await?;
-                            self.reset_conn_db_and_autocommit(conn_info).await?;
+                            self.reset_conn_db_and_autocommit(handler, conn_info)?;
                             conn_info.reset_cached().await?;
                         }
                         Statement::StartTransaction { modes } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info).await{
+                            if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info){
                                 self.send_error_packet(handler, &e.to_string()).await?;
                                 return Ok(())
                             };
@@ -211,19 +211,19 @@ impl ClientResponse {
 
     /// 处理查询的连接
     async fn exec_query(&self, handler: &mut Handler, conn_info: &mut MysqlConnectionInfo) -> Result<()> {
-        if let Err(e) = self.set_conn_db_and_autocommit(handler, conn_info).await{
+        if let Err(e) = self.set_conn_db_for_query(handler, conn_info){
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(())
         };
         let packet = self.packet_my_value();
-        let (buf, header) = conn_info.send_packet(&packet).await?;
+        let (buf, header) = conn_info.send_packet(&packet)?;
         self.send_mysql_response_packet(handler, &buf, &header).await?;
         let mut eof_num = 0;
         'b: loop {
             if eof_num > 1{
                 break 'b;
             }
-            let (buf, mut header) = conn_info.get_packet_from_stream().await?;
+            let (buf, mut header) = conn_info.get_packet_from_stream()?;
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 break 'b;
@@ -237,7 +237,7 @@ impl ClientResponse {
 
         }
         if conn_info.cached == "".to_string() {
-            self.reset_conn_db_and_autocommit(conn_info).await?;
+            self.reset_conn_db_and_autocommit(handler, conn_info)?;
         }
         Ok(())
     }
@@ -275,19 +275,19 @@ impl ClientResponse {
 
     /// 用于非事务性的操作
     async fn no_traction(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()> {
-        if let Err(e) = self.set_conn_db_and_autocommit(handler, conn).await{
+        if let Err(e) = self.set_conn_db_and_autocommit(handler, conn){
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(())
         };
         self.send_one_packet(handler, conn).await?;
-        self.reset_conn_db_and_autocommit(conn).await?;
+        self.reset_conn_db_and_autocommit(handler, conn)?;
         Ok(())
     }
 
     /// 发送只回复ok/error的数据包
     async fn send_one_packet(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
         let packet = self.packet_my_value();
-        let (buf, header) = conn.send_packet(&packet).await?;
+        let (buf, header) = conn.send_packet(&packet)?;
         self.send_mysql_response_packet(handler, &buf, &header).await?;
         //self.check_eof(handler, conn).await?;
         Ok(())
@@ -296,7 +296,7 @@ impl ClientResponse {
     /// 检查ok包是否已eof结尾
     async fn check_eof(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()> {
         if handler.client_flags & CLIENT_SESSION_TRACK as i32 <= 0 {
-            let (buf, header) = conn.get_packet_from_stream().await?;
+            let (buf, header) = conn.get_packet_from_stream()?;
             self.send_mysql_response_packet(handler, &buf, &header).await?;
         }
         Ok(())
@@ -305,7 +305,7 @@ impl ClientResponse {
     /// 用于检查是否为自动提交， 判断是否缓存线程
     async fn check_auto_commit_set(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
         if handler.auto_commit{
-            self.reset_conn_db_and_autocommit(conn).await?;
+            self.reset_conn_db_and_autocommit(handler, conn)?;
         }else {
             conn.set_cached(&handler.hand_key).await?;
         }
@@ -336,8 +336,22 @@ impl ClientResponse {
         Ok(())
     }
 
+    /// 判断并初始化默认库，只针对查询/show语句
+    fn set_conn_db_for_query(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
+        if conn.cached != String::from(""){
+            return Ok(())
+        }
+        if let Some(db) = &handler.db{
+            if db != &String::from("information_schema"){
+                self.__set_default_db(db, conn)?;
+            }
+        }
+        return Ok(())
+
+    }
+
     /// 初始化连接状态
-    async fn set_conn_db_and_autocommit(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
+    fn set_conn_db_and_autocommit(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
         if conn.cached != String::from(""){
             return Ok(())
         }
@@ -345,55 +359,58 @@ impl ClientResponse {
         packet.push(3 as u8);
         if let Some(db) = &handler.db{
             if handler.auto_commit{
-                self.__set_autocommit(1, conn).await?;
+                self.__set_autocommit(1, conn)?;
             }
-            self.__set_default_db(db, conn).await?;
+            if db != &String::from("information_schema"){
+                self.__set_default_db(db, conn)?;
+            }
         }else {
             if handler.auto_commit{
-                self.__set_autocommit(1, conn).await?;
+                self.__set_autocommit(1, conn)?;
             }
         }
         Ok(())
     }
 
-    async fn __set_default_db(&self, db: &String, conn: &mut MysqlConnectionInfo) -> Result<()> {
+    fn __set_default_db(&self, db: &String, conn: &mut MysqlConnectionInfo) -> Result<()> {
         let mut packet = vec![];
         packet.push(3 as u8);
         let sql = format!("use {};", db.clone());
         packet.extend(sql.as_bytes());
-        self.__set_packet_send(&packet, conn).await?;
+        self.__set_packet_send(&packet, conn)?;
         Ok(())
     }
 
-    async fn __set_autocommit(&self, autocommit: u8, conn: &mut MysqlConnectionInfo) -> Result<()> {
+    fn __set_autocommit(&self, autocommit: u8, conn: &mut MysqlConnectionInfo) -> Result<()> {
         let mut packet = vec![];
         packet.push(3 as u8);
         let sql = format!("set autocommit={};", autocommit);
         packet.extend(sql.as_bytes());
-        self.__set_packet_send(&packet, conn).await?;
+        self.__set_packet_send(&packet, conn)?;
         Ok(())
     }
 
-    async fn __set_packet_send(&self, packet: &Vec<u8>, conn: &mut MysqlConnectionInfo) -> Result<()>{
+    fn __set_packet_send(&self, packet: &Vec<u8>, conn: &mut MysqlConnectionInfo) -> Result<()>{
         let mut packet_full = vec![];
         packet_full.extend(pack_header(&packet, 0));
         packet_full.extend(packet);
-        let (buf, header) = conn.send_packet(&packet_full).await?;
-        self.check_packet_is(&buf).await?;
+        let (buf, header) = conn.send_packet(&packet_full)?;
+
+        conn.check_packet_is(&buf)?;
         Ok(())
     }
 
     /// 恢复连接为初始化状态
-    async fn reset_conn_db_and_autocommit(&self, conn: &mut MysqlConnectionInfo) -> Result<()>{
-        self.__set_autocommit(0, conn).await?;
-        self.__set_default_db(&String::from("information_schema"), conn).await?;
-        Ok(())
-    }
-
-    async fn check_packet_is(&self, buf: &Vec<u8>) -> Result<()>{
-        if buf[0] == 0xff {
-            let error = readvalue::read_string_value(&buf[3..]);
-            return Box::new(Err(error)).unwrap();
+    fn reset_conn_db_and_autocommit(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
+        //如果当前连接为自动提交则初始化设置，默认是不自动提交
+        if handler.auto_commit{
+            self.__set_autocommit(0, conn)?;
+        }
+        //如果当前连接设置的db不为information_schema才初始化db信息
+        if let Some(db) = &handler.db{
+            if db != &String::from("information_schema"){
+                self.__set_default_db(&String::from("information_schema"), conn)?;
+            }
         }
         Ok(())
     }

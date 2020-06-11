@@ -245,9 +245,9 @@ impl MysqlConnectionInfo{
     }
 
     /// send packet and return response packet
-    pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
+    pub fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         self.conn.write_all(packet)?;
-        let (buf, header) = self.get_packet_from_stream().await?;
+        let (buf, header) = self.get_packet_from_stream()?;
         Ok((buf, header))
     }
 
@@ -304,18 +304,18 @@ impl MysqlConnectionInfo{
     /// read packet from socket
     ///
     /// if payload = 0xffffff： this packet more than the 64MB
-    pub async fn get_packet_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
-        let (mut buf,header) = self.get_from_stream().await?;
+    pub fn get_packet_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
+        let (mut buf,header) = self.get_from_stream()?;
         while header.payload == 0xffffff{
             debug(header.payload);
-            let (buf_tmp,_) = self.get_from_stream().await?;
+            let (buf_tmp,_) = self.get_from_stream()?;
             buf.extend(buf_tmp);
         }
         Ok((buf, header))
     }
 
     /// read on packet from socket
-    async fn get_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
+    fn get_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
         let mut header_buf = vec![0 as u8; 4];
         let mut header: PacketHeader = PacketHeader { payload: 0, seq_id: 0 };
         loop {
@@ -357,7 +357,7 @@ impl MysqlConnectionInfo{
         Ok(())
     }
 
-    fn check_packet_is(&self, buf: &Vec<u8>) -> Result<()>{
+    pub fn check_packet_is(&self, buf: &Vec<u8>) -> Result<()>{
         if buf[0] == 0xff {
             let error = readvalue::read_string_value(&buf[3..]);
             return Box::new(Err(error)).unwrap();
