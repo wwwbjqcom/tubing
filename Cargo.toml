@@ -1,0 +1,30 @@
+[package]
+name = "MysqlBus"
+version = "0.1.0"
+authors = ["manito <wwwbjqcom@127.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sqlparser = "0.5"
+rand = "0.7.3"
+tokio-util = {version = "0.3", features = ["full"]}
+serde = { version = "1.0.100", features = ["derive"] }
+serde_json = "1.0.40"
+async-stream = "0.2.1"
+atoi = "0.3.2"
+bytes = "0.5.4"
+structopt = "0.3.14"
+tokio = { version = "0.2.20", features = ["full"] }
+tracing = "0.1.13"
+tracing-futures = { version = "0.2.3", features = ["tokio"] }
+tracing-subscriber = "0.2.2"
+mysql_common = "0.18"
+byteorder="1"
+sha1="0.6.0"
+sha2="0.8.0"
+
+
+[MysqlBus.release]
+debug= true
