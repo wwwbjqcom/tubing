@@ -450,9 +450,11 @@ impl ClientResponse {
             if let Some(db) = &handler.db{
                 if db != &my_tmp{
                     self.__set_default_db(db, conn_info)?;
-                    handler.db = Some(my_tmp);
                 }
+            }else {
+                self.__set_default_db(&my_tmp, conn_info)?;
             }
+            handler.db = Some(my_tmp);
             self.send_ok_packet(handler).await?;
             return Ok(true)
         }
