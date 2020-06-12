@@ -24,6 +24,7 @@ mysql_common = "0.18"
 byteorder="1"
 sha1="0.6.0"
 sha2="0.8.0"
+chrono="0.4.11"
 
 
 [MysqlBus.release]

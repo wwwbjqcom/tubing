@@ -19,6 +19,8 @@ use std::io::{Write, Read};
 use tracing::field::debug;
 use std::ops::DerefMut;
 use crate::mysql::connection::response::pack_header;
+use chrono::prelude::*;
+use chrono;
 
 /// 连接池管理
 ///
@@ -217,13 +219,33 @@ impl ConnectionsPool{
 pub struct MysqlConnectionInfo {
     pub conn: TcpStream,
     pub cached: String,             //记录使用该连接的线程hash，用于不自动提交的update/insert/delete
+    pub last_time: usize,          //记录该mysql连接最后执行命令的时间，用于计算空闲时间，如果没有设置缓存标签在达到200ms空闲时将放回连接池
+    pub is_transaction: bool,        //记录是否还有事务存在
 }
 impl MysqlConnectionInfo{
     pub fn new(conn: MysqlConnection) -> MysqlConnectionInfo{
         MysqlConnectionInfo{
             conn: conn.conn,
-            cached: "".to_string()
+            cached: "".to_string(),
+            last_time: 0,
+            is_transaction: false
         }
+    }
+
+    pub fn set_last_time(&mut self) {
+        let dt = Local::now();
+        let last_time = dt.timestamp_millis() as usize;
+        self.last_time = last_time;
+    }
+
+    /// 检查空闲时间，超过200ms
+    pub fn check_sleep(&mut self) -> bool {
+        let dt = Local::now();
+        let now_time = dt.timestamp_millis() as usize;
+        if now_time - self.last_time > 200 && !self.is_transaction {
+            return true
+        }
+        false
     }
 
     pub fn hash_cache(&self, key: &String) -> bool{
@@ -234,8 +256,20 @@ impl MysqlConnectionInfo{
         }
     }
 
+    pub async fn set_is_transaction(&mut self) -> Result<()>{
+        self.is_transaction = true;
+        Ok(())
+    }
+
+    pub async fn reset_is_transaction(&mut self) -> Result<()>{
+        self.is_transaction = false;
+        Ok(())
+    }
+
     pub async fn set_cached(&mut self, key: &String) -> Result<()> {
-        self.cached = key.clone();
+        if key != &self.cached{
+            self.cached = key.clone();
+        }
         Ok(())
     }
 
@@ -248,6 +282,7 @@ impl MysqlConnectionInfo{
     pub fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         self.conn.write_all(packet)?;
         let (buf, header) = self.get_packet_from_stream()?;
+        self.set_last_time();
         Ok((buf, header))
     }
 

@@ -8,6 +8,7 @@ dependencies = [
  "atoi",
  "byteorder",
  "bytes 0.5.4",
+ "chrono",
  "mysql_common",
  "rand",
  "serde",
