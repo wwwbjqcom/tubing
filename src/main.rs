@@ -7,10 +7,24 @@ use tokio::net::TcpListener;
 use tokio::signal;
 use std::sync::Arc;
 use std::ops::DerefMut;
+use std::thread;
+use std::fmt;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+
+#[derive(Debug)]
+pub struct MyError(String);
+
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "There is an error: {}", self.0)
+    }
+}
+
+impl std::error::Error for MyError {}
 
 pub const DEFAULT_PORT: &str = "3306";
 pub const DEFAULT_USER: &str = "root";
@@ -72,9 +86,13 @@ async fn main() -> Result<()> {
 
     let mysql_pool = mysql::pool::ConnectionsPool::new(&config)?;
 
+//    //节点状态检查线程
+//    let mut a = mysql_pool.clone();
+//    tokio::spawn(async move{
+//        return a.pool_check_maintain(signal::ctrl_c()).await;
+//    });
     let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     let config_arc = Arc::new(config);
-
     server::run(listener, config_arc,  mysql_pool, signal::ctrl_c()).await
 
 //    use sqlparser::dialect::GenericDialect;

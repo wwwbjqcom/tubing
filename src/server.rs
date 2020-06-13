@@ -14,7 +14,7 @@ use crate::{Config, Result};
 use crate::dbengine;
 use crate::dbengine::client::ClientResponse;
 use crate::dbengine::server::HandShake;
-mod shutdown;
+pub mod shutdown;
 mod connection;
 use connection::Connection;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -27,7 +27,17 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
+    let (notify_shutdown_t, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+    let (shutdown_complete_tx_t, shutdown_complete_rx_t) = mpsc::channel(1);
+
+    let mut pool_maintain = ThreadPoolMaintain{
+        pool: mysql_pool.clone(),
+        notify_shutdown_t,
+        shutdown_complete_rx_t,
+        shutdown_complete_tx_t
+    };
+
 
     // Initialize the listener state
     let mut server = Listener {
@@ -39,7 +49,6 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
         shutdown_complete_tx,
         shutdown_complete_rx,
     };
-
     // Concurrently run the server and listen for the `shutdown` signal. The
     // server task runs until an error is encountered, so under normal
     // circumstances, this `select!` statement runs until the `shutdown` signal
@@ -71,6 +80,14 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
                 error!(cause = %err, "failed to accept");
             }
         }
+
+        a = pool_maintain.run() => {
+            if let Err(err) = a {
+                error!("thread pool maintain faild");
+            }
+
+        }
+
         _ = shutdown => {
             // The shutdown signal has been received.
             info!("shutting down");
@@ -86,15 +103,74 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
         ..
     } = server;
 
-    drop(shutdown_complete_tx);
+    let ThreadPoolMaintain {
+        mut shutdown_complete_rx_t,
+        shutdown_complete_tx_t,
+        ..
+    } = pool_maintain;
 
+    drop(shutdown_complete_tx);
+    drop(shutdown_complete_tx_t);
     // Wait for all active connections to finish processing. As the `Sender`
     // handle held by the listener has been dropped above, the only remaining
     // `Sender` instances are held by connection handler tasks. When those drop,
     // the `mpsc` channel will close and `recv()` will return `None`.
     let _ = shutdown_complete_rx.recv().await;
-
+    let _ = shutdown_complete_rx_t.recv().await;
     Ok(())
+}
+
+
+struct ThreadPoolMaintain{
+    /// Mysql thread pool
+    pool: ConnectionsPool,
+
+    /// Broadcasts a shutdown signal to all active connections.
+    ///
+    /// The initial `shutdown` trigger is provided by the `run` caller. The
+    /// server is responsible for gracefully shutting down active connections.
+    /// When a connection task is spawned, it is passed a broadcast receiver
+    /// handle. When a graceful shutdown is initiated, a `()` value is sent via
+    /// the broadcast::Sender. Each active connection receives it, reaches a
+    /// safe terminal state, and completes the task.
+    notify_shutdown_t: broadcast::Sender<()>,
+
+    /// Used as part of the graceful shutdown process to wait for client
+    /// connections to complete processing.
+    ///
+    /// Tokio channels are closed once all `Sender` handles go out of scope.
+    /// When a channel is closed, the receiver receives `None`. This is
+    /// leveraged to detect all connection handlers completing. When a
+    /// connection handler is initialized, it is assigned a clone of
+    /// `shutdown_complete_tx`. When the listener shuts down, it drops the
+    /// sender held by this `shutdown_complete_tx` field. Once all handler tasks
+    /// complete, all clones of the `Sender` are also dropped. This results in
+    /// `shutdown_complete_rx.recv()` completing with `None`. At this point, it
+    /// is safe to exit the server process.
+    shutdown_complete_rx_t: mpsc::Receiver<()>,
+    shutdown_complete_tx_t: mpsc::Sender<()>,
+}
+
+impl ThreadPoolMaintain{
+    async fn run(&mut self) -> Result<()> {
+//        let mut shutdown = shutdown::Shutdown::new(self.notify_shutdown_t.subscribe());
+//        while !shutdown.is_shutdown(){
+//            println!("abc");
+//            tokio::select! {
+//                _ = self.pool.check_health() => {
+//                    error!("thread pool maintain faild");
+//                },
+//                _ = shutdown.recv() => {
+//                    // If a shutdown signal is received, return from `run`.
+//                    // This will result in the task terminating.
+//                    return Ok(());
+//                }
+//            };
+//        }
+        self.pool.check_health().await?;
+
+        Ok(())
+    }
 }
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
@@ -165,7 +241,6 @@ impl Listener {
     /// strategy, which is what we do here.
     async fn run(&mut self) -> Result<()> {
         info!("accepting inbound connections");
-
         loop {
             // Wait for a permit to become available
             //
@@ -229,6 +304,7 @@ impl Listener {
             });
         }
     }
+
 
     /// Accept an inbound connection.
     ///

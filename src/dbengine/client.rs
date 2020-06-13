@@ -20,6 +20,8 @@ use crate::mysql::pool::MysqlConnectionInfo;
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{BorrowMut, Borrow};
+use tracing_subscriber::util::SubscriberInitExt;
+use crate::MyError;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -53,8 +55,10 @@ impl ClientResponse {
             PacketType::ComQuery => {
                 let mut conn = handler.pool.get_pool(&handler.hand_key).await?;
                 if let Err(e) = self.parse_query_packet(handler, &mut conn).await{
+                    conn.reset_conn_default()?;
                     handler.pool.return_pool(conn).await?;
-                    return Box::new(Err(e)).unwrap();
+                    return Err(Box::new(MyError(e.to_string().into())));
+                    //return Box::new(Err(e)).unwrap();
                 };
                 handler.pool.return_pool(conn).await?;
             }
@@ -196,6 +200,7 @@ impl ClientResponse {
                     //self.send_one_packet(handler, conn_info).await?;
                 }else if self.check_is_show(&sql).await? {
                     self.exec_query(handler, conn_info).await?;
+                    conn_info.set_cached(&handler.hand_key).await?;
                 }else {
                     self.send_error_packet(handler, &e.to_string()).await?;
                 }
@@ -447,9 +452,12 @@ impl ClientResponse {
                 }
             }
             let my_tmp = tmp[1].to_string().clone();
-            self.__set_default_db(&my_tmp, conn_info);
-            handler.db = Some(my_tmp);
-            self.send_ok_packet(handler).await?;
+            if let Err(e) = self.__set_default_db(&my_tmp, conn_info){
+                self.send_error_packet(handler, &e.to_string()).await?;
+            }else {
+                handler.db = Some(my_tmp);
+                self.send_ok_packet(handler).await?;
+            }
             return Ok(true)
         }
         Ok(false)
