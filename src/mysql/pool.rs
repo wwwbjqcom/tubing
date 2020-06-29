@@ -515,10 +515,8 @@ impl MysqlConnectionInfo{
             debug(e.to_string());
             return Ok(false);
         };
-        info!("{}", String::from("setaaa"));
         match self.get_packet_from_stream(){
             Ok((buf, header)) => {
-                info!("{}", String::from("getaaa"));
                 if let Err(e) = self.check_packet_is(&buf){
                     debug(e.to_string());
                     self.close();

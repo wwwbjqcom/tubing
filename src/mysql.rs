@@ -88,7 +88,7 @@ pub fn conn(host_info: &str) -> Result<TcpStream> {
     let addrs = SocketAddr::from((IpAddr::V4(Ipv4Addr::new(ip_info[0], ip_info[1], ip_info[2], ip_info[3])), port));
     //let tcp_conn = TcpStream::connect(host_info)?;
     let tcp_conn = TcpStream::connect_timeout(&addrs, Duration::new(1,0))?;
-    tcp_conn.set_read_timeout(Some(Duration::new(0,1000)))?;
+    tcp_conn.set_read_timeout(Some(Duration::new(0,100000)))?;
     tcp_conn.set_write_timeout(Some(Duration::new(0,1000)))?;
     Ok(tcp_conn)
 }
