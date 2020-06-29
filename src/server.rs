@@ -10,18 +10,20 @@ use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
-use crate::{Config, Result};
+use crate::{Config, Result, readvalue};
 use crate::dbengine;
-use crate::dbengine::client::ClientResponse;
+use crate::dbengine::client::{ClientResponse};
 use crate::dbengine::server::HandShake;
 pub mod shutdown;
 mod connection;
+mod per_connection;
 use connection::Connection;
 use tracing_subscriber::util::SubscriberInitExt;
 use crate::mysql::pool::{ConnectionsPool, MysqlConnectionInfo};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS};
+use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41};
+use crate::mysql::connection::PacketHeader;
 
 pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Future) -> crate::Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
@@ -262,6 +264,7 @@ impl Listener {
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
                 platform: None,
+                per_conn_info: per_connection::PerMysqlConn::new(),
                 hand_key: thread_rng()
                     .sample_iter(&Alphanumeric)
                     .take(32)
@@ -339,6 +342,8 @@ impl Listener {
     }
 }
 
+
+
 /// Per-connection state
 ///
 #[derive(Debug)]
@@ -366,6 +371,8 @@ pub enum  ConnectionStatus {
 pub struct Handler {
     /// record the business library to which the current connection belongs
     pub platform: Option<String>,
+    
+    pub per_conn_info: per_connection::PerMysqlConn,
 
     pub hand_key: String,
 
@@ -441,6 +448,7 @@ impl Handler {
     async fn run(mut self) -> Result<()> {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
+
         while !self.shutdown.is_shutdown() {
             // While reading a request frame, also listen for the shutdown
             // signal.
@@ -466,6 +474,9 @@ impl Handler {
                     // If a shutdown signal is received, return from `run`.
                     // This will result in the task terminating.
                     return Ok(());
+                }
+                _ = self.per_conn_info.health(&mut self.pool) => {
+                    continue;
                 }
             };
 
@@ -560,6 +571,30 @@ impl Handler {
             return SERVER_STATUS_IN_TRANS as u16;
         }
     }
+
+    pub async fn set_per_conn_cached(&mut self) -> Result<()> {
+        if let Some(conn) = &mut self.per_conn_info.conn_info{
+            conn.set_cached(&self.hand_key).await?;
+        }
+        Ok(())
+    }
+
+    /// 发送error packet
+    pub async fn send_error_packet(&mut self, error: &String) -> Result<()>{
+        let mut err = vec![];
+        err.push(0xff);
+        err.extend(readvalue::write_u16(10));
+        if CLIENT_BASIC_FLAGS & CLIENT_PROTOCOL_41 > 0{
+            for _ in 0..5{
+                err.push(0);
+            }
+        }
+        err.extend(error.as_bytes());
+        self.send(&err).await?;
+        self.reset_seq();
+        Ok(())
+    }
+
 }
 
 

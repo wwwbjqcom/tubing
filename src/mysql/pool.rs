@@ -108,7 +108,7 @@ impl ConnectionsPool{
                             pool  = if now_time - start_time > wait_time {
                                 return Err(Box::new(MyError(String::from("获取连接超时").into())));
                             } else {
-                                thread::sleep(Duration::from_millis(1));
+                                delay_for(Duration::from_millis(50)).await;
                                 self.conn_queue.lock().await
                                 //condvar.wait_timeout(pool, wait_time)?.0
                             };
@@ -288,6 +288,7 @@ pub struct MysqlConnectionInfo {
     pub cached: String,             //记录使用该连接的线程hash，用于不自动提交的update/insert/delete
     pub last_time: usize,          //记录该mysql连接最后执行命令的时间，用于计算空闲时间，如果没有设置缓存标签在达到200ms空闲时将放回连接池
     pub is_transaction: bool,        //记录是否还有事务存在
+    pub is_write: bool,            //是否为写入连接
 }
 impl MysqlConnectionInfo{
     pub fn new(conn: MysqlConnection) -> MysqlConnectionInfo{
@@ -295,8 +296,19 @@ impl MysqlConnectionInfo{
             conn: conn.conn,
             cached: "".to_string(),
             last_time: 0,
-            is_transaction: false
+            is_transaction: false,
+            is_write: false
         }
+    }
+
+    pub fn try_clone(&self) -> Result<MysqlConnectionInfo>{
+        Ok(MysqlConnectionInfo{
+            conn: self.conn.try_clone()?,
+            cached: self.cached.clone(),
+            last_time: self.last_time.clone(),
+            is_transaction: self.is_transaction.clone(),
+            is_write: self.is_write.clone()
+        })
     }
 
     pub fn set_last_time(&mut self) {
@@ -559,6 +571,7 @@ impl ConnectionInfo {
     }
 
 }
+
 
 
 
