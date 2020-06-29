@@ -510,10 +510,10 @@ impl MysqlConnectionInfo{
         packet.push(0);
         packet.push(0x0e);
         if let Err(e) = self.conn.write_all(&packet){
-            println!("ccc");
             debug(e.to_string());
             return Ok(false);
-        }
+        };
+        info!("{}", String::from("oook"));
         let (buf, header) = self.get_packet_from_stream()?;
         if let Err(e) = self.check_packet_is(&buf){
             debug(e.to_string());
