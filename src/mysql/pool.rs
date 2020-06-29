@@ -17,7 +17,7 @@ use std::sync::{Arc, Condvar};
 use std::{thread, time};
 use crate::dbengine::client::ClientResponse;
 use std::io::{Write, Read};
-use tracing::field::debug;
+use tracing::field::{debug};
 use std::ops::DerefMut;
 use crate::mysql::connection::response::pack_header;
 use tracing::{debug, error, info, instrument};
@@ -500,7 +500,8 @@ impl MysqlConnectionInfo{
         packet.extend(readvalue::write_u24(1));
         packet.push(0);
         packet.push(0x0e);
-        if let Err(_e) = self.conn.write_all(&packet){
+        if let Err(e) = self.conn.write_all(&packet){
+            debug(e.to_string());
             return Ok(false);
         }else {
             let (buf, header) = self.get_packet_from_stream()?;
