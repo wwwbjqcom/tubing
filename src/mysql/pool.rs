@@ -275,10 +275,12 @@ impl ConnectionsPool{
                                 self.queued_count.fetch_add(1, Ordering::SeqCst);
                                 self.active_count.fetch_sub(1, Ordering::SeqCst);
                             }else {
+                                self.active_count.fetch_sub(1, Ordering::SeqCst);
                                 error!("{}",String::from("check ping failed"));
                             }
                         }
                         Err(e) => {
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
                             error!("{}",format!("check ping error: {:?}", e.to_string()));
                         }
                     }
