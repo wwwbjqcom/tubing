@@ -461,7 +461,7 @@ impl MysqlConnectionInfo{
                     }
                 }
                 Err(e) => {
-                    debug(e);
+                    //debug(e);
                     return Err(Box::new(MyError(e.to_string().into())));
                 }
             }
