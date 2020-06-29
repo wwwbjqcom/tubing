@@ -181,7 +181,7 @@ impl ConnectionsPool{
                 maintain_last_check_time = now_time;
             }
 
-            self.maintain_cache_pool().await?;
+            //self.maintain_cache_pool().await?;
             delay_for(Duration::from_millis(50)).await;
         }
     }
@@ -501,17 +501,19 @@ impl MysqlConnectionInfo{
         packet.push(0);
         packet.push(0x0e);
         if let Err(e) = self.conn.write_all(&packet){
+            println!("ccc");
             debug(e.to_string());
             return Ok(false);
-        }else {
-            let (buf, header) = self.get_packet_from_stream()?;
-            if let Err(e) = self.check_packet_is(&buf){
-                self.close();
-                return Ok(false);
-            }else {
-                return Ok(true);
-            }
         }
+        let (buf, header) = self.get_packet_from_stream()?;
+        if let Err(e) = self.check_packet_is(&buf){
+            debug(e.to_string());
+            self.close();
+            return Ok(false);
+        }
+
+        return Ok(true);
+
     }
 
     /// 初始化连接为默认状态
