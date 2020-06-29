@@ -510,7 +510,7 @@ impl MysqlConnectionInfo{
         packet.push(0);
         packet.push(0x0e);
         self.conn.set_write_timeout(Some(Duration::new(0,1000)))?;
-        if let Err(e) = self.conn.write(&packet){
+        if let Err(e) = self.conn.try_write(&packet){
             debug(e.to_string());
             return Ok(false);
         };
