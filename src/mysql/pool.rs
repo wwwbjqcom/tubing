@@ -522,7 +522,7 @@ impl MysqlConnectionInfo{
                 }
             }
             Err(e) => {
-                error!(e.to_string());
+                error!("{}",e.to_string());
                 return Ok(false);
             }
         }
