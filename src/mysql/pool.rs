@@ -509,21 +509,23 @@ impl MysqlConnectionInfo{
         packet.extend(readvalue::write_u24(1));
         packet.push(0);
         packet.push(0x0e);
-        //self.conn.set_write_timeout(Some(Duration::new(0,1000)))?;
-        info!("{}", format!("write timeout: {:?}", self.conn.write_timeout()?));
         if let Err(e) = self.conn.write(&packet){
             debug(e.to_string());
             return Ok(false);
         };
-        info!("{}", String::from("oook"));
-        let (buf, header) = self.get_packet_from_stream()?;
-        info!("{}", String::from("getook"));
-        if let Err(e) = self.check_packet_is(&buf){
-            debug(e.to_string());
-            self.close();
-            return Ok(false);
+        match self.get_packet_from_stream(){
+            Ok((buf, header)) => {
+                if let Err(e) = self.check_packet_is(&buf){
+                    debug(e.to_string());
+                    self.close();
+                    return Ok(false);
+                }
+            }
+            Err(e) => {
+                error!(e.to_string());
+                return Ok(false);
+            }
         }
-
         return Ok(true);
 
     }
