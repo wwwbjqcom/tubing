@@ -172,11 +172,13 @@ impl ConnectionsPool{
             let now_time = Local::now().timestamp_millis() as usize;
             //每隔60秒检查一次
             if now_time - ping_last_check_time >= 60000{
+                info!("{}", String::from("check_ping"));
                 self.check_ping().await?;
                 ping_last_check_time = now_time;
             }
             //每隔600秒进行一次连接池数量维护
             if now_time - maintain_last_check_time >= 600000{
+                info!("{}", String::from("maintain_pool"));
                 self.maintain_pool().await?;
                 maintain_last_check_time = now_time;
             }
@@ -266,11 +268,18 @@ impl ConnectionsPool{
                 if let Some(mut conn) = pool.pool.pop_front(){
                     self.queued_count.fetch_sub(1, Ordering::SeqCst);
                     self.active_count.fetch_add(1, Ordering::SeqCst);
-                    if let Ok(b) = conn.check_health(){
-                        if b{
-                            pool.pool.push_back(conn);
-                            self.queued_count.fetch_add(1, Ordering::SeqCst);
-                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                    match conn.check_health(){
+                        Ok(b) =>{
+                            if b{
+                                pool.pool.push_back(conn);
+                                self.queued_count.fetch_add(1, Ordering::SeqCst);
+                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                            }else {
+                                error!("{}",String::from("check ping failed"));
+                            }
+                        }
+                        Err(e) => {
+                            error!("{}",format!("check ping error: {:?}", e.to_string()));
                         }
                     }
                 }

@@ -170,7 +170,7 @@ impl ThreadPoolMaintain{
 //            };
 //        }
         self.pool.check_health().await?;
-        println!("abc");
+        info!("abc");
         Ok(())
     }
 }
