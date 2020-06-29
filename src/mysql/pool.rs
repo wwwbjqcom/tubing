@@ -452,6 +452,7 @@ impl MysqlConnectionInfo{
         let mut header_buf = vec![0 as u8; 4];
         let mut header: PacketHeader = PacketHeader { payload: 0, seq_id: 0 };
         loop {
+            debug(String::from("aa"));
             match self.conn.read_exact(&mut header_buf){
                 Ok(_) => {
                     header = PacketHeader::new(&header_buf)?;
@@ -461,6 +462,7 @@ impl MysqlConnectionInfo{
                 }
                 Err(e) => {
                     debug(e);
+                    return Err(Box::new(MyError(e.to_string().into())));
                 }
             }
 
