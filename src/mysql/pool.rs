@@ -452,7 +452,6 @@ impl MysqlConnectionInfo{
         let mut header_buf = vec![0 as u8; 4];
         let mut header: PacketHeader = PacketHeader { payload: 0, seq_id: 0 };
         loop {
-            debug(String::from("aa"));
             match self.conn.read_exact(&mut header_buf){
                 Ok(_) => {
                     header = PacketHeader::new(&header_buf)?;
@@ -462,6 +461,10 @@ impl MysqlConnectionInfo{
                 }
                 Err(e) => {
                     //debug(e);
+                    let str_tmp = e.to_string();
+                    if str_tmp.contains("Resource temporarily unavailable") {
+                        continue;
+                    }
                     return Err(Box::new(MyError(e.to_string().into())));
                 }
             }
@@ -524,7 +527,7 @@ impl MysqlConnectionInfo{
                 }
             }
             Err(e) => {
-                error!("{}",e.to_string());
+                error!("check health error: {}",e.to_string());
                 return Ok(false);
             }
         }
