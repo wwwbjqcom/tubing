@@ -291,6 +291,9 @@ impl ConnectionsPool{
         Ok(())
     }
 
+    pub fn active_count_sub(&mut self) {
+        self.active_count.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 #[derive(Debug)]
