@@ -102,7 +102,9 @@ impl ClientResponse {
 //        match ast{
 //            Ok(mut ast) => {
 //                'a: for i in &mut ast{
-        match sql_parser.parser(&sql){
+        let a = sql_parser.parser(&sql);
+        info!("{:?}", a);
+        match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql).await?;
                 handler.set_per_conn_cached().await?;

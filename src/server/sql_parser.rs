@@ -6,6 +6,7 @@ use crate::Result;
 use tracing::field::{debug};
 
 /// 解析sql类型
+#[derive(Debug)]
 pub enum SqlStatement {
     SetVariable(String, String),
     Query,              //select、with
