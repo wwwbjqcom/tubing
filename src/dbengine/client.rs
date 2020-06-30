@@ -266,13 +266,16 @@ impl ClientResponse {
         let packet = self.packet_my_value();
         let (buf, header) = self.send_packet(handler, &packet)?;
         self.send_mysql_response_packet(handler, &buf, &header).await?;
+        //如果发生错误直接退出， 如果不是将继续接收数据包，因为只有错误包只有一个，其他数据都会是连续的
+        if buf[0] == 0xff{
+            return Ok(());
+        }
         let mut eof_num = 0;
         'b: loop {
             if eof_num > 1{
                 break 'b;
             }
             let (buf, mut header) = self.get_packet_from_stream(handler)?;
-            info!("{}", &buf[0]);
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 break 'b;
