@@ -54,12 +54,12 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    pub async fn return_connection(&mut self) -> Result<()> {
+    pub async fn return_connection(&mut self, pool: &mut ConnectionsPool) -> Result<()> {
         if let Some(conn) = &mut self.conn_info{
             conn.reset_cached().await?;
             conn.reset_conn_default()?;
             let mut new_conn = conn.try_clone()?;
-            .return_pool(new_conn).await?;
+            pool.return_pool(new_conn).await?;
             self.conn_info = None;
             self.conn_state = false;
         }

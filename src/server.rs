@@ -508,19 +508,16 @@ impl Handler {
                     self.reset_seq();
                 }
                 ConnectionStatus::Connected => {
-//                    let a = vec![00,00,00,01,00,00,00];
-//                    self.connection.send(&a, &self.seq).await?;
-//                    println!("{:?}", response);
                     if let Err(e) = response.exec(&mut self).await{
-                        self.per_conn_info.return_connection().await?;
-                        return Err(Box::new(MyError(e.into())));
+                        error!("{}", e.to_string());
+                        break;
                     }
                     self.reset_seq();
                 }
                 _ => {}
             }
         }
-        self.per_conn_info.return_connection().await?;
+        self.per_conn_info.return_connection(&mut self.pool).await?;
         Ok(())
     }
 
