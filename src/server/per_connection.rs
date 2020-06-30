@@ -63,7 +63,7 @@ impl PerMysqlConn {
             self.conn_info = None;
             self.conn_state = false;
         }
-
+        Ok(())
     }
 
 }
