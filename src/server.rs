@@ -467,6 +467,7 @@ impl Handler {
                     return Ok(())
                 }
                 ConnectionStatus::Quit => {
+                    self.per_conn_info.return_connection(&mut self.pool).await?;
                     return Ok(())
                 }
                 _ => {}
@@ -476,7 +477,7 @@ impl Handler {
                 _ = self.shutdown.recv() => {
                     // If a shutdown signal is received, return from `run`.
                     // This will result in the task terminating.
-                    return Ok(());
+                    break;
                 }
                 _ = self.per_conn_info.health(&mut self.pool) => {
                     continue;
@@ -488,11 +489,11 @@ impl Handler {
             // terminated.
             let response = match maybe_response {
                 Some(response) => response,
-                None => return Ok(()),
+                None => break,
             };
 
             if !self.check_seq(&response.seq){
-                return Ok(())
+                break;
             }
             match &self.status {
                 ConnectionStatus::Auth(handshake) => {
