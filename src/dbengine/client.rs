@@ -54,7 +54,7 @@ impl ClientResponse {
                 handler.per_conn_info.check(&mut handler.pool, &handler.hand_key).await?;
                 //let mut conn = handler.pool.get_pool(&handler.hand_key).await?;
                 if let Err(e) = self.parse_query_packet(handler).await{
-                    error!("{}", &e.to_string());
+                    //error!("{}", &e.to_string());
                     return Err(Box::new(MyError(e.to_string().into())));
                     //return Box::new(Err(e)).unwrap();
                 };
