@@ -15,7 +15,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, CLIENT_SESSION_TRACK};
 use crate::server::{Handler, ConnectionStatus};
 use sqlparser::parser::Parser;
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPool};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
@@ -100,7 +100,7 @@ impl ClientResponse {
             handler.set_per_conn_cached().await?;
             return Ok(())
         }
-        let dialect = GenericDialect {};
+        let dialect = MySqlDialect {};
         let mut ast = Parser::parse_sql(&dialect, sql.to_string());
         match ast{
             Ok(mut ast) => {
