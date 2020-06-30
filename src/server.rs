@@ -300,7 +300,7 @@ impl Listener {
 
             // Spawn a new task to process the connections. Tokio tasks are like
             // asynchronous green threads and are executed concurrently.
-            let pool_clone = self.pool.clone();
+            let mut pool_clone = self.pool.clone();
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
