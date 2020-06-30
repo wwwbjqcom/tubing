@@ -206,7 +206,7 @@ impl ClientResponse {
                 self.set_cached(handler).await?;
             }
             Err(e) => {
-                error!("{}", &e.to_string());
+                error!("{} sql:{}", &e.to_string(), &sql);
                 if self.check_is_set_names(&sql).await?{
                     self.send_ok_packet(handler).await?;
                     //self.send_one_packet(handler, conn_info).await?;
