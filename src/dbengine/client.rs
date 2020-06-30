@@ -21,6 +21,7 @@ use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{BorrowMut, Borrow};
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing::{error, info, instrument};
 use crate::MyError;
 use std::net::TcpStream;
 use std::time::Duration;
@@ -205,6 +206,7 @@ impl ClientResponse {
                 self.set_cached(handler).await?;
             }
             Err(e) => {
+                error!("{}", &e.to_string());
                 if self.check_is_set_names(&sql).await?{
                     self.send_ok_packet(handler).await?;
                     //self.send_one_packet(handler, conn_info).await?;
