@@ -20,6 +20,7 @@ use crate::server::sql_parser::SqlStatement;
 use std::net::TcpStream;
 use std::time::Duration;
 use tokio::time::delay_for;
+use tracing::field::debug;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -104,7 +105,7 @@ impl ClientResponse {
 //            Ok(mut ast) => {
 //                'a: for i in &mut ast{
         let a = sql_parser.parser(&sql);
-        info!("{:?}: {}", a, &sql);
+        debug(format!("{:?}: {}", a, &sql));
         match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql).await?;
