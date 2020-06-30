@@ -126,6 +126,7 @@ impl ClientResponse {
             }
             SqlStatement::Query => {
                 self.exec_query(handler).await?;
+                info!("aa");
             }
             SqlStatement::Commit => {
                 self.send_one_packet(handler).await?;
