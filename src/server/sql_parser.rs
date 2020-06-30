@@ -3,6 +3,7 @@
 @datetime: 2020/5/30
 */
 use crate::Result;
+use tracing::field::{debug};
 
 /// 解析sql类型
 pub enum SqlStatement {
@@ -23,6 +24,7 @@ pub enum SqlStatement {
 }
 impl SqlStatement{
     pub fn parser(&self, sql: &String) -> SqlStatement{
+        debug(format!("parser sql: {}", sql));
         let sql_vec = self.split_sql(sql);
         match sql_vec[0].as_ref(){
             "select" => SqlStatement::Query,

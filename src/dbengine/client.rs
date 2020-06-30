@@ -189,6 +189,7 @@ impl ClientResponse {
             }
             SqlStatement::Default => {
                 let error = String::from("Unsupported syntax");
+                error!("{}",&error);
                 self.send_error_packet(handler, &error).await?;
             }
         }
