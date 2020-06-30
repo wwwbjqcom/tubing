@@ -69,6 +69,7 @@ impl ClientResponse {
             }
             PacketType::ComInitDb => {
                 let db = readvalue::read_string_value(&self.buf[1..]);
+                info!("initdb {}", &db);
                 handler.db = Some(db);
                 self.send_ok_packet(handler).await?;
             }
