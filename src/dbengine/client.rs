@@ -126,7 +126,6 @@ impl ClientResponse {
             }
             SqlStatement::Query => {
                 self.exec_query(handler).await?;
-                info!("aa");
             }
             SqlStatement::Commit => {
                 self.send_one_packet(handler).await?;
@@ -273,6 +272,7 @@ impl ClientResponse {
                 break 'b;
             }
             let (buf, mut header) = self.get_packet_from_stream(handler)?;
+            info!("{}", &buf[0]);
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 break 'b;
@@ -286,36 +286,6 @@ impl ClientResponse {
 
         }
 
-
-//        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-//            if let Err(e) = self.set_conn_db_for_query(handler){
-//                //handler.send_error_packet(&e.to_string()).await?;
-//                self.send_error_packet(handler, &e.to_string()).await?;
-//                return Ok(())
-//            };
-//            let packet = self.packet_my_value();
-//            let (buf, header) = conn_info.send_packet(&packet)?;
-//            //self.send_mysql_response_packet(handler, &buf, &header).await?;
-//            handler.send_mysql_response_packet(&buf, &header).await?;
-//            let mut eof_num = 0;
-//            'b: loop {
-//                if eof_num > 1{
-//                    break 'b;
-//                }
-//                let (buf, mut header) = conn_info.get_packet_from_stream()?;
-//                if buf[0] == 0xff {
-//                    self.send_mysql_response_packet(handler, &buf, &header).await?;
-//                    break 'b;
-//                }else{
-//                    let (is_eof,num) = self.check_p(&buf, eof_num.clone(), &header);
-//                    if is_eof{
-//                        eof_num = num;
-//                    }
-//                    self.query_response(handler, &buf, &mut header, &eof_num, is_eof).await?;
-//                }
-//
-//            }
-//        }
         Ok(())
     }
 
