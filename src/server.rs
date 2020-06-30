@@ -12,6 +12,7 @@ use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
 use crate::{Config, Result, readvalue};
 use crate::dbengine;
+use crate::MyError;
 use crate::dbengine::client::{ClientResponse};
 use crate::dbengine::server::HandShake;
 pub mod shutdown;
@@ -304,7 +305,6 @@ impl Listener {
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
-                    pool_clone.active_count_sub();
                     error!(cause = ?err, "connection error");
                 }
             });
@@ -511,7 +511,10 @@ impl Handler {
 //                    let a = vec![00,00,00,01,00,00,00];
 //                    self.connection.send(&a, &self.seq).await?;
 //                    println!("{:?}", response);
-                    response.exec(&mut self).await?;
+                    if let Err(e) = response.exec(&mut self).await{
+                        self.per_conn_info.return_connection().await?;
+                        return Err(Box::new(MyError(e.into())));
+                    }
                     self.reset_seq();
                 }
                 _ => {}
