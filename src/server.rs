@@ -303,7 +303,7 @@ impl Listener {
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
-                    self.pool.active_count_sub();
+                    handler.pool.active_count_sub();
                     error!(cause = ?err, "connection error");
                 }
             });
