@@ -15,7 +15,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
- "sqlparser",
  "structopt",
  "tokio 0.2.21",
  "tokio-util",
@@ -959,15 +958,6 @@ dependencies = [
  "libc",
  "redox_syscall",
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "sqlparser"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ac1f0f284146472a721eb7b5cb4615e314c781f5f7be41d27aa98d9e0a1ff9"
-dependencies = [
- "log",
 ]
 
 [[package]]

@@ -123,6 +123,7 @@ impl ClientResponse {
                     self.send_ok_packet(handler).await?;
                 }else {
                     let error = String::from("only supports set autocommit/platform/names");
+                    error!("{}", &error);
                     self.send_error_packet(handler, &error).await?;
                 }
             }
