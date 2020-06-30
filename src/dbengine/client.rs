@@ -3,19 +3,12 @@
 @datetime: 2020/5/28
 */
 
-use sqlparser::ast::{SetExpr, SetVariableValue};
-use sqlparser::ast::Select;
-use sqlparser::ast::TableFactor;
-use sqlparser::ast::Statement;
-use sqlparser::ast::Value;
 use bytes::BytesMut;
 use std::io::{Cursor, Read};
 use crate::{Result, readvalue};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, CLIENT_SESSION_TRACK};
 use crate::server::{Handler, ConnectionStatus};
-use sqlparser::parser::Parser;
-use sqlparser::dialect::{GenericDialect, MySqlDialect};
 use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPool};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
