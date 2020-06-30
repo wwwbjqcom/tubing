@@ -23,6 +23,7 @@ use std::borrow::{BorrowMut, Borrow};
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing::{error, info, instrument};
 use crate::MyError;
+use crate::server::sql_parser::SqlStatement;
 use std::net::TcpStream;
 use std::time::Duration;
 use tokio::time::delay_for;
@@ -97,129 +98,119 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        if self.check_is_change_db(handler, &sql).await?{
-            handler.set_per_conn_cached().await?;
-            return Ok(())
-        }
-        let dialect = MySqlDialect {};
-        let mut ast = Parser::parse_sql(&dialect, sql.to_string());
-        match ast{
-            Ok(mut ast) => {
-                'a: for i in &mut ast{
-                    match i{
-                        Statement::SetVariable { local, variable, value } => {
-                            let mut v = match value {
-                                SetVariableValue::Ident(v) => {
-                                    v.to_string().clone()
-                                }
-                                SetVariableValue::Literal(v) => {
-                                    match v{
-                                        Value::Number(i) => {
-                                            i.clone()
-                                        }
-                                        _ => {
-                                            "".to_string()
-                                        }
-                                    }
-                                }
-                            };
-                            if variable.to_lowercase() == String::from("autocommit"){
-                                self.set_autocommit(handler, &v).await?;
-                            }else if variable.to_lowercase() == String::from("platform") {
-                                handler.platform = Some(v);
-                                self.send_ok_packet(handler).await?;
-                            }else {
-                                let error = String::from("only supports set autocommit/platform");
-                                self.send_error_packet(handler, &error).await?;
-                            }
-                        }
-                        Statement::Query(v) => {
-                            self.exec_query(handler).await?;
-                        }
-                        Statement::Commit { chain } => {
-                            self.send_one_packet(handler).await?;
-                            //self.reset_conn_db_and_autocommit(handler, conn_info)?;
-                            self.reset_is_transaction(handler).await?;
-                        }
-                        Statement::Insert { table_name, columns, source } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler){
-                                self.send_error_packet(handler, &e.to_string()).await?;
-                                return Ok(())
-                            };
-                            self.send_one_packet(handler).await?;
-                            self.check_is_no_autocommit(handler);
-                            //self.check_auto_commit_set(handler, conn_info).await?;
-                        }
-                        Statement::Delete { table_name, selection } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler){
-                                self.send_error_packet(handler, &e.to_string()).await?;
-                                return Ok(())
-                            };
-                            self.send_one_packet(handler).await?;
-                            self.check_is_no_autocommit(handler);
-                            //self.check_auto_commit_set(handler, conn_info).await?;
-                        }
-                        Statement::Update { table_name, assignments, selection } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler){
-                                self.send_error_packet(handler, &e.to_string()).await?;
-                                return Ok(())
-                            };
-                            self.send_one_packet(handler).await?;
-                            self.check_is_no_autocommit(handler);
-                            //self.check_auto_commit_set(handler, conn_info).await?;
-                        }
-                        Statement::Rollback { chain } => {
-                            self.send_one_packet(handler).await?;
-                            self.reset_is_transaction(handler).await?;
-                            //self.reset_conn_db_and_autocommit(handler, conn_info)?;
-                            //conn_info.reset_cached().await?;
-                        }
-                        Statement::StartTransaction { modes } => {
-                            if let Err(e) = self.set_conn_db_and_autocommit(handler){
-                                self.send_error_packet(handler, &e.to_string()).await?;
-                                return Ok(())
-                            };
-                            self.send_one_packet(handler).await?;
-                            self.set_is_transaction(handler).await?;
-                        }
-                        Statement::AlterTable { name, operation } => {
-                            self.no_traction(handler).await?;
-                        }
-                        Statement::CreateTable { name, columns, constraints, with_options, external, file_format, location } => {
-                            self.no_traction(handler).await?;
-                        }
-                        Statement::Drop { object_type, if_exists, names, cascade } => {
-                            self.no_traction(handler).await?;
-                        }
-                        Statement::ShowVariable { variable } => {
-                            self.exec_query(handler).await?;
-                        }
-                        Statement::ShowColumns { extended, full, table_name, filter } => {
-                            self.exec_query(handler).await?;
-                        }
-                        _ => {
-                            self.send_ok_packet(handler).await?;
-                        }
-                    }
-                }
-                //conn_info.set_cached(&handler.hand_key).await?;
-                self.set_cached(handler).await?;
+        let sql_parser = SqlStatement::Default;
+//        if self.check_is_change_db(handler, &sql).await?{
+//            handler.set_per_conn_cached().await?;
+//            return Ok(())
+//        }
+//        let dialect = MySqlDialect {};
+//        let mut ast = Parser::parse_sql(&dialect, sql.to_string());
+//        match ast{
+//            Ok(mut ast) => {
+//                'a: for i in &mut ast{
+        match sql_parser.parser(&sql){
+            SqlStatement::ChangeDatabase => {
+                self.check_is_change_db(handler, &sql).await?;
+                handler.set_per_conn_cached().await?;
             }
-            Err(e) => {
-                error!("{} sql:{}", &e.to_string(), &sql);
-                if self.check_is_set_names(&sql).await?{
+            SqlStatement::SetVariable (variable, value) => {
+                if variable.to_lowercase() == String::from("autocommit"){
+                    self.set_autocommit(handler, &value).await?;
+                }else if variable.to_lowercase() == String::from("platform") {
+                    handler.platform = Some(value);
                     self.send_ok_packet(handler).await?;
-                    //self.send_one_packet(handler, conn_info).await?;
-                }else if self.check_is_show(&sql).await? {
-                    self.exec_query(handler).await?;
-                    //conn_info.set_cached(&handler.hand_key).await?;
-                    self.set_cached(handler).await?;
+                }else if variable.to_lowercase() == String::from("names"){
+                    self.send_ok_packet(handler).await?;
                 }else {
-                    self.send_error_packet(handler, &e.to_string()).await?;
+                    let error = String::from("only supports set autocommit/platform/names");
+                    self.send_error_packet(handler, &error).await?;
                 }
-
+            }
+            SqlStatement::Query => {
+                self.exec_query(handler).await?;
+            }
+            SqlStatement::Commit => {
+                self.send_one_packet(handler).await?;
+                //self.reset_conn_db_and_autocommit(handler, conn_info)?;
+                self.reset_is_transaction(handler).await?;
+            }
+            SqlStatement::Insert => {
+                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    return Ok(())
+                };
+                self.send_one_packet(handler).await?;
+                self.check_is_no_autocommit(handler).await?;
+                //self.check_auto_commit_set(handler, conn_info).await?;
+            }
+            SqlStatement::Delete => {
+                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    return Ok(())
+                };
+                self.send_one_packet(handler).await?;
+                self.check_is_no_autocommit(handler).await?;
+                //self.check_auto_commit_set(handler, conn_info).await?;
+            }
+            SqlStatement::Update => {
+                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    return Ok(())
+                };
+                self.send_one_packet(handler).await?;
+                self.check_is_no_autocommit(handler).await?;
+                //self.check_auto_commit_set(handler, conn_info).await?;
+            }
+            SqlStatement::Rollback => {
+                self.send_one_packet(handler).await?;
+                self.reset_is_transaction(handler).await?;
+                //self.reset_conn_db_and_autocommit(handler, conn_info)?;
+                //conn_info.reset_cached().await?;
+            }
+            SqlStatement::StartTransaction  => {
+                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    return Ok(())
+                };
+                self.send_one_packet(handler).await?;
+                self.set_is_transaction(handler).await?;
+            }
+            SqlStatement::AlterTable => {
+                self.no_traction(handler).await?;
+            }
+            SqlStatement::Create => {
+                self.no_traction(handler).await?;
+            }
+            SqlStatement::Drop => {
+                self.no_traction(handler).await?;
+            }
+            SqlStatement::Show => {
+                self.exec_query(handler).await?;
+            }
+            SqlStatement::Default => {
+                let error = String::from("Unsupported syntax");
+                self.send_error_packet(handler, &error).await?;
             }
         }
+//                }
+//                //conn_info.set_cached(&handler.hand_key).await?;
+//                self.set_cached(handler).await?;
+//            }
+//            Err(e) => {
+//                error!("{} sql:{}", &e.to_string(), &sql);
+//                if self.check_is_set_names(&sql).await?{
+//                    self.send_ok_packet(handler).await?;
+//                    //self.send_one_packet(handler, conn_info).await?;
+//                }else if self.check_is_show(&sql).await? {
+//                    self.exec_query(handler).await?;
+//                    //conn_info.set_cached(&handler.hand_key).await?;
+//                    self.set_cached(handler).await?;
+//                }else {
+//                    self.send_error_packet(handler, &e.to_string()).await?;
+//                }
+//
+//            }
+//        }
 
         Ok(())
     }
@@ -247,12 +238,13 @@ impl ClientResponse {
     }
 
     /// 检查是否为非自动提交， 用于数据变动时设置连接状态
-    fn check_is_no_autocommit(&self, handler: &mut Handler){
+    async fn check_is_no_autocommit(&self, handler: &mut Handler) -> Result<()>{
         if !handler.auto_commit{
             if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-                conn_info.set_is_transaction();
+                conn_info.set_is_transaction().await?;
             }
         }
+        Ok(())
     }
 
     /// 检查是否为select 语句，测试用
@@ -552,27 +544,27 @@ impl ClientResponse {
     /// 检查是否为use db语句
     ///
     /// 因为sqlparse不支持该类语句
-    async fn check_is_change_db(&self, handler: &mut Handler, sql: &String) -> Result<bool>{
-        if sql.to_lowercase().starts_with("use"){
-            let sql = sql.to_lowercase();
-            let sql_ver = sql.split(" ");
-            let sql_ver = sql_ver.collect::<Vec<&str>>();
-            let mut tmp: Vec<String> = vec![];
-            for i in &sql_ver{
-                if &i.to_string() != &"".to_string(){
-                    tmp.push(i.to_string().clone())
-                }
+    async fn check_is_change_db(&self, handler: &mut Handler, sql: &String) -> Result<()>{
+//        if sql.to_lowercase().starts_with("use"){
+        let sql = sql.to_lowercase();
+        let sql_ver = sql.split(" ");
+        let sql_ver = sql_ver.collect::<Vec<&str>>();
+        let mut tmp: Vec<String> = vec![];
+        for i in &sql_ver{
+            if &i.to_string() != &"".to_string(){
+                tmp.push(i.to_string().clone())
             }
-            let my_tmp = tmp[1].to_string().clone();
-            if let Err(e) = self.__set_default_db(my_tmp.clone(), handler){
-                self.send_error_packet(handler, &e.to_string()).await?;
-            }else {
-                handler.db = Some(my_tmp);
-                self.send_ok_packet(handler).await?;
-            }
-            return Ok(true)
         }
-        Ok(false)
+        let my_tmp = tmp[1].to_string().clone();
+        if let Err(e) = self.__set_default_db(my_tmp.clone(), handler){
+            self.send_error_packet(handler, &e.to_string()).await?;
+        }else {
+            handler.db = Some(my_tmp);
+            self.send_ok_packet(handler).await?;
+        }
+        return Ok(())
+//        }
+//        Ok(false)
     }
 
     /// 检查是否为set 语句

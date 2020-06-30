@@ -86,70 +86,43 @@ async fn main() -> Result<()> {
 
     let mysql_pool = mysql::pool::ConnectionsPool::new(&config)?;
 
-//    //节点状态检查线程
-//    let mut a = mysql_pool.clone();
-//    tokio::spawn(async move{
-//        return a.pool_check_maintain(signal::ctrl_c()).await;
-//    });
     let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     let config_arc = Arc::new(config);
     server::run(listener, config_arc,  mysql_pool, signal::ctrl_c()).await
 
-//    use sqlparser::dialect::GenericDialect;
-//    use sqlparser::parser::Parser;
-//    use sqlparser::ast::Statement;
-//
-//    let dialect = GenericDialect {}; // or AnsiDialect
-//
-////    let sql = "SELECT a, b, 123, myfunc(b) \
-////           FROM table_1 \
-////           WHERE a > b AND b < 100 \
-////           ORDER BY a DESC, b";
-//
-//    let sql = "select * from t1 where cc = 11 limit 10 offset 100 row; update t2 set a1 = 1 where a2=3;";
-//    let ast = Parser::parse_sql(&dialect, sql.to_string()).unwrap();
-//    for i in ast{
-//        match i {
-//            Statement::Query(c) => {
-//                println!("{:?}", c)
-//            }
-//            _ => {
-//                println!("{:?}", i)
-//            }
-//        }
-//    }
+
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "MysqlBus", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "A Mysql server proxy")]
 struct Cli {
-    #[structopt(name = "port", long = "--port")]
+    #[structopt(name = "port", long = "--port", help="监听端口, 默认为3306")]
     port: Option<String>,
 
-    #[structopt(name = "username", long = "--user")]
+    #[structopt(name = "username", long = "--user", help="客户端连接时使用的用户名")]
     user: Option<String>,
 
-    #[structopt(name = "password", long = "--password")]
+    #[structopt(name = "password", long = "--password", help="客户端连接时使用的密码")]
     password: Option<String>,
 
-    #[structopt(name = "conns", long = "--conns")]
+    #[structopt(name = "conns", long = "--conns", help="没有使用")]
     conns: Option<String>,
 
-    #[structopt(name = "musername", long = "--musername")]
+    #[structopt(name = "musername", long = "--musername", help="后端数据库用户名")]
     muser: Option<String>,
 
-    #[structopt(name = "mpassword", long = "--mpassword")]
+    #[structopt(name = "mpassword", long = "--mpassword", help="后端数据库密码")]
     mpassword: Option<String>,
 
-    #[structopt(name = "mport", long = "--mport")]
+    #[structopt(name = "mport", long = "--mport", help="没有使用")]
     mport: Option<String>,
 
-    #[structopt(name = "min", long = "--min")]
+    #[structopt(name = "min", long = "--min", help="连接池最小连接数")]
     min: Option<String>,
 
-    #[structopt(name = "max", long = "--max")]
+    #[structopt(name = "max", long = "--max", help="连接池最大连接数")]
     max: Option<String>,
 
-    #[structopt(name = "host_info", long = "--hostinfo")]
+    #[structopt(name = "host_info", long = "--hostinfo", help="后端数据库ip:port, 如192.168.1.1:3306")]
     host_info: Option<String>,
 }

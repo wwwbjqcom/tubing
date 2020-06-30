@@ -17,6 +17,7 @@ use crate::dbengine::server::HandShake;
 pub mod shutdown;
 mod connection;
 mod per_connection;
+pub mod sql_parser;
 use connection::Connection;
 use tracing_subscriber::util::SubscriberInitExt;
 use crate::mysql::pool::{ConnectionsPool, MysqlConnectionInfo};
