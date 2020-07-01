@@ -30,6 +30,7 @@ impl SqlStatement{
         match sql_vec[0].as_ref(){
             "select" => SqlStatement::Query,
             "with" => SqlStatement::Query,
+            "explain" => SqlStatement::Query,
             "commit" => SqlStatement::Commit,
             "set" => self.parser_set(sql),
             "insert" => SqlStatement::Insert,

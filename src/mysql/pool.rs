@@ -230,34 +230,34 @@ impl ConnectionsPool{
         Ok(())
     }
 
-    /// 对缓存连接池进行维护, 空闲超过阈值且不存在事务的则直接放回连接池，供其他连接使用
-    pub async fn maintain_cache_pool(&mut self) -> Result<()> {
-        if self.cached_count.load(Ordering::Relaxed) > 0 {
-            let mut cache_pool = self.cached_queue.lock().await;
-            let mut tmp: Vec<String> = vec![];
-            for (key, conn) in cache_pool.iter_mut(){
-
-                if conn.check_cacke_sleep(){
-                    tmp.push(key.clone());
-                }
-            }
-            for key in tmp {
-                let mut pool = self.conn_queue.lock().await;
-                match cache_pool.remove(&key){
-                    Some(mut conn) => {
-                        conn.reset_cached().await?;
-                        conn.reset_conn_default()?;
-                        pool.pool.push_back(conn);
-                        self.queued_count.fetch_add(1, Ordering::SeqCst);
-                        self.cached_count.fetch_sub(1, Ordering::SeqCst);
-                    }
-                    None => {}
-                }
-            }
-            drop(cache_pool)
-        }
-        Ok(())
-    }
+//    /// 对缓存连接池进行维护, 空闲超过阈值且不存在事务的则直接放回连接池，供其他连接使用
+//    pub async fn maintain_cache_pool(&mut self) -> Result<()> {
+//        if self.cached_count.load(Ordering::Relaxed) > 0 {
+//            let mut cache_pool = self.cached_queue.lock().await;
+//            let mut tmp: Vec<String> = vec![];
+//            for (key, conn) in cache_pool.iter_mut(){
+//
+//                if conn.check_cacke_sleep(){
+//                    tmp.push(key.clone());
+//                }
+//            }
+//            for key in tmp {
+//                let mut pool = self.conn_queue.lock().await;
+//                match cache_pool.remove(&key){
+//                    Some(mut conn) => {
+//                        conn.reset_cached().await?;
+//                        conn.reset_conn_default()?;
+//                        pool.pool.push_back(conn);
+//                        self.queued_count.fetch_add(1, Ordering::SeqCst);
+//                        self.cached_count.fetch_sub(1, Ordering::SeqCst);
+//                    }
+//                    None => {}
+//                }
+//            }
+//            drop(cache_pool)
+//        }
+//        Ok(())
+//    }
 
     /// 对连接池中的连接进行心跳检查
     pub async fn check_ping(&mut self) -> Result<()> {
@@ -291,9 +291,6 @@ impl ConnectionsPool{
         Ok(())
     }
 
-    pub fn active_count_sub(&mut self) {
-        self.active_count.fetch_sub(1, Ordering::SeqCst);
-    }
 }
 
 #[derive(Debug)]

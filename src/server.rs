@@ -357,7 +357,6 @@ pub enum  ConnectionStatus {
     /// when exchanging account password agreement with the server
     Auth(HandShake),
     ///
-    Sleep,
     /// authentication failed
     Failure,
     /// initial socket connection
@@ -535,14 +534,6 @@ impl Handler {
         Ok(())
     }
 
-    /// operate client requests
-    ///
-    /// after the client handshake is successful,
-    /// process and reply to the received request
-    async fn response_operation(&mut self, buf: &ClientResponse) -> Result<()> {
-        Ok(())
-    }
-
     pub async fn send(&mut self, packet: &Vec<u8>) -> Result<()>{
         self.connection.send(packet, &self.seq).await?;
         Ok(())
@@ -580,22 +571,6 @@ impl Handler {
         if let Some(conn) = &mut self.per_conn_info.conn_info{
             conn.set_cached(&self.hand_key).await?;
         }
-        Ok(())
-    }
-
-    /// 发送error packet
-    pub async fn send_error_packet(&mut self, error: &String) -> Result<()>{
-        let mut err = vec![];
-        err.push(0xff);
-        err.extend(readvalue::write_u16(10));
-        if CLIENT_BASIC_FLAGS & CLIENT_PROTOCOL_41 > 0{
-            for _ in 0..5{
-                err.push(0);
-            }
-        }
-        err.extend(error.as_bytes());
-        self.send(&err).await?;
-        self.reset_seq();
         Ok(())
     }
 

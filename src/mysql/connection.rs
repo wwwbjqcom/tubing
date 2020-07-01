@@ -39,10 +39,10 @@ impl PacketHeader{
 
 #[derive(Debug)]
 pub enum MysqlPacketType {
-    Ok,
+//    Ok,
     Error,
     Handshake,
-    EOF,
+//    EOF,
     Unknown
 }
 
