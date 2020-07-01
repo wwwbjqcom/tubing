@@ -84,10 +84,10 @@ impl SqlStatement{
                 let sql_ver = sql_vec[2].split("=");
                 let sql_ver = sql_ver.collect::<Vec<&str>>();
                 if sql_vec.len() == 2{
-                    return SqlStatement::SetVariable(sql_vec[1].clone, sql_ver[1].to_string());
+                    return SqlStatement::SetVariable(sql_vec[1].clone(), sql_ver[1].to_string());
                 }
             }
-            return SqlStatement::SetVariable(sql_vec[1].clone, sql_vec[2].to_string());
+            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].to_string());
         }
 
     }
