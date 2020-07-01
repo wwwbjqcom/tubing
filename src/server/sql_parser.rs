@@ -72,11 +72,23 @@ impl SqlStatement{
 
     fn parser_set(&self, sql: &String) -> SqlStatement {
         let sql_vec = self.split_sql(sql);
-        let sql_ver = sql_vec[1].split("=");
-        let sql_ver = sql_ver.collect::<Vec<&str>>();
-        if sql_vec.len() == 2{
-            return SqlStatement::SetVariable(sql_ver[0].to_string(), sql_ver[1].to_string());
+        if sql_vec[1].contains("="){
+            let sql_ver = sql_vec[1].split("=");
+            let sql_ver = sql_ver.collect::<Vec<&str>>();
+            if sql_vec.len() == 2{
+                return SqlStatement::SetVariable(sql_ver[0].to_string(), sql_ver[1].to_string());
+            }
+            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].clone())
+        }else {
+            if sql_vec[2].len() > 1 && sql_vec[2].contains("="){
+                let sql_ver = sql_vec[2].split("=");
+                let sql_ver = sql_ver.collect::<Vec<&str>>();
+                if sql_vec.len() == 2{
+                    return SqlStatement::SetVariable(sql_vec[1].clone, sql_ver[1].to_string());
+                }
+            }
+            return SqlStatement::SetVariable(sql_vec[1].clone, sql_vec[2].to_string());
         }
-        SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].clone())
+
     }
 }
