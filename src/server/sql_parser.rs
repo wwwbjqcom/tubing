@@ -71,6 +71,7 @@ impl SqlStatement{
     }
 
     fn parser_set(&self, sql: &String) -> SqlStatement {
+        println!("{:?}",sql);
         let sql_vec = self.split_sql(sql);
         if sql_vec[1].contains("="){
             let sql_ver = sql_vec[1].split("=");
