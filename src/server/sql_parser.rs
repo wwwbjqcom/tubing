@@ -71,7 +71,6 @@ impl SqlStatement{
     }
 
     fn parser_set(&self, sql: &String) -> SqlStatement {
-        println!("{:?}",sql);
         let sql_vec = self.split_sql(sql);
         if sql_vec[1].contains("="){
             let sql_ver = sql_vec[1].split("=");
@@ -88,7 +87,7 @@ impl SqlStatement{
                     return SqlStatement::SetVariable(sql_vec[1].clone(), sql_ver[1].to_string());
                 }
             }
-            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].to_string());
+            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[3].to_string());
         }
 
     }

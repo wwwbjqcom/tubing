@@ -112,7 +112,6 @@ impl ClientResponse {
                 handler.set_per_conn_cached().await?;
             }
             SqlStatement::SetVariable (variable, value) => {
-                println!("{},{}",&variable, &value);
                 if variable.to_lowercase() == String::from("autocommit"){
                     self.set_autocommit(handler, &value).await?;
                 }else if variable.to_lowercase() == String::from("platform") {
