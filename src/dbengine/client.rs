@@ -3,7 +3,7 @@
 @datetime: 2020/5/28
 */
 
-use bytes::BytesMut;
+use bytes::{BytesMut, Buf};
 use std::io::{Cursor, Read};
 use crate::{Result, readvalue};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
@@ -14,7 +14,7 @@ use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{BorrowMut, Borrow};
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing::{error, info, instrument};
+use tracing::{error, debug, info, instrument};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
 use std::net::TcpStream;
@@ -105,7 +105,7 @@ impl ClientResponse {
 //            Ok(mut ast) => {
 //                'a: for i in &mut ast{
         let a = sql_parser.parser(&sql);
-        debug(format!("{:?}: {}", a, &sql));
+        debug!("{}",format!("{:?}: {}", a, &sql));
         match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql).await?;
@@ -134,7 +134,7 @@ impl ClientResponse {
                 self.reset_is_transaction(handler).await?;
             }
             SqlStatement::Insert => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
                     self.send_error_packet(handler, &e.to_string()).await?;
                     return Ok(())
                 };
@@ -143,7 +143,7 @@ impl ClientResponse {
                 //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Delete => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
                     self.send_error_packet(handler, &e.to_string()).await?;
                     return Ok(())
                 };
@@ -152,7 +152,7 @@ impl ClientResponse {
                 //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Update => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
                     self.send_error_packet(handler, &e.to_string()).await?;
                     return Ok(())
                 };
@@ -167,7 +167,7 @@ impl ClientResponse {
                 //conn_info.reset_cached().await?;
             }
             SqlStatement::StartTransaction  => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler){
+                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
                     self.send_error_packet(handler, &e.to_string()).await?;
                     return Ok(())
                 };
@@ -258,14 +258,14 @@ impl ClientResponse {
 
     /// 处理查询的连接
     async fn exec_query(&self, handler: &mut Handler) -> Result<()> {
-        if let Err(e) = self.set_conn_db_for_query(handler){
+        if let Err(e) = self.set_conn_db_for_query(handler).await{
             //handler.send_error_packet(&e.to_string()).await?;
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(())
         };
 
         let packet = self.packet_my_value();
-        let (buf, header) = self.send_packet(handler, &packet)?;
+        let (buf, header) = self.send_packet(handler, &packet).await?;
         self.send_mysql_response_packet(handler, &buf, &header).await?;
         //如果发生错误直接退出， 如果不是将继续接收数据包，因为只有错误包只有一个，其他数据都会是连续的
         if buf[0] == 0xff{
@@ -276,7 +276,7 @@ impl ClientResponse {
             if eof_num > 1{
                 break 'b;
             }
-            let (buf, mut header) = self.get_packet_from_stream(handler)?;
+            let (buf, mut header) = self.get_packet_from_stream(handler).await?;
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 break 'b;
@@ -293,17 +293,17 @@ impl ClientResponse {
         Ok(())
     }
 
-    fn get_packet_from_stream(&self, handler: &mut Handler) -> Result<(Vec<u8>, PacketHeader)>{
+    async fn get_packet_from_stream(&self, handler: &mut Handler) -> Result<(Vec<u8>, PacketHeader)>{
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-            return Ok(conn_info.get_packet_from_stream()?);
+            return Ok(conn_info.get_packet_from_stream().await?);
         }
         let error = String::from("lost connection");
         return Err(Box::new(MyError(error.into())));
     }
 
-    fn send_packet(&self, handler: &mut Handler, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)>{
+    async fn send_packet(&self, handler: &mut Handler, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)>{
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-            return Ok(conn_info.send_packet(&packet)?);
+            return Ok(conn_info.send_packet(&packet).await?);
         }
         let error = String::from("lost connection");
         return Err(Box::new(MyError(error.into())));
@@ -343,7 +343,7 @@ impl ClientResponse {
     /// 用于非事务性的操作
     async fn no_traction(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            if let Err(e) = self.set_conn_db_and_autocommit(handler){
+            if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
                 self.send_error_packet(handler, &e.to_string()).await?;
                 return Ok(())
             };
@@ -356,7 +356,7 @@ impl ClientResponse {
     async fn send_one_packet(&self, handler: &mut Handler) -> Result<()>{
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             let packet = self.packet_my_value();
-            let (buf, header) = conn.send_packet(&packet)?;
+            let (buf, header) = conn.send_packet(&packet).await?;
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             //self.check_eof(handler, conn).await?;
         }
@@ -367,7 +367,7 @@ impl ClientResponse {
     async fn check_eof(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             if handler.client_flags & CLIENT_SESSION_TRACK as i32 <= 0 {
-                let (buf, header) = conn.get_packet_from_stream()?;
+                let (buf, header) = conn.get_packet_from_stream().await?;
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
             }
         }
@@ -410,9 +410,9 @@ impl ClientResponse {
         if let Some(conn_info) = &mut hanler.per_conn_info.conn_info{
             if tmp != hanler.auto_commit && conn_info.hash_cache(&hanler.hand_key){
                 if hanler.auto_commit{
-                    self.__set_autocommit(1, hanler)?;
+                    self.__set_autocommit(1, hanler).await?;
                 }else {
-                    self.__set_autocommit(0, hanler)?;
+                    self.__set_autocommit(0, hanler).await?;
                 }
             }
         }
@@ -421,14 +421,14 @@ impl ClientResponse {
     }
 
     /// 判断并初始化默认库，只针对查询/show语句
-    fn set_conn_db_for_query(&self, handler: &mut Handler) -> Result<()>{
+    async fn set_conn_db_for_query(&self, handler: &mut Handler) -> Result<()>{
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             if conn.cached != String::from(""){
                 return Ok(())
             }
             if let Some(db) = &handler.db{
                 if db != &String::from("information_schema"){
-                    self.__set_default_db(db.clone(), handler)?;
+                    self.__set_default_db(db.clone(), handler).await?;
                 }
             }
             return Ok(())
@@ -437,7 +437,7 @@ impl ClientResponse {
     }
 
     /// 初始化连接状态
-    fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
+    async fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
         if self.check_is_cached(handler)? {
             return Ok(());
         }
@@ -446,14 +446,14 @@ impl ClientResponse {
         let my_db = handler.db.clone();
         if let Some(db) = &my_db{
             if handler.auto_commit{
-                self.__set_autocommit(1, handler)?;
+                self.__set_autocommit(1, handler).await?;
             }
             if db != &String::from("information_schema"){
-                self.__set_default_db(db.clone(), handler)?;
+                self.__set_default_db(db.clone(), handler).await?;
             }
         }else {
             if handler.auto_commit{
-                self.__set_autocommit(1, handler)?;
+                self.__set_autocommit(1, handler).await?;
             }
         }
 
@@ -470,30 +470,30 @@ impl ClientResponse {
         return Err(Box::new(MyError(String::from("lost connection").into())));
     }
 
-    fn __set_default_db(&self, db: String, handler: &mut Handler) -> Result<()> {
+    async fn __set_default_db(&self, db: String, handler: &mut Handler) -> Result<()> {
         let mut packet = vec![];
         packet.push(3 as u8);
         let sql = format!("use {};", db);
         packet.extend(sql.as_bytes());
-        self.__set_packet_send(&packet, handler)?;
+        self.__set_packet_send(&packet, handler).await?;
         Ok(())
     }
 
-    fn __set_autocommit(&self, autocommit: u8, handler: &mut Handler) -> Result<()> {
+    async fn __set_autocommit(&self, autocommit: u8, handler: &mut Handler) -> Result<()> {
         let mut packet = vec![];
         packet.push(3 as u8);
         let sql = format!("set autocommit={};", autocommit);
         packet.extend(sql.as_bytes());
-        self.__set_packet_send(&packet, handler)?;
+        self.__set_packet_send(&packet, handler).await?;
         Ok(())
     }
 
-    fn __set_packet_send(&self, packet: &Vec<u8>, handler: &mut Handler) -> Result<()>{
+    async fn __set_packet_send(&self, packet: &Vec<u8>, handler: &mut Handler) -> Result<()>{
         let mut packet_full = vec![];
         packet_full.extend(pack_header(&packet, 0));
         packet_full.extend(packet);
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            let (buf, header) = conn.send_packet(&packet_full)?;
+            let (buf, header) = conn.send_packet(&packet_full).await?;
             conn.check_packet_is(&buf)?;
             return Ok(());
         }
@@ -530,7 +530,7 @@ impl ClientResponse {
             }
         }
         let my_tmp = tmp[1].to_string().clone();
-        if let Err(e) = self.__set_default_db(my_tmp.clone(), handler){
+        if let Err(e) = self.__set_default_db(my_tmp.clone(), handler).await{
             self.send_error_packet(handler, &e.to_string()).await?;
         }else {
             handler.db = Some(my_tmp);

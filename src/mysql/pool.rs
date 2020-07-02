@@ -268,7 +268,7 @@ impl ConnectionsPool{
                 if let Some(mut conn) = pool.pool.pop_front(){
                     self.queued_count.fetch_sub(1, Ordering::SeqCst);
                     self.active_count.fetch_add(1, Ordering::SeqCst);
-                    match conn.check_health(){
+                    match conn.check_health().await{
                         Ok(b) =>{
                             if b{
                                 pool.pool.push_back(conn);
@@ -379,9 +379,9 @@ impl MysqlConnectionInfo{
     }
 
     /// send packet and return response packet
-    pub fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
+    pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         self.conn.write_all(packet)?;
-        let (buf, header) = self.get_packet_from_stream()?;
+        let (buf, header) = self.get_packet_from_stream().await?;
         self.set_last_time();
         Ok((buf, header))
     }
@@ -439,18 +439,18 @@ impl MysqlConnectionInfo{
     /// read packet from socket
     ///
     /// if payload = 0xffffff： this packet more than the 64MB
-    pub fn get_packet_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
-        let (mut buf,header) = self.get_from_stream()?;
+    pub async fn get_packet_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
+        let (mut buf,header) = self.get_from_stream().await?;
         while header.payload == 0xffffff{
             debug(header.payload);
-            let (buf_tmp,_) = self.get_from_stream()?;
+            let (buf_tmp,_) = self.get_from_stream().await?;
             buf.extend(buf_tmp);
         }
         Ok((buf, header))
     }
 
     /// read on packet from socket
-    fn get_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
+    async fn get_from_stream(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
         let mut header_buf = vec![0 as u8; 4];
         let mut header: PacketHeader = PacketHeader { payload: 0, seq_id: 0 };
         loop {
@@ -512,7 +512,7 @@ impl MysqlConnectionInfo{
     }
 
     /// ping 检查连接健康状态
-    pub fn check_health(&mut self) -> Result<bool> {
+    pub async fn check_health(&mut self) -> Result<bool> {
         let mut packet: Vec<u8> = vec![];
         packet.extend(readvalue::write_u24(1));
         packet.push(0);
@@ -521,7 +521,7 @@ impl MysqlConnectionInfo{
             debug(e.to_string());
             return Ok(false);
         };
-        match self.get_packet_from_stream(){
+        match self.get_packet_from_stream().await{
             Ok((buf, header)) => {
                 if let Err(e) = self.check_packet_is(&buf){
                     debug(e.to_string());
