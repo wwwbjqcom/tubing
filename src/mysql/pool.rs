@@ -380,9 +380,11 @@ impl MysqlConnectionInfo{
 
     /// send packet and return response packet
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
+        crate::info_now_time(String::from("write all to mysql conn"));
         self.conn.write_all(packet)?;
-        let (buf, header) = self.get_packet_from_stream().await?;
         self.set_last_time();
+        crate::info_now_time(String::from("get mysql response"));
+        let (buf, header) = self.get_packet_from_stream().await?;
         Ok((buf, header))
     }
 

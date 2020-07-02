@@ -9,11 +9,20 @@ use std::sync::Arc;
 use std::ops::DerefMut;
 use std::thread;
 use std::fmt;
+use tracing::debug;
+use chrono::prelude::*;
+use chrono;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub fn info_now_time(t: String) {
+    let dt = Local::now();
+    let now_time = dt.timestamp_millis() as usize;
+    let a = format!("{} end_time: {}", t, now_time);
+    debug!("{}", a);
+}
 
 #[derive(Debug)]
 pub struct MyError(String);

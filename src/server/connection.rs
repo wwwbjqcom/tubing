@@ -95,7 +95,9 @@ impl Connection {
 
     /// send a packet to the connection
     pub async fn send_packet_full(&mut self, packet: &Vec<u8>) -> io::Result<()> {
+        crate::info_now_time(String::from("start write all to client"));
         self.stream.write_all(&packet).await?;
+        crate::info_now_time(String::from("flush to client"));
         self.stream.flush().await
     }
 
