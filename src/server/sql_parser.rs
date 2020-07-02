@@ -26,7 +26,7 @@ pub enum SqlStatement {
 impl SqlStatement{
     pub fn parser(&self, sql: &String) -> SqlStatement{
         debug!("{}",crate::info_now_time(String::from("start parser sql")));
-        debug!(format!("parser sql: {}", sql));
+        debug!("{}",format!("parser sql: {}", sql));
         let sql_vec = self.split_sql(sql);
         match sql_vec[0].as_ref(){
             "select" => SqlStatement::Query,
