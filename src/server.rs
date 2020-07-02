@@ -471,7 +471,7 @@ impl Handler {
                 }
                 _ => {}
             }
-            crate::info_now_time(String::from("start read maybe_response"));
+            debug!("{}",crate::info_now_time(String::from("start read maybe_response")));
             let maybe_response = tokio::select! {
                 res = self.connection.read(&self.seq) => res?,
                 _ = self.shutdown.recv() => {
@@ -483,7 +483,7 @@ impl Handler {
                     continue;
                 }
             };
-            crate::info_now_time(String::from("read one maybe_response"));
+            debug!("{}",crate::info_now_time(String::from("read one maybe_response")));
             // If `None` is returned from `read_frame()` then the peer closed
             // the socket. There is no further work to do and the task can be
             // terminated.
@@ -491,11 +491,11 @@ impl Handler {
                 Some(response) => response,
                 None => break,
             };
-            crate::info_now_time(String::from("start"));
+            debug!("{}",crate::info_now_time(String::from("start")));
             if !self.check_seq(&response.seq){
                 break;
             }
-            crate::info_now_time(String::from("check_seq"));
+            debug!("{}",crate::info_now_time(String::from("check_seq")));
             match &self.status {
                 ConnectionStatus::Auth(handshake) => {
                     let (buf, db, flags)= handshake.auth(&response, &self.config, self.get_status_flags()).await?;
@@ -510,7 +510,7 @@ impl Handler {
                     self.reset_seq();
                 }
                 ConnectionStatus::Connected => {
-                    crate::info_now_time(String::from("start execute"));
+                    debug!("{}",crate::info_now_time(String::from("start execute")));
                     if let Err(e) = response.exec(&mut self).await{
                         error!("{}", e.to_string());
                         break;

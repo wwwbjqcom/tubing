@@ -52,9 +52,9 @@ impl ClientResponse {
                 self.send_ok_packet(handler).await?;
             }
             PacketType::ComQuery => {
-                crate::info_now_time(String::from("start check pool info"));
+                debug!("{}",crate::info_now_time(String::from("start check pool info")));
                 handler.per_conn_info.check(&mut handler.pool, &handler.hand_key, &handler.db, &handler.auto_commit).await?;
-                crate::info_now_time(String::from("start parse query packet"));
+                debug!("{}",crate::info_now_time(String::from("start parse query packet")));
                 if let Err(e) = self.parse_query_packet(handler).await{
                     return Err(Box::new(MyError(e.to_string().into())));
                 };
@@ -96,7 +96,7 @@ impl ClientResponse {
 //            Ok(mut ast) => {
 //                'a: for i in &mut ast{
         let a = sql_parser.parser(&sql);
-        crate::info_now_time(String::from("parser sql sucess"));
+        debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
         debug!("{}",format!("{:?}: {}", a, &sql));
         match a{
             SqlStatement::ChangeDatabase => {
@@ -231,19 +231,19 @@ impl ClientResponse {
 
     /// 处理查询的连接
     async fn exec_query(&self, handler: &mut Handler) -> Result<()> {
-        crate::info_now_time(String::from("start execute query"));
+        debug!("{}",crate::info_now_time(String::from("start execute query")));
 //        if let Err(e) = self.set_conn_db_for_query(handler).await{
 //            //handler.send_error_packet(&e.to_string()).await?;
 //            self.send_error_packet(handler, &e.to_string()).await?;
 //            return Ok(())
 //        };
-        crate::info_now_time(String::from("set conn db for query sucess"));
+        debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
         let packet = self.packet_my_value();
-        crate::info_now_time(String::from("start send pakcet to mysql"));
+        debug!("{}",crate::info_now_time(String::from("start send pakcet to mysql")));
         let (buf, header) = self.send_packet(handler, &packet).await?;
-        crate::info_now_time(String::from("start and mysql response to client"));
+        debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
-        crate::info_now_time(String::from("send_mysql_response_packet sucess"));
+        debug!("{}",crate::info_now_time(String::from("send_mysql_response_packet sucess")));
         //如果发生错误直接退出， 如果不是将继续接收数据包，因为只有错误包只有一个，其他数据都会是连续的
         if buf[0] == 0xff{
             return Ok(());
@@ -266,7 +266,7 @@ impl ClientResponse {
             }
 
         }
-        crate::info_now_time(String::from("send ok"));
+        debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
     }
 
@@ -364,7 +364,7 @@ impl ClientResponse {
 //    }
 
     async fn send_mysql_response_packet(&self, handler: &mut Handler, buf: &Vec<u8>, header: &PacketHeader) -> Result<()> {
-        crate::info_now_time(String::from("start send packet to mysql"));
+        debug!("{}",crate::info_now_time(String::from("start send packet to mysql")));
         let my_buf = self.packet_response_value(buf, header);
         handler.send_full(&my_buf).await?;
         Ok(())

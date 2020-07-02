@@ -51,6 +51,7 @@ impl Connection {
     /// read the data stream from the connection
     pub async fn read(&mut self, seq: &u8) -> Result<Option<client::ClientResponse>> {
         loop {
+            debug!("{}",crate::info_now_time(String::from("get response from client")));
             if 0 == self.stream.read_buf(&mut self.buffer).await? {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
@@ -62,6 +63,7 @@ impl Connection {
                     return Err("connection reset by peer".into());
                 }
             }
+            debug!("{}",crate::info_now_time(String::from("get response from client sucess")));
             let mut buf = Cursor::new(&self.buffer[..]);
             let response = client::ClientResponse::new(&mut buf).await?;
             if response.payload > 0{
@@ -95,9 +97,9 @@ impl Connection {
 
     /// send a packet to the connection
     pub async fn send_packet_full(&mut self, packet: &Vec<u8>) -> io::Result<()> {
-        crate::info_now_time(String::from("start write all to client"));
+        debug!("{}",crate::info_now_time(String::from("start write all to client")));
         self.stream.write_all(&packet).await?;
-        crate::info_now_time(String::from("flush to client"));
+        debug!("{}",crate::info_now_time(String::from("flush to client")));
         self.stream.flush().await
     }
 

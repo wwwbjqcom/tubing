@@ -17,11 +17,11 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub fn info_now_time(t: String) {
+pub fn info_now_time(t: String) -> String {
     let dt = Local::now();
     let now_time = dt.timestamp_millis() as usize;
     let a = format!("{} end_time: {}", t, now_time);
-    debug!("{}", a);
+    return a;
 }
 
 #[derive(Debug)]
