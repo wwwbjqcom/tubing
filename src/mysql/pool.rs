@@ -487,6 +487,22 @@ impl MysqlConnectionInfo{
         return Ok((packet_buf,header));
     }
 
+    pub fn set_default_autocommit(&mut self, autocommit: u8) -> Result<()> {
+        let sql = format!("set autocommit={};", autocommit);
+        let packet_full = self.set_default_packet(&sql);
+        let (a, b) = self.__send_packet(&packet_full)?;
+        self.check_packet_is(&a)?;
+        Ok(())
+    }
+
+    pub fn set_default_db(&mut self, db: String) -> Result<()> {
+        let sql = format!("use {};", db);
+        let packet_full = self.set_default_packet(&sql);
+        let (a, b) = self.__send_packet(&packet_full)?;
+        self.check_packet_is(&a)?;
+        Ok(())
+    }
+
     fn set_autocommit(&mut self) -> Result<()> {
         let sql = format!("set autocommit=0;");
         let packet_full = self.set_default_packet(&sql);

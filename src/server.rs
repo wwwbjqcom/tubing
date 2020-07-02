@@ -471,6 +471,7 @@ impl Handler {
                 }
                 _ => {}
             }
+            crate::info_now_time(String::from("start read maybe_response"));
             let maybe_response = tokio::select! {
                 res = self.connection.read(&self.seq) => res?,
                 _ = self.shutdown.recv() => {
@@ -482,7 +483,7 @@ impl Handler {
                     continue;
                 }
             };
-
+            crate::info_now_time(String::from("read one maybe_response"));
             // If `None` is returned from `read_frame()` then the peer closed
             // the socket. There is no further work to do and the task can be
             // terminated.
@@ -576,6 +577,13 @@ impl Handler {
         Ok(())
     }
 
+
+    pub async fn reset_per_conn_cached(&mut self) -> Result<()> {
+        if let Some(conn) = &mut self.per_conn_info.conn_info{
+            conn.reset_cached().await?;
+        }
+        Ok(())
+    }
 }
 
 

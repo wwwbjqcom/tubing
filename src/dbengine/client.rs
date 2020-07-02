@@ -53,7 +53,7 @@ impl ClientResponse {
             }
             PacketType::ComQuery => {
                 crate::info_now_time(String::from("start check pool info"));
-                handler.per_conn_info.check(&mut handler.pool, &handler.hand_key).await?;
+                handler.per_conn_info.check(&mut handler.pool, &handler.hand_key, &handler.db, &handler.auto_commit).await?;
                 crate::info_now_time(String::from("start parse query packet"));
                 if let Err(e) = self.parse_query_packet(handler).await{
                     return Err(Box::new(MyError(e.to_string().into())));
@@ -101,7 +101,7 @@ impl ClientResponse {
         match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql).await?;
-                handler.set_per_conn_cached().await?;
+                //handler.set_per_conn_cached().await?;
             }
             SqlStatement::SetVariable (variable, value) => {
                 if variable.to_lowercase() == String::from("autocommit"){
@@ -126,28 +126,28 @@ impl ClientResponse {
                 self.reset_is_transaction(handler).await?;
             }
             SqlStatement::Insert => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-                    self.send_error_packet(handler, &e.to_string()).await?;
-                    return Ok(())
-                };
+//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
+//                    self.send_error_packet(handler, &e.to_string()).await?;
+//                    return Ok(())
+//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
                 //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Delete => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-                    self.send_error_packet(handler, &e.to_string()).await?;
-                    return Ok(())
-                };
+//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
+//                    self.send_error_packet(handler, &e.to_string()).await?;
+//                    return Ok(())
+//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
                 //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Update => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-                    self.send_error_packet(handler, &e.to_string()).await?;
-                    return Ok(())
-                };
+//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
+//                    self.send_error_packet(handler, &e.to_string()).await?;
+//                    return Ok(())
+//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
                 //self.check_auto_commit_set(handler, conn_info).await?;
@@ -159,10 +159,10 @@ impl ClientResponse {
                 //conn_info.reset_cached().await?;
             }
             SqlStatement::StartTransaction  => {
-                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-                    self.send_error_packet(handler, &e.to_string()).await?;
-                    return Ok(())
-                };
+//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
+//                    self.send_error_packet(handler, &e.to_string()).await?;
+//                    return Ok(())
+//                };
                 self.send_one_packet(handler).await?;
                 self.set_is_transaction(handler).await?;
             }
@@ -184,25 +184,6 @@ impl ClientResponse {
                 self.send_error_packet(handler, &error).await?;
             }
         }
-//                }
-//                //conn_info.set_cached(&handler.hand_key).await?;
-//                self.set_cached(handler).await?;
-//            }
-//            Err(e) => {
-//                error!("{} sql:{}", &e.to_string(), &sql);
-//                if self.check_is_set_names(&sql).await?{
-//                    self.send_ok_packet(handler).await?;
-//                    //self.send_one_packet(handler, conn_info).await?;
-//                }else if self.check_is_show(&sql).await? {
-//                    self.exec_query(handler).await?;
-//                    //conn_info.set_cached(&handler.hand_key).await?;
-//                    self.set_cached(handler).await?;
-//                }else {
-//                    self.send_error_packet(handler, &e.to_string()).await?;
-//                }
-//
-//            }
-//        }
 
         Ok(())
     }
@@ -251,11 +232,11 @@ impl ClientResponse {
     /// 处理查询的连接
     async fn exec_query(&self, handler: &mut Handler) -> Result<()> {
         crate::info_now_time(String::from("start execute query"));
-        if let Err(e) = self.set_conn_db_for_query(handler).await{
-            //handler.send_error_packet(&e.to_string()).await?;
-            self.send_error_packet(handler, &e.to_string()).await?;
-            return Ok(())
-        };
+//        if let Err(e) = self.set_conn_db_for_query(handler).await{
+//            //handler.send_error_packet(&e.to_string()).await?;
+//            self.send_error_packet(handler, &e.to_string()).await?;
+//            return Ok(())
+//        };
         crate::info_now_time(String::from("set conn db for query sucess"));
         let packet = self.packet_my_value();
         crate::info_now_time(String::from("start send pakcet to mysql"));
@@ -339,10 +320,10 @@ impl ClientResponse {
     /// 用于非事务性的操作
     async fn no_traction(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-                self.send_error_packet(handler, &e.to_string()).await?;
-                return Ok(())
-            };
+//            if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
+//                self.send_error_packet(handler, &e.to_string()).await?;
+//                return Ok(())
+//            };
             self.send_one_packet(handler).await?;
         }
         Ok(())
@@ -417,21 +398,21 @@ impl ClientResponse {
         Ok(())
     }
 
-    /// 判断并初始化默认库，只针对查询/show语句
-    async fn set_conn_db_for_query(&self, handler: &mut Handler) -> Result<()>{
-        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            if conn.cached != String::from(""){
-                return Ok(())
-            }
-            if let Some(db) = &handler.db{
-                if db != &String::from("information_schema"){
-                    self.__set_default_db(db.clone(), handler).await?;
-                }
-            }
-            return Ok(())
-        }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
-    }
+//    /// 判断并初始化默认库，只针对查询/show语句
+//    async fn set_conn_db_for_query(&self, handler: &mut Handler) -> Result<()>{
+//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+//            if conn.cached != String::from(""){
+//                return Ok(())
+//            }
+//            if let Some(db) = &handler.db{
+//                if db != &String::from("information_schema"){
+//                    self.__set_default_db(db.clone(), handler).await?;
+//                }
+//            }
+//            return Ok(())
+//        }
+//        return Err(Box::new(MyError(String::from("lost connection").into())));
+//    }
 
     /// 初始化连接状态
     async fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
