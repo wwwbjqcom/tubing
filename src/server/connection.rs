@@ -10,6 +10,7 @@ use std::io::{self, Cursor};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use byteorder::{WriteBytesExt, LittleEndian};
+use tracing::{info, debug};
 
 /// Send and receive `Frame` values from a remote peer.
 ///
