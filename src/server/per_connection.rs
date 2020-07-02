@@ -20,6 +20,7 @@ impl PerMysqlConn {
         loop {
             if let Some(conn) = &mut self.conn_info{
                 if conn.check_cacke_sleep(){
+                    info!("abc");
                     conn.reset_cached().await?;
                     conn.reset_conn_default()?;
                     let mut new_conn = conn.try_clone()?;
