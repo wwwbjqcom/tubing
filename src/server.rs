@@ -479,9 +479,9 @@ impl Handler {
                     // This will result in the task terminating.
                     break;
                 }
-                _ = self.per_conn_info.health(&mut self.pool) => {
-                    continue;
-                }
+//                _ = self.per_conn_info.health(&mut self.pool) => {
+//                    continue;
+//                }
             };
             debug!("{}",crate::info_now_time(String::from("read one maybe_response")));
             // If `None` is returned from `read_frame()` then the peer closed
