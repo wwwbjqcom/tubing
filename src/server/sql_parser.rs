@@ -3,7 +3,7 @@
 @datetime: 2020/5/30
 */
 use crate::Result;
-use tracing::field::{debug};
+use tracing::{info, debug};
 
 /// 解析sql类型
 #[derive(Debug)]
