@@ -119,7 +119,7 @@ impl Connection {
 
     async fn get_packet_from_client(&mut self, buf: &mut Vec<u8>) -> Result<()> {
         loop {
-            if 0 == self.stream.read_buf(buf).await? {
+            if 0 == self.stream.read(buf).await? {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
                 // there is, this means that the peer closed the socket while
