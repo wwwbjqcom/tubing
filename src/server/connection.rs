@@ -36,7 +36,7 @@ pub(crate) struct Connection {
     // currently requires you to empty its buffer before you can ask it to
     // retrieve more data from the underlying stream, so we have to manually
     // implement buffering. This should be fixed in Tokio v0.3.
-    buffer: Vec<u8>,
+    buffer: BytesMut,
 }
 
 impl Connection {
@@ -46,7 +46,7 @@ impl Connection {
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
-            buffer: vec![],
+            buffer: BytesMut::with_capacity(4 * 1024),
         }
     }
 
@@ -98,6 +98,7 @@ impl Connection {
     }
 
     async fn get_packet_buffer(&mut self) -> Result<Vec<u8>> {
+        debug!("{}",crate::info_now_time(String::from("get response from client")));
         let mut all_buf: Vec<u8> = vec![];
         let mut buf = vec![0 as u8; 4];
         self.get_packet_from_client(&mut buf).await?;
@@ -107,6 +108,7 @@ impl Connection {
         let mut buf = vec![0 as u8; payload as usize];
         self.get_packet_from_client(&mut buf).await?;
         all_buf.extend(buf);
+        debug!("{}",crate::info_now_time(String::from("get response packet from client sucess")));
         Ok(all_buf)
     }
 
@@ -117,6 +119,7 @@ impl Connection {
                 // shutdown, there should be no data in the read buffer. If
                 // there is, this means that the peer closed the socket while
                 // sending a frame.
+                debug!("{}",crate::info_now_time(String::from("get response from client none")));
                 return Err("connection reset by peer".into());
             }
             return Ok(())
