@@ -86,15 +86,6 @@ impl ClientResponse {
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let sql_parser = SqlStatement::Default;
-//        if self.check_is_change_db(handler, &sql).await?{
-//            handler.set_per_conn_cached().await?;
-//            return Ok(())
-//        }
-//        let dialect = MySqlDialect {};
-//        let mut ast = Parser::parse_sql(&dialect, sql.to_string());
-//        match ast{
-//            Ok(mut ast) => {
-//                'a: for i in &mut ast{
         let a = sql_parser.parser(&sql);
         debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
         debug!("{}",format!("{:?}: {}", a, &sql));
@@ -122,47 +113,25 @@ impl ClientResponse {
             }
             SqlStatement::Commit => {
                 self.send_one_packet(handler).await?;
-                //self.reset_conn_db_and_autocommit(handler, conn_info)?;
                 self.reset_is_transaction(handler).await?;
             }
             SqlStatement::Insert => {
-//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-//                    self.send_error_packet(handler, &e.to_string()).await?;
-//                    return Ok(())
-//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
-                //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Delete => {
-//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-//                    self.send_error_packet(handler, &e.to_string()).await?;
-//                    return Ok(())
-//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
-                //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Update => {
-//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-//                    self.send_error_packet(handler, &e.to_string()).await?;
-//                    return Ok(())
-//                };
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
-                //self.check_auto_commit_set(handler, conn_info).await?;
             }
             SqlStatement::Rollback => {
                 self.send_one_packet(handler).await?;
                 self.reset_is_transaction(handler).await?;
-                //self.reset_conn_db_and_autocommit(handler, conn_info)?;
-                //conn_info.reset_cached().await?;
             }
             SqlStatement::StartTransaction  => {
-//                if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
-//                    self.send_error_packet(handler, &e.to_string()).await?;
-//                    return Ok(())
-//                };
                 self.send_one_packet(handler).await?;
                 self.set_is_transaction(handler).await?;
             }
@@ -184,7 +153,7 @@ impl ClientResponse {
                 self.send_error_packet(handler, &error).await?;
             }
         }
-
+        debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
     }
 
@@ -266,7 +235,6 @@ impl ClientResponse {
             }
 
         }
-        debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
     }
 
