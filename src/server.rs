@@ -457,6 +457,7 @@ impl Handler {
             match &self.status {
                 // first handshake verification
                 ConnectionStatus::Null => {
+                    debug!("{}",crate::info_now_time(String::from("send auth packet")));
                     self.handshake().await?;
                     continue;
                 }
