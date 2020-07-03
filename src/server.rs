@@ -551,7 +551,7 @@ impl Handler {
 
     pub async fn stream_flush(&mut self) -> Result<()> {
         debug!("{}",crate::info_now_time(String::from("flush to client")));
-        self.connection.flush().await
+        Ok(self.connection.flush().await?)
     }
 
     /// check response seq id
