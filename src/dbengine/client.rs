@@ -30,7 +30,7 @@ pub struct ClientResponse {
 }
 
 impl ClientResponse {
-    pub async fn new(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse> {
+    pub async fn new(packet: &mut Cursor<Vec<u8>>) -> Result<ClientResponse> {
         let payload = packet.read_u24::<LittleEndian>()?;
         let seq = packet.read_u8()?;
         let mut buf = vec![0 as u8; payload as usize];
