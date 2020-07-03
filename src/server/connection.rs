@@ -43,6 +43,7 @@ impl Connection {
     /// Create a new `Connection`, backed by `socket`. Read and write buffers
     /// are initialized.
     pub(crate) fn new(socket: TcpStream) -> Connection {
+        socket.set_nodelay(true);
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
