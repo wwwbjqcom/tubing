@@ -46,90 +46,52 @@ impl Connection {
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
-            buffer: BytesMut::with_capacity(4 * 1024),
+            buffer: BytesMut::with_capacity(60 * 1024 * 1024),
         }
     }
 
     /// read the data stream from the connection
     pub async fn read(&mut self, seq: &u8) -> Result<Option<client::ClientResponse>> {
-//        loop {
-//            let mut buf = Cursor::new(&self.buffer[..]);
-//            if self.check_data(&mut buf)? {
-//                debug!("{}",crate::info_now_time(String::from("get response from client sucess")));
-//                let response = client::ClientResponse::new(&mut buf).await?;
-//                if response.payload > 0{
-//                    // The `client::ClientResponse::new` function will have advanced the cursor until
-//                    // the end of the packet. Since the cursor had position set
-//                    // to zero before `client::ClientResponse::new` was called, we obtain the
-//                    // length of the packet by checking the cursor position.
-//                    let len = buf.position() as usize;
-//                    // Reset the position to zero before passing the cursor to
-//                    // `client::ClientResponse::new`.
-//                    buf.set_position(0);
-//                    // Discard the parsed data from the read buffer.
-//                    //
-//                    // When `advance` is called on the read buffer, all of the
-//                    // data up to `len` is discarded. The details of how this
-//                    // works is left to `BytesMut`. This is often done by moving
-//                    // an internal cursor, but it may be done by reallocataing
-//                    // and copying data.
-//                    self.buffer.advance(len);
-//                    return Ok(Some(response));
-//                }
-//            }
-//
-//            debug!("{}",crate::info_now_time(String::from("get response from client")));
-//            if 0 == self.stream.read_buf(&mut self.buffer).await? {
-//                // The remote closed the connection. For this to be a clean
-//                // shutdown, there should be no data in the read buffer. If
-//                // there is, this means that the peer closed the socket while
-//                // sending a frame.
-//                if self.buffer.is_empty() {
-//                    return Ok(None);
-//                } else {
-//                    return Err("connection reset by peer".into());
-//                }
-//            }
-//        }
         loop {
-            let packet = self.get_packet_buffer().await?;
-            let mut buf = Cursor::new(packet);
-            let response = client::ClientResponse::new(&mut buf).await?;
-            debug!("{}",crate::info_now_time(format!("a response: {:?}", &response)));
-            if response.payload > 0{
-                return Ok(Some(response))
+            let mut buf = Cursor::new(&self.buffer[..]);
+            if self.check_data(&mut buf)? {
+                debug!("{}",crate::info_now_time(String::from("get response from client sucess")));
+                let response = client::ClientResponse::new(&mut buf).await?;
+                if response.payload > 0{
+                    // The `client::ClientResponse::new` function will have advanced the cursor until
+                    // the end of the packet. Since the cursor had position set
+                    // to zero before `client::ClientResponse::new` was called, we obtain the
+                    // length of the packet by checking the cursor position.
+                    let len = buf.position() as usize;
+                    // Reset the position to zero before passing the cursor to
+                    // `client::ClientResponse::new`.
+                    buf.set_position(0);
+                    // Discard the parsed data from the read buffer.
+                    //
+                    // When `advance` is called on the read buffer, all of the
+                    // data up to `len` is discarded. The details of how this
+                    // works is left to `BytesMut`. This is often done by moving
+                    // an internal cursor, but it may be done by reallocataing
+                    // and copying data.
+                    self.buffer.advance(len);
+                    return Ok(Some(response));
+                }
             }
-        }
-    }
 
-    async fn get_packet_buffer(&mut self) -> Result<Vec<u8>> {
-        debug!("{}",crate::info_now_time(String::from("get response from client")));
-        let mut all_buf: Vec<u8> = vec![];
-        let mut buf = vec![0 as u8; 4];
-        self.get_packet_from_client(&mut buf).await?;
-        let mut my_buf = Cursor::new(buf.clone());
-        let payload = my_buf.read_u24::<LittleEndian>()?;
-        all_buf.extend(buf);
-        let mut buf = vec![0 as u8; payload as usize];
-        self.get_packet_from_client(&mut buf).await?;
-        all_buf.extend(buf);
-        debug!("{}",crate::info_now_time(String::from("get response packet from client sucess")));
-        Ok(all_buf)
-    }
-
-    async fn get_packet_from_client(&mut self, buf: &mut Vec<u8>) -> Result<()> {
-        loop {
-            if 0 == self.stream.read(buf).await? {
+            debug!("{}",crate::info_now_time(String::from("get response from client")));
+            if 0 == self.stream.read_buf(&mut self.buffer).await? {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
                 // there is, this means that the peer closed the socket while
                 // sending a frame.
-                debug!("{}",crate::info_now_time(String::from("get response from client none")));
-                return Err("connection reset by peer".into());
+                if self.buffer.is_empty() {
+                    return Ok(None);
+                } else {
+                    return Err("connection reset by peer".into());
+                }
             }
-            debug!("{}",crate::info_now_time(String::from("read one packet sucess")));
-            return Ok(())
         }
+
     }
 
     fn check_data(&self, src: &mut Cursor<&[u8]>) -> Result<bool> {
@@ -148,12 +110,16 @@ impl Connection {
         self.stream.flush().await
     }
 
+    pub async fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush().await
+    }
+
     /// send a packet to the connection
     pub async fn send_packet_full(&mut self, packet: &Vec<u8>) -> io::Result<()> {
         debug!("{}",crate::info_now_time(String::from("start write all to client")));
         self.stream.write_all(&packet).await?;
-        debug!("{}",crate::info_now_time(String::from("flush to client")));
-        self.stream.flush().await
+//        debug!("{}",crate::info_now_time(String::from("flush to client")));
+//        self.stream.flush().await
     }
 
 

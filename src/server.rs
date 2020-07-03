@@ -543,11 +543,16 @@ impl Handler {
         Ok(())
     }
 
+
     pub async fn send_full(&mut self, packet: &Vec<u8>) -> Result<()>{
         self.connection.send_packet_full(packet).await?;
         Ok(())
     }
 
+    pub async fn stream_flush(&mut self) -> Result<()> {
+        debug!("{}",crate::info_now_time(String::from("flush to client")));
+        self.connection.flush().await?
+    }
 
     /// check response seq id
     fn check_seq(&mut self, seq: &u8) -> bool {

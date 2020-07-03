@@ -30,7 +30,7 @@ pub struct ClientResponse {
 }
 
 impl ClientResponse {
-    pub async fn new(packet: &mut Cursor<Vec<u8>>) -> Result<ClientResponse> {
+    pub async fn new(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse> {
         let payload = packet.read_u24::<LittleEndian>()?;
         let seq = packet.read_u8()?;
         let mut buf = vec![0 as u8; payload as usize];
@@ -153,6 +153,7 @@ impl ClientResponse {
                 self.send_error_packet(handler, &error).await?;
             }
         }
+        handler.stream_flush().await?;
         debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
     }
@@ -308,16 +309,16 @@ impl ClientResponse {
         Ok(())
     }
 
-    /// 检查ok包是否已eof结尾
-    async fn check_eof(&self, handler: &mut Handler) -> Result<()> {
-        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            if handler.client_flags & CLIENT_SESSION_TRACK as i32 <= 0 {
-                let (buf, header) = conn.get_packet_from_stream().await?;
-                self.send_mysql_response_packet(handler, &buf, &header).await?;
-            }
-        }
-        Ok(())
-    }
+//    /// 检查ok包是否已eof结尾
+//    async fn check_eof(&self, handler: &mut Handler) -> Result<()> {
+//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+//            if handler.client_flags & CLIENT_SESSION_TRACK as i32 <= 0 {
+//                let (buf, header) = conn.get_packet_from_stream().await?;
+//                self.send_mysql_response_packet(handler, &buf, &header).await?;
+//            }
+//        }
+//        Ok(())
+//    }
 
 //    /// 用于检查是否为自动提交， 判断是否缓存线程
 //    async fn check_auto_commit_set(&self, handler: &mut Handler) -> Result<()>{
