@@ -7,7 +7,7 @@ use crate::{Result, MyError};
 use crate::dbengine::client;
 use bytes::{Buf, BytesMut};
 use std::io::{self, Cursor};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter, BufReader, BufStream};
 use tokio::net::TcpStream;
 use byteorder::{WriteBytesExt, LittleEndian};
 use tracing::{info, debug};
@@ -29,7 +29,7 @@ pub(crate) struct Connection {
     // The `TcpStream`. It is decorated with a `BufWriter`, which provides write
     // level buffering. The `BufWriter` implementation provided by Tokio is
     // sufficient for our needs.
-    stream: BufWriter<TcpStream>,
+    stream: BufStream<TcpStream>,
 
     // The buffer for reading frames. Unfortunately, Tokio's `BufReader`
     // currently requires you to empty its buffer before you can ask it to
@@ -43,7 +43,7 @@ impl Connection {
     /// are initialized.
     pub(crate) fn new(socket: TcpStream) -> Connection {
         Connection {
-            stream: BufWriter::new(socket),
+            stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
             buffer: BytesMut::with_capacity(64 * 1024 * 1024),
         }
