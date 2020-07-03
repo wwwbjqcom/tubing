@@ -127,6 +127,7 @@ impl Connection {
                 debug!("{}",crate::info_now_time(String::from("get response from client none")));
                 return Err("connection reset by peer".into());
             }
+            debug!("{}",crate::info_now_time(String::from("read one packet sucess")));
             return Ok(())
         }
     }
