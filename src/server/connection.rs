@@ -91,10 +91,14 @@ impl Connection {
 //                }
 //            }
 //        }
-        let packet = self.get_packet_buffer().await?;
-        let mut buf = Cursor::new(packet);
-        let response = client::ClientResponse::new(&mut buf).await?;
-        return Ok(Some(response))
+        loop {
+            let packet = self.get_packet_buffer().await?;
+            let mut buf = Cursor::new(packet);
+            let response = client::ClientResponse::new(&mut buf).await?;
+            if response.payload > 0{
+                return Ok(Some(response))
+            }
+        }
     }
 
     async fn get_packet_buffer(&mut self) -> Result<Vec<u8>> {
