@@ -38,7 +38,7 @@ pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Fu
     let (shutdown_complete_tx_t, shutdown_complete_rx_t) = mpsc::channel(1);
 
     let mut runtime = Builder::new()
-        .threaded_scheduler()
+        .basic_scheduler()
         .core_threads(2)
         .max_threads(10)
         .enable_all()
