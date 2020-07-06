@@ -39,7 +39,7 @@ pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Fu
 
     let mut runtime = Builder::new()
         .threaded_scheduler()
-        .core_threads(8)
+        .core_threads(10)
         .max_threads(100)
         .enable_all()
         .thread_name("my-custom-name")
