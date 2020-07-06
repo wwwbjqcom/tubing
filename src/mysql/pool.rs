@@ -173,13 +173,13 @@ impl ConnectionsPool{
             let now_time = Local::now().timestamp_millis() as usize;
             //每隔60秒检查一次
             if now_time - ping_last_check_time >= 60000{
-                info!("{}", String::from("check_ping"));
+                debug!("{}", String::from("check_ping"));
                 self.check_ping().await?;
                 ping_last_check_time = now_time;
             }
             //每隔600秒进行一次连接池数量维护
             if now_time - maintain_last_check_time >= 600000{
-                info!("{}", String::from("maintain_pool"));
+                debug!("{}", String::from("maintain_pool"));
                 self.maintain_pool().await?;
                 maintain_last_check_time = now_time;
             }
@@ -230,35 +230,6 @@ impl ConnectionsPool{
         }
         Ok(())
     }
-
-//    /// 对缓存连接池进行维护, 空闲超过阈值且不存在事务的则直接放回连接池，供其他连接使用
-//    pub async fn maintain_cache_pool(&mut self) -> Result<()> {
-//        if self.cached_count.load(Ordering::Relaxed) > 0 {
-//            let mut cache_pool = self.cached_queue.lock().await;
-//            let mut tmp: Vec<String> = vec![];
-//            for (key, conn) in cache_pool.iter_mut(){
-//
-//                if conn.check_cacke_sleep(){
-//                    tmp.push(key.clone());
-//                }
-//            }
-//            for key in tmp {
-//                let mut pool = self.conn_queue.lock().await;
-//                match cache_pool.remove(&key){
-//                    Some(mut conn) => {
-//                        conn.reset_cached().await?;
-//                        conn.reset_conn_default()?;
-//                        pool.pool.push_back(conn);
-//                        self.queued_count.fetch_add(1, Ordering::SeqCst);
-//                        self.cached_count.fetch_sub(1, Ordering::SeqCst);
-//                    }
-//                    None => {}
-//                }
-//            }
-//            drop(cache_pool)
-//        }
-//        Ok(())
-//    }
 
     /// 对连接池中的连接进行心跳检查
     pub async fn check_ping(&mut self) -> Result<()> {
@@ -381,10 +352,10 @@ impl MysqlConnectionInfo{
 
     /// send packet and return response packet
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
-        crate::info_now_time(String::from("write all to mysql conn"));
+        debug!("{}",crate::info_now_time(String::from("write all to mysql conn")));
         self.conn.write_all(packet)?;
         self.set_last_time();
-        crate::info_now_time(String::from("get mysql response"));
+        debug!("{}",crate::info_now_time(String::from("get mysql response")));
         let (buf, header) = self.get_packet_from_stream().await?;
         Ok((buf, header))
     }
