@@ -2,7 +2,7 @@
 @author: xiao cai niao
 @datetime: 2020/5/30
 */
-use crate::Result;
+use crate::mysql::Result;
 use tracing::{info, debug};
 
 /// 解析sql类型

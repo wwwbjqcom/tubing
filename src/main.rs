@@ -5,6 +5,8 @@ mod readvalue;
 use structopt::StructOpt;
 use tokio::net::TcpListener;
 use tokio::signal;
+use tokio::runtime::{Runtime, Builder};
+use tokio::prelude::*;
 use std::sync::Arc;
 use std::ops::DerefMut;
 use std::thread;
@@ -12,10 +14,6 @@ use std::fmt;
 use tracing::debug;
 use chrono::prelude::*;
 use chrono;
-
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 pub fn info_now_time(t: String) -> String {
     let dt = Local::now();
@@ -74,8 +72,8 @@ impl Config{
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+//#[tokio::main]
+fn main() -> mysql::Result<()> {
     tracing_subscriber::fmt::try_init()?;
 
     let cli = Cli::from_args();
@@ -89,17 +87,23 @@ async fn main() -> Result<()> {
     let max = cli.max.unwrap_or(MAX.to_string()).parse().unwrap();
     let host_info = cli.host_info.unwrap_or(DEFAULT_HOST_INFO.to_string());
 
+//    let runtime = Builder::new()
+//        .threaded_scheduler()
+//        .core_threads(2)
+//        .enable_all()
+//        .thread_name("my-custom-name")
+//        .thread_stack_size(3 * 1024 * 1024)
+//        .build()
+//        .unwrap();
+
     let config = Config{user, password, conns, muser, mpassword,
         program_name: String::from("MysqlBus"),
         database: String::from("information_schema"), min, max, host_info};
 
     let mysql_pool = mysql::pool::ConnectionsPool::new(&config)?;
-
-    let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     let config_arc = Arc::new(config);
-    server::run(listener, config_arc,  mysql_pool, signal::ctrl_c()).await
-
-
+    //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
+    server::run(config_arc,  mysql_pool, signal::ctrl_c(), port)
 }
 
 #[derive(StructOpt, Debug)]

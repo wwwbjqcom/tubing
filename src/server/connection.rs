@@ -3,7 +3,8 @@
 @datetime: 2020/5/14
 */
 
-use crate::{Result, MyError};
+use crate::{MyError};
+use crate::mysql::Result;
 use crate::dbengine::client;
 use bytes::{Buf, BytesMut};
 use std::io::{self, Cursor};

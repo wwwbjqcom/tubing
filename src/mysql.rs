@@ -3,7 +3,6 @@
 @datetime: 2020/5/29
 */
 
-use crate::Result;
 use std::net::{TcpStream, IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 use std::sync::{Arc, Mutex, Condvar};
@@ -12,6 +11,10 @@ pub mod connection;
 use connection::MysqlConnection;
 pub mod scramble;
 pub mod pool;
+
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// mysql 协议包枚举类型
 pub enum PackType {

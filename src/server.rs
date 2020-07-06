@@ -10,7 +10,8 @@ use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
-use crate::{Config, Result, readvalue};
+use crate::{Config, readvalue};
+use crate::mysql::Result;
 use crate::dbengine;
 use crate::MyError;
 use crate::dbengine::client::{ClientResponse};
@@ -26,8 +27,9 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41};
 use crate::mysql::connection::PacketHeader;
+use tokio::runtime::Builder;
 
-pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Future) -> crate::Result<()> {
+pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Future, port: String) -> Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
@@ -35,24 +37,15 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let (shutdown_complete_tx_t, shutdown_complete_rx_t) = mpsc::channel(1);
 
-    let mut pool_maintain = ThreadPoolMaintain{
-        pool: mysql_pool.clone(),
-        notify_shutdown_t,
-        shutdown_complete_rx_t,
-        shutdown_complete_tx_t
-    };
+    let mut runtime = Builder::new()
+        .threaded_scheduler()
+        .core_threads(2)
+        .enable_all()
+        .thread_name("my-custom-name")
+        .thread_stack_size(3 * 1024 * 1024)
+        .build()
+        .unwrap();
 
-
-    // Initialize the listener state
-    let mut server = Listener {
-        pool: mysql_pool,
-        config,
-        listener,
-        limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
-        notify_shutdown,
-        shutdown_complete_tx,
-        shutdown_complete_rx,
-    };
     // Concurrently run the server and listen for the `shutdown` signal. The
     // server task runs until an error is encountered, so under normal
     // circumstances, this `select!` statement runs until the `shutdown` signal
@@ -72,56 +65,81 @@ pub async fn run(listener: TcpListener , config: Arc<Config>,  mysql_pool: Conne
     // asynchronous Rust. See the API docs for more details:
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
-    tokio::select! {
-        res = server.run() => {
-            // If an error is received here, accepting connections from the TCP
-            // listener failed multiple times and the server is giving up and
-            // shutting down.
-            //
-            // Errors encountered when handling individual connections do not
-            // bubble up to this point.
-            if let Err(err) = res {
-                error!(cause = %err, "failed to accept");
+    runtime.block_on(async{
+        let mut listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
+
+        let mut pool_maintain = ThreadPoolMaintain{
+            pool: mysql_pool.clone(),
+            notify_shutdown_t,
+            shutdown_complete_rx_t,
+            shutdown_complete_tx_t
+        };
+
+
+        // Initialize the listener state
+        let mut server = Listener {
+            pool: mysql_pool,
+            config,
+            listener,
+            limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
+            notify_shutdown,
+            shutdown_complete_tx,
+            shutdown_complete_rx,
+        };
+
+        tokio::select! {
+            res = server.run() => {
+                // If an error is received here, accepting connections from the TCP
+                // listener failed multiple times and the server is giving up and
+                // shutting down.
+                //
+                // Errors encountered when handling individual connections do not
+                // bubble up to this point.
+                if let Err(err) = res {
+                    error!(cause = %err, "failed to accept");
+                }
+            }
+
+            a = pool_maintain.run() => {
+                if let Err(err) = a {
+                    error!("thread pool maintain faild");
+                }
+
+            }
+
+            _ = shutdown => {
+                // The shutdown signal has been received.
+                info!("shutting down");
             }
         }
 
-        a = pool_maintain.run() => {
-            if let Err(err) = a {
-                error!("thread pool maintain faild");
-            }
+        // Extract the `shutdown_complete` receiver and transmitter
+        // explicitly drop `shutdown_transmitter`. This is important, as the
+        // `.await` below would otherwise never complete.
+        let Listener {
+            mut shutdown_complete_rx,
+            shutdown_complete_tx,
+            ..
+        } = server;
 
-        }
+        let ThreadPoolMaintain {
+            mut shutdown_complete_rx_t,
+            shutdown_complete_tx_t,
+            ..
+        } = pool_maintain;
 
-        _ = shutdown => {
-            // The shutdown signal has been received.
-            info!("shutting down");
-        }
-    }
+        drop(shutdown_complete_tx);
+        drop(shutdown_complete_tx_t);
+        // Wait for all active connections to finish processing. As the `Sender`
+        // handle held by the listener has been dropped above, the only remaining
+        // `Sender` instances are held by connection handler tasks. When those drop,
+        // the `mpsc` channel will close and `recv()` will return `None`.
+        let _ = shutdown_complete_rx.recv().await;
+        let _ = shutdown_complete_rx_t.recv().await;
 
-    // Extract the `shutdown_complete` receiver and transmitter
-    // explicitly drop `shutdown_transmitter`. This is important, as the
-    // `.await` below would otherwise never complete.
-    let Listener {
-        mut shutdown_complete_rx,
-        shutdown_complete_tx,
-        ..
-    } = server;
+        Ok(())
+    })
 
-    let ThreadPoolMaintain {
-        mut shutdown_complete_rx_t,
-        shutdown_complete_tx_t,
-        ..
-    } = pool_maintain;
-
-    drop(shutdown_complete_tx);
-    drop(shutdown_complete_tx_t);
-    // Wait for all active connections to finish processing. As the `Sender`
-    // handle held by the listener has been dropped above, the only remaining
-    // `Sender` instances are held by connection handler tasks. When those drop,
-    // the `mpsc` channel will close and `recv()` will return `None`.
-    let _ = shutdown_complete_rx.recv().await;
-    let _ = shutdown_complete_rx_t.recv().await;
-    Ok(())
 }
 
 

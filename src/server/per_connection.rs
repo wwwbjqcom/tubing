@@ -1,6 +1,6 @@
 use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPool};
 use std::time::Duration;
-use crate::Result;
+use crate::mysql::Result;
 use tokio::time::delay_for;
 use tracing::{info, debug};
 

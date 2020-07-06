@@ -11,7 +11,7 @@ use std::borrow::Borrow;
 use byteorder::ReadBytesExt;
 use mysql_common::crypto::encrypt;
 use byteorder::LittleEndian;
-use crate::Result;
+use crate::mysql::Result;
 use crate::mysql::connection::response::pack_header;
 use tracing::field::debug;
 

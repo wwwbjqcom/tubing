@@ -5,7 +5,8 @@
 
 use bytes::{BytesMut, Buf};
 use std::io::{Cursor, Read};
-use crate::{Result, readvalue};
+use crate::{ readvalue};
+use crate::mysql::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, CLIENT_SESSION_TRACK};
 use crate::server::{Handler, ConnectionStatus};
