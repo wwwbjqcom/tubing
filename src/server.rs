@@ -522,6 +522,7 @@ impl Handler {
                     let (buf, db, flags, user_name)= handshake.auth(&response,
                                                                     self.get_status_flags(),
                                                                     &self.platform_pool).await?;
+                    debug!("{}",&buf);
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                         self.client_flags = flags;
