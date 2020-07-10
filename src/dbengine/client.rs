@@ -87,7 +87,7 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        info!("{}",&sql);
+        //info!("{}",&sql);
         let sql_parser = SqlStatement::Default;
         let a = sql_parser.parser(&sql);
         debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
