@@ -18,6 +18,7 @@ use crate::mysql::Result;
 use byteorder::{WriteBytesExt, LittleEndian};
 use crate::dbengine::client::ClientResponse;
 use crate::mysql::scramble::get_sha1_pass;
+use tracing::{info, debug};
 use std::sync::Arc;
 use crate::readvalue;
 use crate::server::Handler;
@@ -116,7 +117,9 @@ impl HandShake {
             return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags, user_name));
         }
         let auth_password = user_info_lock.get_user_password(&user_name);
+        debug!("{}", &auth_password);
         let auth_password = get_sha1_pass(&auth_password, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
+        debug!("{}",&auth_password);
         drop(user_info_lock);
 
 
@@ -124,6 +127,7 @@ impl HandShake {
         if self.capabilities & (CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA as u32) > 0 {
             let password_len = response.buf[offset..offset+1][0];
             let password = response.buf[offset+1..offset+1+ password_len as usize].to_vec();
+            debug!("{}",&password);
             offset += (1 + password_len) as usize;
             if &password != &auth_password{
                 //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
