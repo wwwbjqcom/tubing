@@ -512,6 +512,7 @@ impl Handler {
                 Some(response) => response,
                 None => break,
             };
+            debug!("{:?}", &response);
             debug!("{}",crate::info_now_time(String::from("start")));
             if !self.check_seq(&response.seq){
                 break;
