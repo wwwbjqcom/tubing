@@ -620,19 +620,25 @@ impl Handler {
             if cur_platform != platform{
                 //归还连接
                 self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
-                if !self.get_platform_conn_on(platform).await?{
-                    let error = format!("no available connection for this platform({})", platform);
-                    error!("{}", &error);
-                    return Err(Box::new(MyError(error.into())));
-                    //self.send_error_packet(handler, &error).await?;
-                }else {
-                    self.platform = Some(platform.clone());
-                }
+                self.check_get_connection(platform).await?;
             }
+        }else {
+            self.check_get_connection(platform).await?;
         }
         return Ok(());
     }
 
+    async fn check_get_connection(&mut self, platform: &String) -> Result<()> {
+        if !self.get_platform_conn_on(platform).await?{
+            let error = format!("no available connection for this platform({})", platform);
+            error!("{}", &error);
+            return Err(Box::new(MyError(error.into())));
+            //self.send_error_packet(handler, &error).await?;
+        }else {
+            self.platform = Some(platform.clone());
+        }
+        Ok(())
+    }
 }
 
 
