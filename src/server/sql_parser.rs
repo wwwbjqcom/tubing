@@ -88,7 +88,7 @@ impl SqlStatement{
                     return SqlStatement::SetVariable(sql_vec[1].clone(), sql_ver[1].to_string());
                 }
             }
-            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[3].to_string());
+            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].to_string());
         }
 
     }

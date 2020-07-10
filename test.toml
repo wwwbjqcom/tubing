@@ -1,0 +1,26 @@
+user="root"
+password="root"
+bind="0.0.0.0"
+port=3306
+auth=false
+
+[[platform]]
+platform="test1"
+write="192.168.1.126:3306"
+user="test"
+password="test@123"
+clipassword="test"
+min=10
+max=100
+auth=false
+
+#[[platform]]
+#platform="test2"
+#write="127.0.0.1:3309"
+#read=["127.0.0.1:3309", "127.0.0.1:3310"]
+#user="root"
+#password="root"
+#clipassword="root"
+#min=10
+#max=100
+#auth=false

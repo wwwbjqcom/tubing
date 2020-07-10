@@ -53,11 +53,12 @@ impl ClientResponse {
                 self.send_ok_packet(handler).await?;
             }
             PacketType::ComQuery => {
-                debug!("{}",crate::info_now_time(String::from("start check pool info")));
-                handler.per_conn_info.check(&mut handler.pool, &handler.hand_key, &handler.db, &handler.auto_commit).await?;
                 debug!("{}",crate::info_now_time(String::from("start parse query packet")));
                 if let Err(e) = self.parse_query_packet(handler).await{
-                    return Err(Box::new(MyError(e.to_string().into())));
+                    error!("{}",&e.to_string());
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    handler.per_conn_info.reset_connection(&mut handler.platform_pool_on).await?;
+                    //return Err(Box::new(MyError(e.to_string().into())));
                 };
             }
             PacketType::ComInitDb => {
@@ -86,10 +87,26 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
+        info!("{}",&sql);
         let sql_parser = SqlStatement::Default;
         let a = sql_parser.parser(&sql);
         debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
         debug!("{}",format!("{:?}: {}", a, &sql));
+
+        debug!("{}",crate::info_now_time(String::from("start check pool info")));
+        //已经设置了platform则进行连接检查及获取
+        if let Some(platform) = &handler.platform{
+            handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
+        }
+        //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
+        if !self.check_is_set_platform(&a, handler).await?{
+            let error = format!("please set up a business platform first");
+            error!("{}", &error);
+            self.send_error_packet(handler, &error).await?;
+            return Ok(())
+        }
+
+        //进行语句操作
         match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql).await?;
@@ -99,8 +116,22 @@ impl ClientResponse {
                 if variable.to_lowercase() == String::from("autocommit"){
                     self.set_autocommit(handler, &value).await?;
                 }else if variable.to_lowercase() == String::from("platform") {
-                    handler.platform = Some(value);
-                    self.send_ok_packet(handler).await?;
+                    // 设置platform
+                    if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
+                        if !handler.get_platform_conn_on(&value).await?{
+                            let error = format!("no available connection for this platform({})", &value);
+                            error!("{}", &error);
+                            self.send_error_packet(handler, &error).await?;
+                        }else {
+                            handler.platform = Some(value);
+                            self.send_ok_packet(handler).await?;
+                        }
+                    }else {
+                        let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
+                        error!("{}", &error);
+                        self.send_error_packet(handler, &error).await?;
+                    }
+
                 }else if variable.to_lowercase() == String::from("names"){
                     self.send_ok_packet(handler).await?;
                 }else {
@@ -159,6 +190,21 @@ impl ClientResponse {
         Ok(())
     }
 
+    /// 用于语句执行之前进行判断有没有设置platform
+    async fn check_is_set_platform(&self, sql_type: &SqlStatement, handler: &mut Handler) -> Result<bool>{
+        if let None = &handler.platform{
+            match sql_type{
+                SqlStatement::SetVariable(variable, value) => {
+                    return Ok(true)
+                }
+                _ => {
+                    return Ok(false);
+                }
+            }
+        }
+        return Ok(true);
+    }
+
     async fn reset_is_transaction(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.reset_is_transaction().await?);
@@ -173,13 +219,13 @@ impl ClientResponse {
         return Err(Box::new(MyError(String::from("lost connection").into())));
     }
 
-    async fn set_cached(&self, handler: &mut Handler) -> Result<()>{
-        let hand_key = handler.hand_key.clone();
-        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-            return Ok(conn_info.set_cached(&hand_key).await?);
-        }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
-    }
+//    async fn set_cached(&self, handler: &mut Handler) -> Result<()>{
+//        let hand_key = handler.hand_key.clone();
+//        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
+//            return Ok(conn_info.set_cached(&hand_key).await?);
+//        }
+//        return Err(Box::new(MyError(String::from("lost connection").into())));
+//    }
 
     /// 检查是否为非自动提交， 用于数据变动时设置连接状态
     async fn check_is_no_autocommit(&self, handler: &mut Handler) -> Result<()>{
@@ -310,28 +356,6 @@ impl ClientResponse {
         Ok(())
     }
 
-//    /// 检查ok包是否已eof结尾
-//    async fn check_eof(&self, handler: &mut Handler) -> Result<()> {
-//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-//            if handler.client_flags & CLIENT_SESSION_TRACK as i32 <= 0 {
-//                let (buf, header) = conn.get_packet_from_stream().await?;
-//                self.send_mysql_response_packet(handler, &buf, &header).await?;
-//            }
-//        }
-//        Ok(())
-//    }
-
-//    /// 用于检查是否为自动提交， 判断是否缓存线程
-//    async fn check_auto_commit_set(&self, handler: &mut Handler) -> Result<()>{
-//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-//            if handler.auto_commit{
-//                self.reset_conn_db_and_autocommit(handler, conn)?;
-//            }else {
-//                conn.set_cached(&handler.hand_key).await?;
-//            }
-//        }
-//        Ok(())
-//    }
 
     async fn send_mysql_response_packet(&self, handler: &mut Handler, buf: &Vec<u8>, header: &PacketHeader) -> Result<()> {
         debug!("{}",crate::info_now_time(String::from("start send packet to mysql")));

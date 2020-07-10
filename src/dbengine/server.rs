@@ -21,6 +21,7 @@ use crate::mysql::scramble::get_sha1_pass;
 use std::sync::Arc;
 use crate::readvalue;
 use crate::server::Handler;
+use crate::mysql::pool::PlatformPool;
 
 #[derive(Debug)]
 pub struct HandShake {
@@ -92,11 +93,9 @@ impl HandShake {
         return Ok(rdr);
     }
 
-    pub async fn auth(&self, response: &ClientResponse, config: &Arc<Config>, status_flags: u16) -> Result<(Vec<u8>, Option<String>, i32)>{
-        let mut my_config = config.my_clone();
-        let auth_password = get_sha1_pass(&my_config, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
+    pub async fn auth(&self, response: &ClientResponse,
+                      status_flags: u16, platform_pool: &PlatformPool) -> Result<(Vec<u8>, Option<String>, i32, String)>{
         let client_flags = readvalue::read_i32(&response.buf);
-
 
         let mut offset = 32;
         let mut db = None;
@@ -111,10 +110,16 @@ impl HandShake {
         let user_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
         offset += index + 1;
         //匹配用户名
-        if user_name != config.user{
+        let user_info_lock = platform_pool.user_info.read().await;
+        if !user_info_lock.check_user_name(&user_name){
             //handler.send(&self.error_packet(String::from("wrong username")).await?).await?;
-            return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags));
+            return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags, user_name));
         }
+        let auth_password = user_info_lock.get_user_password(&user_name);
+        let auth_password = get_sha1_pass(&auth_password, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
+        drop(user_info_lock);
+
+
         //获取密码
         if self.capabilities & (CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA as u32) > 0 {
             let password_len = response.buf[offset..offset+1][0];
@@ -122,7 +127,7 @@ impl HandShake {
             offset += (1 + password_len) as usize;
             if &password != &auth_password{
                 //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
-                return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags));
+                return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
             }
         }
 
@@ -140,7 +145,7 @@ impl HandShake {
             }
         }
 
-        return Ok((self.ok_packet(status_flags).await?, db, client_flags));
+        return Ok((self.ok_packet(status_flags).await?, db, client_flags, user_name));
     }
 
     async fn error_packet(&self, error: String) -> Result<Vec<u8>>{

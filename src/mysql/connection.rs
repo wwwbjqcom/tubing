@@ -3,7 +3,7 @@
 @datetime: 2019/9/21
 */
 
-use crate::{Config, readvalue};
+use crate::{Config, readvalue, MyConfig, Platform};
 use std::net::{TcpStream, IpAddr, Ipv4Addr, SocketAddr};
 use std::process;
 use std::io::{Cursor, Read, Seek, Write};
@@ -14,10 +14,83 @@ use byteorder::LittleEndian;
 use crate::mysql::Result;
 use crate::mysql::connection::response::pack_header;
 use tracing::field::debug;
+use std::collections::HashMap;
 
 pub mod pack;
 pub mod response;
 
+
+/// 记录客户端验证使用的用户信息
+#[derive(Clone, Debug)]
+pub struct UserInfo{
+    pub user: String,
+    pub password: String,
+    pub platform: String,
+}
+impl UserInfo{
+    pub fn new(conf: &Platform) -> UserInfo{
+        UserInfo{
+            user: conf.user.clone(),
+            password: conf.clipassword.clone(),
+            platform: conf.platform.clone()
+        }
+    }
+}
+
+/// 所有客户端验证的用户/密码信息， 用于验证登陆及权限
+#[derive(Clone, Debug)]
+pub struct AllUserInfo{
+    pub all_info: HashMap<String, UserInfo>     //user作为key, 方便查找
+}
+impl AllUserInfo{
+    pub fn new(conf: &MyConfig) -> AllUserInfo{
+        let mut all_info = HashMap::new();
+        let admin_user_info = UserInfo{user: conf.user.clone(), password: conf.password.clone(), platform: "admin".to_string()};
+        all_info.insert(conf.user.clone(), admin_user_info);
+        for platform in &conf.platform{
+            let platform_user_info = UserInfo::new(platform);
+            all_info.insert(platform.user.clone(), platform_user_info);
+        }
+        AllUserInfo{
+            all_info
+        }
+    }
+
+    /// 检查用户名是否存在
+    pub fn check_user_name(&self, user_name: &String) -> bool{
+        if self.all_info.contains_key(user_name) {
+            return true;
+        }
+        return false;
+    }
+
+    /// 获取用户密码
+    pub fn get_user_password(&self, user_name: &String) -> String{
+        match self.all_info.get(user_name){
+            Some(user_info) => {
+                return user_info.password.clone();
+            }
+            None => {
+                return "".to_string();
+            }
+        }
+    }
+
+    /// 检查用户权限， 是否能连接对应的业务平台
+    pub fn check_platform_privileges(&self, platform: &String, user_name: &String) -> bool{
+        match self.all_info.get(user_name){
+            Some(user_info) => {
+                if user_info.platform == "admin".to_string() || &user_info.platform == platform{
+                    return true;
+                }
+                return false;
+            }
+            None => {
+                return false;
+            }
+        }
+    }
+}
 
 /// mysql procotol packet header
 #[derive(Debug)]

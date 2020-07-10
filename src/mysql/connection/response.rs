@@ -70,7 +70,7 @@ impl LocalInfo {
         rdr.extend(config.muser.clone().into_bytes());
         rdr.push(0);
 
-        let sha1_pass= scramble::get_sha1_pass(config, &buf.auth_plugin_name, &buf.auth_plugin_data);
+        let sha1_pass= scramble::get_sha1_pass(&config.mpassword, &buf.auth_plugin_name, &buf.auth_plugin_data);
 
         if buf.capability_flags & (flags_meta.client_plugin_auth_lenenc_client_data as u32) > 0{
             rdr.push(sha1_pass.len() as u8);
@@ -169,7 +169,7 @@ pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config
     if auth_plugin_name.len() > 0 {
         let flags_meta = FlagsMeta::new();
         if handshake.capability_flags & flags_meta.client_plugin_auth as u32 > 0 {
-            payload = scramble::get_sha1_pass(conf, &auth_plugin_name, &auth_plugin_data.to_vec());
+            payload = scramble::get_sha1_pass(&conf.mpassword, &auth_plugin_name, &auth_plugin_data.to_vec());
         }
     }
 

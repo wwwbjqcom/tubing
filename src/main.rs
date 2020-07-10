@@ -15,6 +15,35 @@ use tracing::debug;
 use chrono::prelude::*;
 use chrono;
 
+use serde_derive::Deserialize;
+use std::fs::File;
+use std::io::prelude::*;
+
+#[derive(Debug, Deserialize)]
+pub struct MyConfig {
+    pub user: String,
+    pub password: String,
+    pub bind: String,
+    pub port: Option<u16>,
+    pub mode: Option<String>,
+    pub remote_mha: Option<String>,
+    pub auth: bool,
+    pub platform: Vec<Platform>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Platform {
+    pub platform: String,
+    pub write: String,
+    pub read: Option<Vec<String>>,
+    pub user: String,
+    pub password: String,
+    pub clipassword: String,
+    pub max: usize,
+    pub min: usize,
+    pub auth: bool
+}
+
 pub fn info_now_time(t: String) -> String {
     let dt = Local::now();
     let now_time = dt.timestamp_millis() as usize;
@@ -45,7 +74,6 @@ pub const MAX_CONNECTIONS: usize = 1000;
 pub struct Config {
     pub user: String,
     pub password: String,
-    pub conns: u8,
     pub muser: String,
     pub mpassword: String,
     pub program_name: String,
@@ -56,11 +84,24 @@ pub struct Config {
 }
 
 impl Config{
+    pub fn new(platform_conf: &Platform) -> Config{
+        Config{
+            user: platform_conf.user.clone(),
+            password: platform_conf.clipassword.clone(),
+            muser: platform_conf.user.clone(),
+            mpassword: platform_conf.password.clone(),
+            program_name: String::from("MysqlBus"),
+            database: String::from("information_schema"),
+            min: platform_conf.min.clone(),
+            max: platform_conf.max.clone(),
+            host_info: "".to_string()
+        }
+    }
+
     pub fn my_clone(&self) -> Config{
         Config{
             user: self.user.clone(),
             password: self.password.clone(),
-            conns: self.conns.clone(),
             muser: self.muser.clone(),
             mpassword: self.password.clone(),
             program_name: self.program_name.clone(),
@@ -77,65 +118,57 @@ fn main() -> mysql::Result<()> {
     tracing_subscriber::fmt::try_init()?;
 
     let cli = Cli::from_args();
-    let port = cli.port.unwrap_or(DEFAULT_PORT.to_string());
-    let user = cli.user.unwrap_or(DEFAULT_USER.to_string());
-    let password = cli.password.unwrap_or(DEFAULT_PASSWORD.to_string());
-    let conns = cli.conns.unwrap_or(MIN.to_string()).parse().unwrap();
-    let muser = cli.muser.unwrap_or(DEFAULT_USER.to_string());
-    let mpassword = cli.mpassword.unwrap_or(DEFAULT_PASSWORD.to_string());
-    let min = cli.min.unwrap_or(MIN.to_string()).parse().unwrap();
-    let max = cli.max.unwrap_or(MAX.to_string()).parse().unwrap();
-    let host_info = cli.host_info.unwrap_or(DEFAULT_HOST_INFO.to_string());
+    let config_file = cli.config.unwrap_or("default.toml".to_string());
+    let mut file = match File::open(&config_file) {
+        Ok(f) => f,
+        Err(e) => panic!("no such file {} exception:{}", &config_file, e)
+    };
+    let mut str_val = String::new();
+    match file.read_to_string(&mut str_val) {
+        Ok(s) => s
+        ,
+        Err(e) => panic!("Error Reading file: {}", e)
+    };
+    let my_config: MyConfig = toml::from_str(&str_val).unwrap();
 
-//    let runtime = Builder::new()
-//        .threaded_scheduler()
-//        .core_threads(2)
-//        .enable_all()
-//        .thread_name("my-custom-name")
-//        .thread_stack_size(3 * 1024 * 1024)
-//        .build()
-//        .unwrap();
-
-    let config = Config{user, password, conns, muser, mpassword,
-        program_name: String::from("MysqlBus"),
-        database: String::from("information_schema"), min, max, host_info};
-
-    let mysql_pool = mysql::pool::ConnectionsPool::new(&config)?;
-    let config_arc = Arc::new(config);
+    let platform_pool = mysql::pool::PlatformPool::new(&my_config)?;
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
-    server::run(config_arc,  mysql_pool, signal::ctrl_c(), port)
+    server::run(&my_config, signal::ctrl_c(), platform_pool)
 }
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "MysqlBus", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "A Mysql server proxy")]
 struct Cli {
-    #[structopt(name = "port", long = "--port", help="监听端口, 默认为3306")]
+    #[structopt(name = "port", long = "--port", help="弃用")]
     port: Option<String>,
 
-    #[structopt(name = "username", long = "--user", help="客户端连接时使用的用户名")]
+    #[structopt(name = "username", long = "--user", help="弃用")]
     user: Option<String>,
 
-    #[structopt(name = "password", long = "--password", help="客户端连接时使用的密码")]
+    #[structopt(name = "password", long = "--password", help="弃用")]
     password: Option<String>,
 
-    #[structopt(name = "conns", long = "--conns", help="没有使用")]
+    #[structopt(name = "conns", long = "--conns", help="弃用")]
     conns: Option<String>,
 
-    #[structopt(name = "musername", long = "--musername", help="后端数据库用户名")]
+    #[structopt(name = "musername", long = "--musername", help="弃用")]
     muser: Option<String>,
 
-    #[structopt(name = "mpassword", long = "--mpassword", help="后端数据库密码")]
+    #[structopt(name = "mpassword", long = "--mpassword", help="弃用")]
     mpassword: Option<String>,
 
-    #[structopt(name = "mport", long = "--mport", help="没有使用")]
+    #[structopt(name = "mport", long = "--mport", help="弃用")]
     mport: Option<String>,
 
-    #[structopt(name = "min", long = "--min", help="连接池最小连接数")]
+    #[structopt(name = "min", long = "--min", help="弃用")]
     min: Option<String>,
 
-    #[structopt(name = "max", long = "--max", help="连接池最大连接数")]
+    #[structopt(name = "max", long = "--max", help="弃用")]
     max: Option<String>,
 
-    #[structopt(name = "host_info", long = "--hostinfo", help="后端数据库ip:port, 如192.168.1.1:3306")]
+    #[structopt(name = "host_info", long = "--hostinfo", help="弃用")]
     host_info: Option<String>,
+
+    #[structopt(name = "config", long = "--defaults-file", help="指定配置文件, 通过配置文件配置所有项")]
+    config: Option<String>,
 }

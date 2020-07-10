@@ -10,15 +10,15 @@ use std::process;
 use tracing::field::debug;
 
 
-pub fn get_sha1_pass(conf: &Config, auth_plugin_name: &String, auth_plugin_data: &Vec<u8>) -> Vec<u8> {
+pub fn get_sha1_pass(password: &String, auth_plugin_name: &String, auth_plugin_data: &Vec<u8>) -> Vec<u8> {
     if auth_plugin_name == &String::from("mysql_native_password"){
-        match scramble_native(&auth_plugin_data[..20], conf.mpassword.as_bytes()){
+        match scramble_native(&auth_plugin_data[..20], password.as_bytes()){
             Some(value) => {return value.to_vec();},
             None => process::exit(1)
 
         };
     }else if auth_plugin_name == &String::from("caching_sha2_password") {
-        match scramble_sha256( &auth_plugin_data[..20], conf.mpassword.as_bytes()){
+        match scramble_sha256( &auth_plugin_data[..20], password.as_bytes()){
             Some(value) => {return value.to_vec()},
             None => process::exit(1)
 

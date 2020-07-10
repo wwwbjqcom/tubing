@@ -10,8 +10,9 @@ use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
-use crate::{Config, readvalue};
+use crate::{Config, readvalue, MyConfig};
 use crate::mysql::Result;
+use crate::mysql::pool::{PlatformPool, ConnectionsPoolPlatform};
 use crate::dbengine;
 use crate::MyError;
 use crate::dbengine::client::{ClientResponse};
@@ -29,7 +30,7 @@ use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS, CLIENT_B
 use crate::mysql::connection::PacketHeader;
 use tokio::runtime::Builder;
 
-pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Future, port: String) -> Result<()> {
+pub fn run(config: &MyConfig, shutdown: impl Future, platform_pool: PlatformPool) -> Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
@@ -67,10 +68,14 @@ pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Fu
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
     runtime.block_on(async{
-        let mut listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
+        let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
+        if let Some(l_port) = config.port{
+            port = l_port;
+        };
+        let mut listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
 
         let mut pool_maintain = ThreadPoolMaintain{
-            pool: mysql_pool.clone(),
+            platform_pool: platform_pool.clone(),
             notify_shutdown_t,
             shutdown_complete_rx_t,
             shutdown_complete_tx_t
@@ -79,8 +84,7 @@ pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Fu
 
         // Initialize the listener state
         let mut server = Listener {
-            pool: mysql_pool,
-            config,
+            platform_pool,
             listener,
             limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
             notify_shutdown,
@@ -145,9 +149,8 @@ pub fn run( config: Arc<Config>,  mysql_pool: ConnectionsPool, shutdown: impl Fu
 
 
 struct ThreadPoolMaintain{
-    /// Mysql thread pool
-    pool: ConnectionsPool,
-
+    /// all connections pool
+    platform_pool: PlatformPool,
     /// Broadcasts a shutdown signal to all active connections.
     ///
     /// The initial `shutdown` trigger is provided by the `run` caller. The
@@ -190,8 +193,8 @@ impl ThreadPoolMaintain{
 //                }
 //            };
 //        }
-        self.pool.check_health().await?;
-        info!("abc");
+        self.platform_pool.check_health().await?;
+        info!("shutdown");
         Ok(())
     }
 }
@@ -200,11 +203,8 @@ impl ThreadPoolMaintain{
 /// which performs the TCP listening and initialization of per-connection state.
 #[derive(Debug)]
 struct Listener {
-    /// Mysql thread pool
-    pool: ConnectionsPool,
-
-    /// Server user password configuration
-    config: Arc<Config>,
+    /// all connections pool
+    platform_pool: PlatformPool,
 
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
@@ -284,7 +284,9 @@ impl Listener {
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                platform: None,
+                platform: Some(String::from("test1")),
+                platform_pool: self.platform_pool.clone(),
+                platform_pool_on: ConnectionsPoolPlatform::default(),
                 per_conn_info: per_connection::PerMysqlConn::new(),
                 hand_key: thread_rng()
                     .sample_iter(&Alphanumeric)
@@ -293,10 +295,9 @@ impl Listener {
                 auto_commit: false,
                 commited: false,
                 client_flags: 0,
-                pool: self.pool.clone(),
                 db: Some("information_schema".to_string()),
+                user_name: "".to_string(),
                 seq: 0,
-                config: self.config.clone(),
 
                 status: ConnectionStatus::Null,
 
@@ -320,7 +321,6 @@ impl Listener {
 
             // Spawn a new task to process the connections. Tokio tasks are like
             // asynchronous green threads and are executed concurrently.
-            let mut pool_clone = self.pool.clone();
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
@@ -340,7 +340,6 @@ impl Listener {
     /// waiting for 64 seconds, then this function returns with an error.
     async fn accept(&mut self) -> Result<TcpStream> {
         let mut backoff = 1;
-
         // Try to accept a few times
         loop {
             // Perform the accept operation. If a socket is successfully
@@ -392,7 +391,14 @@ pub enum  ConnectionStatus {
 pub struct Handler {
     /// record the business library to which the current connection belongs
     pub platform: Option<String>,
-    
+
+    /// all connections pool
+    pub platform_pool: PlatformPool,
+
+    /// all connection pools of the current business platform
+    pub platform_pool_on: ConnectionsPoolPlatform,
+
+    /// current connection
     pub per_conn_info: per_connection::PerMysqlConn,
 
     pub hand_key: String,
@@ -403,18 +409,13 @@ pub struct Handler {
 
     pub client_flags: i32,
 
-    /// mysql thread pool
-    pub pool: ConnectionsPool,
-
     /// current used database
     /// default information_schema
     pub db: Option<String>,
 
+    pub user_name: String,
     /// current sequence id
     pub seq: u8,
-
-    /// Server user/password configuration
-    config: Arc<Config>,
 
     /// connection state.
     ///
@@ -469,7 +470,7 @@ impl Handler {
     async fn run(mut self) -> Result<()> {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
-
+        self.get_platform_conn_on(&"test1".to_string()).await?;
         while !self.shutdown.is_shutdown() {
             // While reading a request frame, also listen for the shutdown
             // signal.
@@ -486,7 +487,7 @@ impl Handler {
                     return Ok(())
                 }
                 ConnectionStatus::Quit => {
-                    self.per_conn_info.return_connection(&mut self.pool).await?;
+                    self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
                     return Ok(())
                 }
                 _ => {}
@@ -499,7 +500,7 @@ impl Handler {
                     // This will result in the task terminating.
                     break;
                 }
-                _ = self.per_conn_info.health(&mut self.pool) => {
+                _ = self.per_conn_info.health(&mut self.platform_pool_on) => {
                     continue;
                 }
             };
@@ -518,11 +519,14 @@ impl Handler {
             debug!("{}",crate::info_now_time(String::from("check_seq")));
             match &self.status {
                 ConnectionStatus::Auth(handshake) => {
-                    let (buf, db, flags)= handshake.auth(&response, &self.config, self.get_status_flags()).await?;
+                    let (buf, db, flags, user_name)= handshake.auth(&response,
+                                                                    self.get_status_flags(),
+                                                                    &self.platform_pool).await?;
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                         self.client_flags = flags;
                         self.db = db;
+                        self.user_name = user_name;
                     }else {
                         self.status = ConnectionStatus::Failure;
                     }
@@ -532,6 +536,7 @@ impl Handler {
                 ConnectionStatus::Connected => {
                     debug!("{}",crate::info_now_time(String::from("start execute")));
                     if let Err(e) = response.exec(&mut self).await{
+                        //发生异常关闭对应db连接，因为如果是语法或sql错误会直接发送到客户端， 这里返回错误一般是mysql异常
                         error!("{}", e.to_string());
                         break;
                     }
@@ -540,7 +545,7 @@ impl Handler {
                 _ => {}
             }
         }
-        self.per_conn_info.return_connection(&mut self.pool).await?;
+        self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
         Ok(())
     }
 
@@ -595,20 +600,15 @@ impl Handler {
         }
     }
 
-    pub async fn set_per_conn_cached(&mut self) -> Result<()> {
-        if let Some(conn) = &mut self.per_conn_info.conn_info{
-            conn.set_cached(&self.hand_key).await?;
+    /// 当用户设置platform时，如果权限检查通过则获取对应业务组的总连接池
+    pub async fn get_platform_conn_on(&mut self, platform: &String) -> Result<bool> {
+        if let Some(pool)  = self.platform_pool.get_platform_pool(platform).await{
+            self.platform_pool_on = pool;
+            return Ok(true)
         }
-        Ok(())
+        return Ok(false)
     }
 
-
-    pub async fn reset_per_conn_cached(&mut self) -> Result<()> {
-        if let Some(conn) = &mut self.per_conn_info.conn_info{
-            conn.reset_cached().await?;
-        }
-        Ok(())
-    }
 }
 
 
