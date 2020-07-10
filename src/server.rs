@@ -626,7 +626,7 @@ impl Handler {
                     return Err(Box::new(MyError(error.into())));
                     //self.send_error_packet(handler, &error).await?;
                 }else {
-                    handler.platform = Some(value);
+                    self.platform = Some(platform.clone());
                 }
             }
         }

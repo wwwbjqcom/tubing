@@ -119,7 +119,7 @@ impl ClientResponse {
                     // 设置platform
                     if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
                         if let Err(e) = handler.check_cur_platform(&value).await{
-                            self.send_error_packet(handler, &error).await?;
+                            self.send_error_packet(handler, &e.to_string()).await?;
                         }else {
                             self.send_ok_packet(handler).await?;
                         }
