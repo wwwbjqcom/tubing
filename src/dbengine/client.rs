@@ -118,14 +118,19 @@ impl ClientResponse {
                 }else if variable.to_lowercase() == String::from("platform") {
                     // 设置platform
                     if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
-                        if !handler.get_platform_conn_on(&value).await?{
-                            let error = format!("no available connection for this platform({})", &value);
-                            error!("{}", &error);
+                        if let Err(e) = handler.check_cur_platform(&value).await{
                             self.send_error_packet(handler, &error).await?;
                         }else {
-                            handler.platform = Some(value);
                             self.send_ok_packet(handler).await?;
                         }
+//                        if !handler.get_platform_conn_on(&value).await?{
+//                            let error = format!("no available connection for this platform({})", &value);
+//                            error!("{}", &error);
+//                            self.send_error_packet(handler, &error).await?;
+//                        }else {
+//                            handler.platform = Some(value);
+//                            self.send_ok_packet(handler).await?;
+//                        }
                     }else {
                         let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
                         error!("{}", &error);

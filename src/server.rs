@@ -610,6 +610,29 @@ impl Handler {
         return Ok(false)
     }
 
+    /// 当设置platform时进行检查，如果当前有platform则判断是否相同
+    ///
+    /// 如果不同则需要归还当前连接并重新获取
+    ///
+    /// 相同则直接返回
+    pub async fn check_cur_platform(&mut self, platform: &String) -> Result<()>{
+        if let Some(cur_platform) = &self.platform{
+            if cur_platform != platform{
+                //归还连接
+                self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
+                if !self.get_platform_conn_on(platform).await?{
+                    let error = format!("no available connection for this platform({})", platform);
+                    error!("{}", &error);
+                    return Err(Box::new(MyError(error.into())));
+                    //self.send_error_packet(handler, &error).await?;
+                }else {
+                    handler.platform = Some(value);
+                }
+            }
+        }
+        return Ok(());
+    }
+
 }
 
 
