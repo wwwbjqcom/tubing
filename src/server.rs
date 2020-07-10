@@ -284,7 +284,7 @@ impl Listener {
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                platform: Some(String::from("test1")),
+                platform: None,
                 platform_pool: self.platform_pool.clone(),
                 platform_pool_on: ConnectionsPoolPlatform::default(),
                 per_conn_info: per_connection::PerMysqlConn::new(),
@@ -470,7 +470,7 @@ impl Handler {
     async fn run(mut self) -> Result<()> {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
-        self.get_platform_conn_on(&"test1".to_string()).await?;
+        //self.get_platform_conn_on(&"test1".to_string()).await?;
         while !self.shutdown.is_shutdown() {
             // While reading a request frame, also listen for the shutdown
             // signal.
