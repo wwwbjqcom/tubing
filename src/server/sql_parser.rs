@@ -29,6 +29,7 @@ impl SqlStatement{
         debug!("{}",format!("parser sql: {}", sql));
         let sql_vec = self.split_sql(sql);
         match sql_vec[0].as_ref(){
+            "desc" => SqlStatement::Query,
             "select" => SqlStatement::Query,
             "with" => SqlStatement::Query,
             "explain" => SqlStatement::Query,

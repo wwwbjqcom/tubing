@@ -573,9 +573,9 @@ impl ClientResponse {
     async fn send_error_packet(&self, handler: &mut Handler, error: &String) -> Result<()>{
         let mut err = vec![];
         err.push(0xff);
-        err.extend(readvalue::write_u16(10));
+        err.extend(readvalue::write_u16(2020));
         if CLIENT_BASIC_FLAGS & CLIENT_PROTOCOL_41 > 0{
-            for _ in 0..5{
+            for _ in 0..6{
                 err.push(0);
             }
         }
