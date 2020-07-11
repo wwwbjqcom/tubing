@@ -575,9 +575,8 @@ impl ClientResponse {
         err.push(0xff);
         err.extend(readvalue::write_u16(2020));
         if CLIENT_BASIC_FLAGS & CLIENT_PROTOCOL_41 > 0{
-            for _ in 0..6{
-                err.push(0);
-            }
+            let err_a = String::from("#HY000");
+            err.extend(err_a.as_bytes());
         }
         err.extend(error.as_bytes());
         handler.send(&err).await?;
