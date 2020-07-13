@@ -179,9 +179,8 @@ fn main() -> mysql::Result<()> {
         Err(e) => panic!("Error Reading file: {}", e)
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
-
+    println!("{:?}", &my_config);
     let platform_pool = mysql::pool::PlatformPool::new(&my_config)?;
-    println!("aa");
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     server::run(&my_config, signal::ctrl_c(), platform_pool)
 }
