@@ -148,6 +148,7 @@ impl GetRouteInfo{
 
 async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
     let map = json!(GetRouteInfo::new(conf)?);
+    println!("{:?}", &map);
     let client = reqwest::Client::new();
     if let Some(url) = &conf.server_url{
         let res = client.post(url)
