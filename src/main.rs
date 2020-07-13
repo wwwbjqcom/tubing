@@ -164,7 +164,7 @@ pub struct ResponseRouteInfo {
     pub route: Vec<RouteInfo>
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 pub struct ResponseValue{
     status: u8,
     value: ResponseRouteInfo
