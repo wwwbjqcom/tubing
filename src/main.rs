@@ -45,7 +45,7 @@ impl MyConfig{
     fn alter_platform_config(&self, platform_config: &mut Vec<Platform>, route_info: &RouteInfo) {
         for platform in platform_config{
             if platform.platform == route_info.cluster_name{
-                platform.write = route_info.get_write_host_info();
+                platform.write = Some(route_info.get_write_host_info());
                 platform.read = route_info.get_read_host_info();
             }
         }
@@ -57,7 +57,7 @@ impl MyConfig{
 #[derive(Debug, Deserialize, Clone)]
 pub struct Platform {
     pub platform: String,
-    pub write: String,
+    pub write: Option<String>,
     pub read: Option<Vec<String>>,
     pub user: String,
     pub password: String,
@@ -65,6 +65,14 @@ pub struct Platform {
     pub max: usize,
     pub min: usize,
     pub auth: bool
+}
+impl Platform{
+    pub fn get_write_host(&self) -> String{
+        if let Some(v) = &self.write{
+            return v.clone();
+        }
+        return "".to_string();
+    }
 }
 
 pub fn info_now_time(t: String) -> String {

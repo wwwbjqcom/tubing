@@ -47,9 +47,9 @@ impl PlatforNodeInfo{
         if let Some(v) = &platform.read{
             read = v.clone();
         }
-        read.push(platform.write.clone());
+        read.push(platform.get_write_host());
         PlatforNodeInfo{
-            write: platform.write.clone(),
+            write: platform.get_write_host(),
             read,
             is_alter: false
         }
@@ -170,7 +170,7 @@ impl ConnectionsPoolPlatform{
     pub fn new(platform_config: &Platform) -> Result<ConnectionsPoolPlatform> {
         let mut conn_pool = HashMap::new();
         let mut my_config = Config::new(platform_config);
-        my_config.host_info = platform_config.write.clone();
+        my_config.host_info = platform_config.get_write_host();
         let mut read_list: Vec<String> = vec![];
 
         //创建主库连接池，并放入conn_pool
