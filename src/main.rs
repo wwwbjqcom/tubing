@@ -164,6 +164,12 @@ pub struct ResponseRouteInfo {
     pub route: Vec<RouteInfo>
 }
 
+#[derive(Serialize, Debug)]
+pub struct ResponseValue{
+    status: u8,
+    value: ResponseRouteInfo
+}
+
 async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
     let map = json!(GetRouteInfo::new(conf)?);
     println!("{:?}", &map);
@@ -173,7 +179,7 @@ async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
             .json(&map)
             .send()
             .await?
-            .json::<ResponseRouteInfo>()
+            .json::<ResponseValue>()
             .await?;
         println!("{:?}", &res);
     }
