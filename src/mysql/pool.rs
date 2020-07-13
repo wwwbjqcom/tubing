@@ -35,26 +35,51 @@ enum HealthType{
     Maintain
 }
 
+#[derive(Clone, Debug)]
+pub struct PlatforNodeInfo{
+    pub write: String,
+    pub read: Vec<String>,
+    pub is_alter: bool
+}
+impl PlatforNodeInfo{
+    fn new(platform: &Platform) -> PlatforNodeInfo{
+        let mut read = vec![];
+        if let Some(v) = &platform.read{
+            read = v.clone();
+        }
+        read.push(platform.write.clone());
+        PlatforNodeInfo{
+            write: platform.write.clone(),
+            read,
+            is_alter: false
+        }
+    }
+}
+
 /// 所有业务平台连接池集合以及用户列表
 #[derive(Clone, Debug)]
 pub struct PlatformPool{
     pub platform_pool: Arc<Mutex<HashMap<String, ConnectionsPoolPlatform>>>,         //存储所有业务平台的连接池， 以platform做为key
-    pub user_info: Arc<RwLock<AllUserInfo>>
+    pub user_info: Arc<RwLock<AllUserInfo>>,
+    pub platform_node_info: Vec<PlatforNodeInfo>                                           //记录每个业务平台后端数据库读写关系,变更时同时变更连接池
 }
 
 impl PlatformPool{
     pub fn new(conf: &MyConfig) -> Result<PlatformPool>{
         let user_info = Arc::new(RwLock::new(AllUserInfo::new(conf)));
         let mut pool = HashMap::new();
+        let mut platform_node_info = vec![];
         for platform in &conf.platform{
             let platform_pool = ConnectionsPoolPlatform::new(platform)?;
             pool.insert(platform.platform.clone(), platform_pool);
+            platform_node_info.push(PlatforNodeInfo::new(platform));
         }
         let platform_pool = Arc::new(Mutex::new(pool));
         Ok(
             PlatformPool{
                 platform_pool,
-                user_info
+                user_info,
+                platform_node_info
             }
         )
     }
@@ -446,7 +471,7 @@ impl ConnectionsPool{
                             //已达到最大连接数则等待指定时间,看能否获取到
                             let now_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
                             pool  = if now_time - start_time > wait_time {
-                                return Err(Box::new(MyError(String::from("获取连接超时").into())));
+                                return Err(Box::new(MyError(String::from("get connection timeout").into())));
                             } else {
                                 delay_for(Duration::from_millis(50)).await;
                                 self.conn_queue.lock().await
@@ -473,12 +498,12 @@ impl ConnectionsPool{
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
                     }else {
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
-                        error!("return connection, but this connection is error:{}",String::from("check ping failed"));
+                        error!("return connection, but this connection {}",String::from("check ping failed"));
                     }
                 }
                 Err(e) => {
                     self.active_count.fetch_sub(1, Ordering::SeqCst);
-                    error!("{}",format!("return connection, but this connection is error: {:?}", e.to_string()));
+                    error!("{}",format!("return connection, but this connection : {:?}", e.to_string()));
                 }
             }
         }else {

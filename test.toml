@@ -3,6 +3,13 @@ password="root"
 bind="0.0.0.0"
 port=3306
 auth=false
+#配置文件读取还是MysqlMP获取，可配置file、mp, 默认file也可以不配置
+mode="mp"
+server_url="http://192.168.0.47:8099/getrouteinfo"
+#配置高可用用户验证id
+hook_id="WhHYnV1psD9Nyba3EbriIKuPPcTHnu6c"
+#配置获取路由信息的集群名称， 不配置代表获取全部，如果配置格式["a","b"]
+#cluster=["a"]
 
 [[platform]]
 platform="test1"

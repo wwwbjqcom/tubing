@@ -14,10 +14,13 @@ use std::fmt;
 use tracing::debug;
 use chrono::prelude::*;
 use chrono;
+use reqwest;
 
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
+use serde_json::json;
 use std::fs::File;
 use std::io::prelude::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct MyConfig {
@@ -26,7 +29,9 @@ pub struct MyConfig {
     pub bind: String,
     pub port: Option<u16>,
     pub mode: Option<String>,
-    pub remote_mha: Option<String>,
+    pub server_url: Option<String>,
+    pub hook_id: Option<String>,
+    pub cluster: Option<Vec<String>>,
     pub auth: bool,
     pub platform: Vec<Platform>,
 }
@@ -113,6 +118,48 @@ impl Config{
     }
 }
 
+#[derive(Serialize)]
+pub struct GetRouteInfo {
+    pub hook_id: String,
+    pub clusters: Vec<String>,
+}
+impl GetRouteInfo{
+    fn new(conf: &MyConfig) -> mysql::Result<GetRouteInfo>{
+        let mut tmp = GetRouteInfo{ hook_id: "".to_string(), clusters: vec![] };
+        if let Some(hook_id) = &conf.hook_id{
+            tmp.hook_id = hook_id.clone();
+            match &conf.cluster{
+                Some(v) => {
+                    if v.len()> 0{
+                        tmp.clusters = v.clone();
+                    }
+                    tmp.clusters = vec![String::from("all")];
+                }
+                None => {
+                    tmp.clusters = vec![String::from("all")];
+                }
+            }
+            return Ok(tmp);
+        }
+        let err = String::from("hook id can not be empty");
+        return Err(Box::new(MyError(err.into())));
+    }
+}
+
+async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
+    let map = json!(GetRouteInfo::new(conf)?);
+    let client = reqwest::Client::new();
+    if let Some(url) = &conf.server_url{
+        let res = client.post(url)
+            .json(&map)
+            .send()
+            .await?;
+        println!("{:?}", &res);
+    }
+    Ok(())
+}
+
+
 //#[tokio::main]
 fn main() -> mysql::Result<()> {
     tracing_subscriber::fmt::try_init()?;
@@ -135,6 +182,7 @@ fn main() -> mysql::Result<()> {
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     server::run(&my_config, signal::ctrl_c(), platform_pool)
 }
+
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "MysqlBus", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "A Mysql server proxy")]

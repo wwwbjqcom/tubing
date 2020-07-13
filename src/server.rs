@@ -68,6 +68,9 @@ pub fn run(config: &MyConfig, shutdown: impl Future, platform_pool: PlatformPool
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
     runtime.block_on(async{
+        crate::get_platform_route(config).await?;
+
+
         let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
         if let Some(l_port) = config.port{
             port = l_port;
