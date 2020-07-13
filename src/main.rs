@@ -146,6 +146,24 @@ impl GetRouteInfo{
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MysqlHostInfo {
+    pub host: String,
+    pub port: usize
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RouteInfo {
+    pub cluster_name: String,
+    pub write: MysqlHostInfo,
+    pub read: Vec<MysqlHostInfo>
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ResponseRouteInfo {
+    pub route: Vec<RouteInfo>
+}
+
 async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
     let map = json!(GetRouteInfo::new(conf)?);
     println!("{:?}", &map);
@@ -155,7 +173,7 @@ async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
             .json(&map)
             .send()
             .await?
-            .text()
+            .json::<ResponseRouteInfo>()
             .await?;
         println!("{:?}", &res);
     }
