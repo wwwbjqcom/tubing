@@ -15,6 +15,7 @@ pub struct GetRouteInfo {
 }
 impl GetRouteInfo{
     fn new(conf: &MyConfig) -> mysql::Result<GetRouteInfo>{
+        println!("{:?}", conf);
         let mut tmp = GetRouteInfo{ hook_id: "".to_string(), clusters: vec![] };
         if let Some(hook_id) = &conf.hook_id{
             tmp.hook_id = hook_id.clone();
