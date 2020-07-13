@@ -18,6 +18,7 @@ use chrono;
 use serde_derive::{Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
+use crate::server::mysql_mp::RouteInfo;
 
 #[derive(Debug, Deserialize)]
 pub struct MyConfig {
@@ -32,8 +33,28 @@ pub struct MyConfig {
     pub auth: bool,
     pub platform: Vec<Platform>,
 }
+impl MyConfig{
+    pub fn reset_init_config(&mut self, ha_route: &crate::server::mysql_mp::ResponseValue) {
+        let mut platform_config_list = self.platform.clone();
+        for cluster_route in  &ha_route.value.route{
+            self.alter_platform_config(&mut platform_config_list, cluster_route);
+        }
+        self.platform = platform_config_list;
+    }
 
-#[derive(Debug, Deserialize)]
+    fn alter_platform_config(&self, platform_config: &mut Vec<Platform>, route_info: &RouteInfo) {
+        for platform in platform_config{
+            if platform.platform == route_info.cluster_name{
+                platform.write = route_info.get_write_host_info();
+                platform.read = route_info.get_read_host_info();
+            }
+        }
+    }
+
+}
+
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Platform {
     pub platform: String,
     pub write: String,
@@ -135,9 +156,9 @@ fn main() -> mysql::Result<()> {
         Err(e) => panic!("Error Reading file: {}", e)
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
-    let platform_pool = mysql::pool::PlatformPool::new(&my_config)?;
+
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
-    server::run(&my_config, signal::ctrl_c(), platform_pool)
+    server::run(my_config, signal::ctrl_c())
 }
 
 

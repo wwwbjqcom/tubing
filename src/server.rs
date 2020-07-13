@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
-use crate::{Config, readvalue, MyConfig};
+use crate::{Config, readvalue, MyConfig, mysql};
 use crate::mysql::Result;
 use crate::mysql::pool::{PlatformPool, ConnectionsPoolPlatform};
 use crate::dbengine;
@@ -20,7 +20,7 @@ use crate::dbengine::server::HandShake;
 pub mod shutdown;
 mod connection;
 mod per_connection;
-mod mysql_mp;
+pub mod mysql_mp;
 pub mod sql_parser;
 use connection::Connection;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -30,8 +30,9 @@ use rand::distributions::Alphanumeric;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41};
 use crate::mysql::connection::PacketHeader;
 use tokio::runtime::Builder;
+use crate::server::mysql_mp::ResponseValue;
 
-pub fn run(config: &MyConfig, shutdown: impl Future, platform_pool: PlatformPool) -> Result<()> {
+pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
@@ -69,8 +70,11 @@ pub fn run(config: &MyConfig, shutdown: impl Future, platform_pool: PlatformPool
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
     runtime.block_on(async{
-        mysql_mp::get_platform_route(config).await?;
 
+        let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
+        config.reset_init_config(&ha_route);
+        println!("{:?}", &config);
+        let platform_pool = mysql::pool::PlatformPool::new(&config)?;
 
         let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
         if let Some(l_port) = config.port{
