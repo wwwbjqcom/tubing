@@ -159,7 +159,7 @@ pub struct RouteInfo {
     pub read: Vec<MysqlHostInfo>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ResponseRouteInfo {
     pub route: Vec<RouteInfo>
 }
