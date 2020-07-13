@@ -148,13 +148,13 @@ impl GetRouteInfo{
 
 async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
     let map = json!(GetRouteInfo::new(conf)?);
-    println!("{:?}", &map);
     let client = reqwest::Client::new();
     if let Some(url) = &conf.server_url{
-        println!("{:?}", &url);
         let res = client.post(url)
             .json(&map)
             .send()
+            .await?
+            .text()
             .await?;
         println!("{:?}", &res);
     }
@@ -179,7 +179,6 @@ fn main() -> mysql::Result<()> {
         Err(e) => panic!("Error Reading file: {}", e)
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
-    println!("{:?}", &my_config);
     let platform_pool = mysql::pool::PlatformPool::new(&my_config)?;
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     server::run(&my_config, signal::ctrl_c(), platform_pool)
