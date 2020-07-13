@@ -15,21 +15,21 @@ pub struct GetRouteInfo {
 }
 impl GetRouteInfo{
     fn new(conf: &MyConfig) -> mysql::Result<GetRouteInfo>{
-        println!("{:?}", conf);
         let mut tmp = GetRouteInfo{ hook_id: "".to_string(), clusters: vec![] };
         if let Some(hook_id) = &conf.hook_id{
             tmp.hook_id = hook_id.clone();
-            println!("{:?}",&conf.cluster);
             match &conf.cluster{
                 Some(v) => {
-                    println!("{:?}", &v);
                     if v.len()> 0{
                         tmp.clusters = v.clone();
+                    }else {
+                        let err = String::from("cluster list can not be empty");
+                        return Err(Box::new(MyError(err.into())));
                     }
-                    tmp.clusters = vec![String::from("all")];
                 }
                 None => {
-                    tmp.clusters = vec![String::from("all")];
+                    let err = String::from("cluster list can not be empty");
+                    return Err(Box::new(MyError(err.into())));
                 }
             }
             return Ok(tmp);
