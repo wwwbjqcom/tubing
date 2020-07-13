@@ -22,6 +22,7 @@ impl GetRouteInfo{
             println!("{:?}",&conf.cluster);
             match &conf.cluster{
                 Some(v) => {
+                    println!("{:?}", &v);
                     if v.len()> 0{
                         tmp.clusters = v.clone();
                     }
