@@ -14,13 +14,10 @@ use std::fmt;
 use tracing::debug;
 use chrono::prelude::*;
 use chrono;
-use reqwest;
 
-use serde_derive::{Deserialize, Serialize};
-use serde_json::json;
+use serde_derive::{Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct MyConfig {
@@ -118,73 +115,7 @@ impl Config{
     }
 }
 
-#[derive(Serialize)]
-pub struct GetRouteInfo {
-    pub hook_id: String,
-    pub clusters: Vec<String>,
-}
-impl GetRouteInfo{
-    fn new(conf: &MyConfig) -> mysql::Result<GetRouteInfo>{
-        let mut tmp = GetRouteInfo{ hook_id: "".to_string(), clusters: vec![] };
-        if let Some(hook_id) = &conf.hook_id{
-            tmp.hook_id = hook_id.clone();
-            match &conf.cluster{
-                Some(v) => {
-                    if v.len()> 0{
-                        tmp.clusters = v.clone();
-                    }
-                    tmp.clusters = vec![String::from("all")];
-                }
-                None => {
-                    tmp.clusters = vec![String::from("all")];
-                }
-            }
-            return Ok(tmp);
-        }
-        let err = String::from("hook id can not be empty");
-        return Err(Box::new(MyError(err.into())));
-    }
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MysqlHostInfo {
-    pub host: String,
-    pub port: usize
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RouteInfo {
-    pub cluster_name: String,
-    pub write: MysqlHostInfo,
-    pub read: Vec<MysqlHostInfo>
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ResponseRouteInfo {
-    pub route: Vec<RouteInfo>
-}
-
-#[derive(Serialize, Debug, Deserialize)]
-pub struct ResponseValue{
-    status: u8,
-    value: ResponseRouteInfo
-}
-
-async fn get_platform_route(conf: &MyConfig) -> mysql::Result<()> {
-    let map = json!(GetRouteInfo::new(conf)?);
-    println!("{:?}", &map);
-    let client = reqwest::Client::new();
-    if let Some(url) = &conf.server_url{
-        let res = client.post(url)
-            .json(&map)
-            .send()
-            .await?
-            .json::<ResponseValue>()
-            .await?;
-        println!("{:?}", &res);
-    }
-    Ok(())
-}
 
 
 //#[tokio::main]

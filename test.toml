@@ -8,8 +8,8 @@ mode="mp"
 server_url="http://192.168.0.47:8099/getrouteinfo"
 #配置高可用用户验证id
 hook_id="WhHYnV1psD9Nyba3EbriIKuPPcTHnu6c"
-#配置获取路由信息的集群名称， 不配置代表获取全部，如果配置格式["a","b"]
-#cluster=["a"]
+#配置获取路由信息的集群名称
+cluster=["a"]
 
 [[platform]]
 platform="test1"

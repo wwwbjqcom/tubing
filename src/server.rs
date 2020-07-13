@@ -20,6 +20,7 @@ use crate::dbengine::server::HandShake;
 pub mod shutdown;
 mod connection;
 mod per_connection;
+mod mysql_mp;
 pub mod sql_parser;
 use connection::Connection;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -68,7 +69,7 @@ pub fn run(config: &MyConfig, shutdown: impl Future, platform_pool: PlatformPool
     //
     // https://docs.rs/tokio/*/tokio/macro.select.html
     runtime.block_on(async{
-        crate::get_platform_route(config).await?;
+        mysql_mp::get_platform_route(config).await?;
 
 
         let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
