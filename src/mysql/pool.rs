@@ -10,6 +10,7 @@ use std::collections::{VecDeque, HashMap};
 use crate::{Config, readvalue, Platform, MyConfig};
 use crate::{MyError};
 use crate::mysql::Result;
+use crate::server::mysql_mp;
 use std::net::TcpStream;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 use std::time::{SystemTime, Duration};
@@ -28,6 +29,7 @@ use chrono::prelude::*;
 use chrono;
 use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
+use crate::server::mysql_mp::RouteInfo;
 
 
 enum HealthType{
@@ -37,22 +39,51 @@ enum HealthType{
 
 #[derive(Clone, Debug)]
 pub struct PlatforNodeInfo{
+    pub platform: String,
     pub write: String,
-    pub read: Vec<String>,
-    pub is_alter: bool
+    pub read: Option<Vec<String>>,
+    pub read_is_alter: bool,
+    pub write_is_alter: bool
 }
 impl PlatforNodeInfo{
     fn new(platform: &Platform) -> PlatforNodeInfo{
-        let mut read = vec![];
+        let mut read:Option<Vec<String>> = None;
+        let mut tmp = vec![];
         if let Some(v) = &platform.read{
-            read = v.clone();
+            tmp = v.clone();
         }
-        read.push(platform.get_write_host());
+        tmp.push(platform.get_write_host());
+        read = Some(tmp);
         PlatforNodeInfo{
+            platform: platform.platform.clone(),
             write: platform.get_write_host(),
             read,
-            is_alter: false
+            read_is_alter: false,
+            write_is_alter: false
         }
+    }
+
+    fn reset_alter(&mut self) {
+        self.read_is_alter = false;
+        self.write_is_alter = false;
+    }
+
+    /// 检查路由是否变动，如果变动则更改且返回true
+    fn check(&mut self, route_info: &RouteInfo) -> bool {
+        let write = route_info.get_write_host_info();
+        let read = route_info.get_read_host_info();
+        if write == self.write && read == read{
+            return false;
+        }
+        if write != self.write{
+            self.write_is_alter = true;
+            self.write = write.clone();
+        }
+        if read != self.read {
+            self.read_is_alter = true;
+            self.read = read.clone();
+        }
+        return true;
     }
 }
 
@@ -61,7 +92,8 @@ impl PlatforNodeInfo{
 pub struct PlatformPool{
     pub platform_pool: Arc<Mutex<HashMap<String, ConnectionsPoolPlatform>>>,         //存储所有业务平台的连接池， 以platform做为key
     pub user_info: Arc<RwLock<AllUserInfo>>,
-    pub platform_node_info: Vec<PlatforNodeInfo>                                           //记录每个业务平台后端数据库读写关系,变更时同时变更连接池
+    pub platform_node_info: Vec<PlatforNodeInfo>,                                           //记录每个业务平台后端数据库读写关系,变更时同时变更连接池
+    pub config: MyConfig
 }
 
 impl PlatformPool{
@@ -79,7 +111,8 @@ impl PlatformPool{
             PlatformPool{
                 platform_pool,
                 user_info,
-                platform_node_info
+                platform_node_info,
+                config: conf.clone()
             }
         )
     }
@@ -124,8 +157,31 @@ impl PlatformPool{
                 maintain_last_check_time = now_time;
             }
 
+            //定时检查路由是否发生变动
+            self.check_route_for_platform().await?;
+
             delay_for(Duration::from_millis(50)).await;
         }
+    }
+
+    ///检查路由信息变动
+    async fn check_route_for_platform(&mut self) -> Result<()> {
+        let ha_ser_route = mysql_mp::get_platform_route(&self.config).await?;
+        let platform_list = self.get_platform_list().await;
+        for route_info in ha_ser_route.value.route{
+            let mut plaform_node_info = self.platform_node_info.clone();
+            for platform_node in &mut plaform_node_info{
+                if !platform_node.check(&route_info){
+                    //发生变动， 开始修改连接池
+                    if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
+                        platform_pool.alter_pool(&route_info, &platform_node).await?;
+                        platform_node.reset_alter();
+                    }
+                }
+            }
+            self.platform_node_info = plaform_node_info;
+        }
+        Ok(())
     }
 
     /// 对连接进行心跳检测、连接池维护
@@ -164,6 +220,7 @@ pub struct ConnectionsPoolPlatform{
     pub write: Arc<RwLock<Vec<String>>>,
     pub read: Arc<RwLock<Vec<String>>>,                             //存放可读节点信息，其中包括写入节点的信息，因为写几点也可读
     pub is_alter: Arc<AtomicUsize>,                                 //当前主从关系版本号， 加1表示发生变动，用于同步连接池状态，如果发生变动写操作需要判断使用的连接是否准确
+    pub platform_config: Option<Platform>
 }
 
 impl ConnectionsPoolPlatform{
@@ -197,7 +254,8 @@ impl ConnectionsPoolPlatform{
                 conn_pool: Arc::new(Mutex::new(conn_pool)),
                 write,
                 read,
-                is_alter
+                is_alter,
+                platform_config: Some(platform_config.clone())
             }
         )
     }
@@ -207,9 +265,100 @@ impl ConnectionsPoolPlatform{
             conn_pool: Arc::new(Mutex::new(HashMap::new())),
             write: Arc::new(RwLock::new(vec![])),
             read: Arc::new(RwLock::new(vec![])),
-            is_alter: Arc::new(AtomicUsize::new(0))
+            is_alter: Arc::new(AtomicUsize::new(0)),
+            platform_config: None
         }
     }
+
+    /// 主从关系发生变化进行连接池对应关系变动
+    async fn alter_pool(&mut self, route_info: &RouteInfo, platfor_node: &PlatforNodeInfo) -> Result<()> {
+        if platfor_node.write_is_alter{
+            //主从发生变化，新master必然会是已存在的slave， 所以直接设置master节点信息
+            let mut write_host_lock = self.write.write().await;
+            *write_host_lock = vec![platfor_node.write.clone()];
+        }
+
+        //读节点变动
+        if platfor_node.read_is_alter{
+            let mut new_read_list = vec![];
+            if let Some(list) = &platfor_node.read{
+                new_read_list = list.clone();
+            }
+            new_read_list.push(platfor_node.write.clone());
+            //首先进行新增判断
+            let mut read_host_lock = self.read.write().await;
+            'a: for host_info in &new_read_list{
+                'b: for info in &*read_host_lock{
+                    if info == host_info{
+                        continue 'a;
+                    }
+                }
+                //不存在当前读取列表中，增加连接池
+                //self.new_pool(&host_info).await?;
+                if let Some(conf) = &self.platform_config{
+                    let mut my_config = Config::new(&conf);
+                    my_config.host_info = host_info.clone();
+                    let new_pool = ConnectionsPool::new(&my_config)?;
+                    let mut pool_lock = self.conn_pool.lock().await;
+                    pool_lock.insert(host_info.clone(), new_pool);
+                    read_host_lock.push(host_info.clone());
+                }else {
+                    let err = String::from("new connection pool, but no configuration information found");
+                    info!("{}",err);
+                    info!("{}", String::from("failed......"));
+                }
+            }
+
+            //反响判断现有节点是否存在新路由关系中，如果不存在则删除
+            'a: for info in &*read_host_lock{
+                'b: for host_info in &new_read_list{
+                    if info == host_info{
+                        continue 'a;
+                    }
+                }
+                //不能存在则删除
+                let mut pool_lock = self.conn_pool.lock().await;
+                match pool_lock.remove(info){
+                    Some(mut conn_pool) => {
+                        conn_pool.close_pool();
+                    }
+                    None => {}
+                }
+                //self.drop_pool(&info).await?;
+            }
+            *read_host_lock = new_read_list;
+        }
+
+        Ok(())
+    }
+
+//    /// 后端节点变动， 下线db节点，删除对应的连接池信息
+//    async fn drop_pool(&mut self, host_info: &String) -> Result<()> {
+//        let mut pool_lock = self.conn_pool.lock().await;
+//        match pool_lock.remove(host_info){
+//            Some(mut conn_pool) => {
+//                conn_pool.close_pool();
+//            }
+//            None => {}
+//        }
+//        Ok(())
+//    }
+//
+//    /// 由于后端节点变动，新增了db节点，这里新增连接池
+//    async fn new_pool(&mut self, host_info: &String) -> Result<()>{
+//        if let Some(conf) = &self.platform_config{
+//            let mut my_config = Config::new(&conf);
+//            my_config.host_info = host_info.clone();
+//            let new_pool = ConnectionsPool::new(&my_config)?;
+//            let mut pool_lock = self.conn_pool.lock().await;
+//            pool_lock.insert(host_info.clone(), new_pool);
+//            return Ok(())
+//        }
+//        let err = String::from("new connection pool, but no configuration information found");
+//        info!("{}",err);
+//        info!("{}", String::from("failed......"));
+//        return Ok(())
+//    }
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
     pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String) -> Result<MysqlConnectionInfo> {
@@ -535,36 +684,13 @@ impl ConnectionsPool{
 
     }
 
-
-//    /// 连接池中连接的维护
-//    ///
-//    /// 如果有断开的连接会自动补齐满足随时都有最小连接数
-//    ///
-//    /// 对空闲连接进行心跳检测
-//    ///
-//    /// 对缓存连接进行空闲时间检测， 超过时间放回连接池
-//    pub async fn check_health(&mut self) -> Result<()>{
-//        let mut ping_last_check_time = Local::now().timestamp_millis() as usize;
-//        let mut maintain_last_check_time = Local::now().timestamp_millis() as usize;
-//        'a: loop {
-//            let now_time = Local::now().timestamp_millis() as usize;
-//            //每隔60秒检查一次
-//            if now_time - ping_last_check_time >= 60000{
-//                debug!("{}", String::from("check_ping"));
-//                self.check_ping().await?;
-//                ping_last_check_time = now_time;
-//            }
-//            //每隔600秒进行一次连接池数量维护
-//            if now_time - maintain_last_check_time >= 600000{
-//                debug!("{}", String::from("maintain_pool"));
-//                self.maintain_pool().await?;
-//                maintain_last_check_time = now_time;
-//            }
-//
-//            //self.maintain_cache_pool().await?;
-//            delay_for(Duration::from_millis(50)).await;
-//        }
-//    }
+    /// 关闭连接池
+    async fn close_pool(&mut self) {
+        let mut pool_lock = self.conn_queue.lock().await;
+        if let Some(mut conn) = pool_lock.pool.pop_front() {
+            conn.close();
+        }
+    }
 
     /// 维护线程池中线程的数量， 如果低于最小值补齐
     ///

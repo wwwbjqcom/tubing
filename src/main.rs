@@ -20,7 +20,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use crate::server::mysql_mp::RouteInfo;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct MyConfig {
     pub user: String,
     pub password: String,
