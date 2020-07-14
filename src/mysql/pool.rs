@@ -83,6 +83,7 @@ impl PlatforNodeInfo{
             self.read_is_alter = true;
             self.read = read.clone();
         }
+        debug!("{:?}", self);
         return true;
     }
 }
@@ -170,6 +171,7 @@ impl PlatformPool{
     ///检查路由信息变动
     async fn check_route_for_platform(&mut self) -> Result<()> {
         let ha_ser_route = mysql_mp::get_platform_route(&self.config).await?;
+        debug!("{:?}", &ha_ser_route);
         let platform_list = self.get_platform_list().await;
         for route_info in ha_ser_route.value.route{
             let mut plaform_node_info = self.platform_node_info.clone();
