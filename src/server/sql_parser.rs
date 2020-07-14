@@ -57,7 +57,7 @@ impl SqlStatement{
     }
 
     fn split_sql(&self, sql: &String) -> Vec<String> {
-        let sql = sql.to_lowercase();
+        let sql = sql.to_lowercase().replace("=", " ");
         let sql_ver = sql.split(" ");
         let sql_ver = sql_ver.collect::<Vec<&str>>();
         let mut tmp: Vec<String> = vec![];
@@ -67,7 +67,7 @@ impl SqlStatement{
                 && &i.to_string() != &"\n".to_string()
                 && &i.to_string() != &"\r".to_string()
                 && &i.to_string() != &"=".to_string(){
-                tmp.push(i.to_string().replace("=","").clone())
+                tmp.push(i.to_string().clone())
             }
         }
         return tmp;
