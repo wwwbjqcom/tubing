@@ -51,6 +51,14 @@ impl MyConfig{
         }
     }
 
+    pub fn check_is_mp(&self) -> bool{
+        if let Some(mode_type) = &self.mode{
+            if mode_type == &String::from("mp"){
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 

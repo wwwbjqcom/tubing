@@ -106,6 +106,9 @@ impl ClientResponse {
             return Ok(())
         }
 
+        //进行ops操作
+        handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
+
         //进行语句操作
         match a{
             SqlStatement::ChangeDatabase => {
@@ -123,14 +126,6 @@ impl ClientResponse {
                         }else {
                             self.send_ok_packet(handler).await?;
                         }
-//                        if !handler.get_platform_conn_on(&value).await?{
-//                            let error = format!("no available connection for this platform({})", &value);
-//                            error!("{}", &error);
-//                            self.send_error_packet(handler, &error).await?;
-//                        }else {
-//                            handler.platform = Some(value);
-//                            self.send_ok_packet(handler).await?;
-//                        }
                     }else {
                         let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
                         error!("{}", &error);
@@ -191,6 +186,7 @@ impl ClientResponse {
             }
         }
         handler.stream_flush().await?;
+
         debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
     }

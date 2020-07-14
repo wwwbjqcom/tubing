@@ -149,4 +149,13 @@ impl PerMysqlConn {
         }
         Ok(())
     }
+
+    pub async fn get_connection_host_info(&self) -> String {
+        let mut host_info = String::from("");
+        if let Some(conn) = &self.conn_info{
+            host_info = conn.host_info.clone();
+        }
+        host_info
+    }
+
 }

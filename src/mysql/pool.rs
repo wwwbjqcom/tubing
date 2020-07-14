@@ -3,6 +3,17 @@
 @datetime: 2020/5/30
 */
 
+
+/*
+记录所有连接池相关操作， 包含：
+1、各业务后端数据库集群连接池管理
+2、连接池使用及归还
+3、读写路由
+4、维护连接池状态
+5、节点变动动态修改对应连接池清空
+6、记录各节点、业务的ops状态
+*/
+
 use tokio::sync::{Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use crate::mysql::connection::{MysqlConnection, PacketHeader, AllUserInfo};
@@ -161,9 +172,11 @@ impl PlatformPool{
             }
 
             //定时检查路由是否发生变动
-            if now_time - route_last_check_time >= 1000 {
-                self.check_route_for_platform().await?;
-                route_last_check_time = now_time;
+            if self.config.check_is_mp(){
+                if now_time - route_last_check_time >= 1000 {
+                    self.check_route_for_platform().await?;
+                    route_last_check_time = now_time;
+                }
             }
             delay_for(Duration::from_millis(50)).await;
         }
@@ -226,7 +239,8 @@ pub struct ConnectionsPoolPlatform{
     pub write: Arc<RwLock<Vec<String>>>,
     pub read: Arc<RwLock<Vec<String>>>,                             //存放可读节点信息，其中包括写入节点的信息，因为写几点也可读
     pub is_alter: Arc<AtomicUsize>,                                 //当前主从关系版本号， 加1表示发生变动，用于同步连接池状态，如果发生变动写操作需要判断使用的连接是否准确
-    pub platform_config: Option<Platform>
+    pub platform_config: Option<Platform>,
+    pub questions:  Arc<AtomicUsize>,                               //记录当前业务集群所有请求次数
 }
 
 impl ConnectionsPoolPlatform{
@@ -261,7 +275,8 @@ impl ConnectionsPoolPlatform{
                 write,
                 read,
                 is_alter,
-                platform_config: Some(platform_config.clone())
+                platform_config: Some(platform_config.clone()),
+                questions: Arc::new(AtomicUsize::new(0))
             }
         )
     }
@@ -272,7 +287,8 @@ impl ConnectionsPoolPlatform{
             write: Arc::new(RwLock::new(vec![])),
             read: Arc::new(RwLock::new(vec![])),
             is_alter: Arc::new(AtomicUsize::new(0)),
-            platform_config: None
+            platform_config: None,
+            questions: Arc::new(AtomicUsize::new(0))
         }
     }
 
@@ -338,33 +354,16 @@ impl ConnectionsPoolPlatform{
         Ok(())
     }
 
-//    /// 后端节点变动， 下线db节点，删除对应的连接池信息
-//    async fn drop_pool(&mut self, host_info: &String) -> Result<()> {
-//        let mut pool_lock = self.conn_pool.lock().await;
-//        match pool_lock.remove(host_info){
-//            Some(mut conn_pool) => {
-//                conn_pool.close_pool();
-//            }
-//            None => {}
-//        }
-//        Ok(())
-//    }
-//
-//    /// 由于后端节点变动，新增了db节点，这里新增连接池
-//    async fn new_pool(&mut self, host_info: &String) -> Result<()>{
-//        if let Some(conf) = &self.platform_config{
-//            let mut my_config = Config::new(&conf);
-//            my_config.host_info = host_info.clone();
-//            let new_pool = ConnectionsPool::new(&my_config)?;
-//            let mut pool_lock = self.conn_pool.lock().await;
-//            pool_lock.insert(host_info.clone(), new_pool);
-//            return Ok(())
-//        }
-//        let err = String::from("new connection pool, but no configuration information found");
-//        info!("{}",err);
-//        info!("{}", String::from("failed......"));
-//        return Ok(())
-//    }
+    /// 修改ops计数状态
+    pub async fn save_com_state(&mut self, host_info: &String, sql_type: &SqlStatement) -> Result<()> {
+        self.questions.fetch_add(1, Ordering::SeqCst);
+        let mut conn_pool_lock = self.conn_pool.lock().await;
+        if let Some(conn_pool) = conn_pool_lock.get(host_info){
+            let mut tmp_pool = conn_pool.clone();
+            tmp_pool.save_ops_info(sql_type);
+        }
+        Ok(())
+    }
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
     pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String) -> Result<MysqlConnectionInfo> {
@@ -556,6 +555,10 @@ pub struct ConnectionsPool {
     cached_count: Arc<AtomicUsize>,                              //当前缓存的连接数
     queued_count: Arc<AtomicUsize>,                              //当前连接池总连接数
     active_count: Arc<AtomicUsize>,                              //当前活跃连接数
+    com_select:  Arc<AtomicUsize>,
+    com_update:  Arc<AtomicUsize>,
+    com_delete:  Arc<AtomicUsize>,
+    com_insert:  Arc<AtomicUsize>,
     min_thread_count: Arc<AtomicUsize>,                          //代表连接池最小线程
     max_thread_count: Arc<AtomicUsize>,                          //最大线连接数
     panic_count: Arc<AtomicUsize>,                               //记录发生panic连接的数量
@@ -575,6 +578,10 @@ impl ConnectionsPool{
             cached_count: Arc::new(AtomicUsize::new(0)),
             queued_count,
             active_count: Arc::new(AtomicUsize::new(0)),
+            com_select: Arc::new(AtomicUsize::new(0)),
+            com_update: Arc::new(AtomicUsize::new(0)),
+            com_delete: Arc::new(AtomicUsize::new(0)),
+            com_insert: Arc::new(AtomicUsize::new(0)),
             min_thread_count: Arc::new(AtomicUsize::new(conf.min)),
             max_thread_count: Arc::new(AtomicUsize::new(conf.max)),
             panic_count: Arc::new(AtomicUsize::new(0)),
@@ -582,6 +589,16 @@ impl ConnectionsPool{
             node_state: Arc::new(AtomicBool::new(true)),
             host_info: Arc::new(Mutex::new(conf.host_info.clone()))
         })
+    }
+
+    async fn save_ops_info(&mut self, sql_type: &SqlStatement) {
+        match sql_type{
+            SqlStatement::Update => {self.com_update.fetch_sub(1, Ordering::SeqCst);},
+            SqlStatement::Insert => {self.com_insert.fetch_sub(1, Ordering::SeqCst);},
+            SqlStatement::Delete => {self.com_delete.fetch_sub(1, Ordering::SeqCst);},
+            SqlStatement::Query => {self.com_select.fetch_sub(1, Ordering::SeqCst);},
+            _ =>{}
+        }
     }
 
     /// 从空闲队列中获取连接

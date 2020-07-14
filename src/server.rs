@@ -72,8 +72,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     runtime.block_on(async{
 
         //通过高可用远程获取各业务集群路由关系并初始化配置
-        let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
-        config.reset_init_config(&ha_route);
+        if config.check_is_mp(){
+            let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
+            config.reset_init_config(&ha_route);
+        }
 
         //创建各业务后端连接池
         let platform_pool = mysql::pool::PlatformPool::new(&config)?;

@@ -5,6 +5,7 @@
 
 pub mod server;
 pub mod client;
+pub mod admin;
 
 ///
 /// 部分capabilities
