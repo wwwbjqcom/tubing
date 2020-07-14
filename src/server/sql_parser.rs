@@ -65,7 +65,8 @@ impl SqlStatement{
             if &i.to_string() != &"".to_string()
                 && &i.to_string() != &"\t".to_string()
                 && &i.to_string() != &"\n".to_string()
-                && &i.to_string() != &"\r".to_string(){
+                && &i.to_string() != &"\r".to_string()
+                && &i.to_string() != &"=".to_string(){
                 tmp.push(i.to_string().clone())
             }
         }
@@ -74,9 +75,6 @@ impl SqlStatement{
 
     fn parser_set(&self, sql: &String) -> SqlStatement {
         let sql_vec = self.split_sql(sql);
-        if sql_vec[2] == String::from("="){
-            return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[3].clone())
-        }
         if sql_vec[1].contains("="){
             let sql_ver = sql_vec[1].split("=");
             let sql_ver = sql_ver.collect::<Vec<&str>>();
