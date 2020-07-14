@@ -142,6 +142,7 @@ impl PlatformPool{
     pub async fn check_health(&mut self) -> Result<()>{
         let mut ping_last_check_time = Local::now().timestamp_millis() as usize;
         let mut maintain_last_check_time = Local::now().timestamp_millis() as usize;
+        let mut route_last_check_time = Local::now().timestamp_millis() as usize;
         'a: loop {
             let now_time = Local::now().timestamp_millis() as usize;
             //每隔60秒检查一次
@@ -158,8 +159,10 @@ impl PlatformPool{
             }
 
             //定时检查路由是否发生变动
-            self.check_route_for_platform().await?;
-
+            if now_time - route_last_check_time >= 1000 {
+                self.check_route_for_platform().await?;
+                route_last_check_time = now_time;
+            }
             delay_for(Duration::from_millis(50)).await;
         }
     }
