@@ -72,6 +72,7 @@ impl PlatforNodeInfo{
     fn check(&mut self, route_info: &RouteInfo) -> bool {
         let write = route_info.get_write_host_info();
         let read = route_info.get_read_host_info();
+        debug!("{:?}, {:?}", &self.write, &self.read);
         if write == self.write && read == read{
             return false;
         }
