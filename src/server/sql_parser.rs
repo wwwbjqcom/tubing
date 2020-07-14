@@ -67,7 +67,7 @@ impl SqlStatement{
                 && &i.to_string() != &"\n".to_string()
                 && &i.to_string() != &"\r".to_string()
                 && &i.to_string() != &"=".to_string(){
-                tmp.push(i.to_string().clone())
+                tmp.push(i.to_string().replace("=","").clone())
             }
         }
         return tmp;
