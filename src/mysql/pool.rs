@@ -980,7 +980,7 @@ impl MysqlConnectionInfo{
     pub fn check_sleep(&mut self) -> bool {
         let dt = Local::now();
         let now_time = dt.timestamp_millis() as usize;
-        if now_time - self.last_time > 600000 {
+        if now_time - self.last_time > 60000 {
             return true
         }
         false
