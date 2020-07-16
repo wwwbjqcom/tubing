@@ -22,6 +22,7 @@ use std::net::TcpStream;
 use std::time::Duration;
 use tokio::time::delay_for;
 use tracing::field::debug;
+use crate::dbengine::admin::AdminSql;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -75,6 +76,49 @@ impl ClientResponse {
         Ok(())
     }
 
+    /// 管理命令操作，并返回数据、成功、失败等数据包
+    ///
+    /// 支持命令：
+    ///
+    /// show status: 当前服务状态， 包括各platform连接池状态，活跃连接数，qps等所有状态信息，
+    /// 可添加where platform=aa只查询对应platform的状态信息
+    ///
+    /// show connections: 返回各节点连接信息，包括目前所有创建的连接数，活跃连接数，连接池最大最小值
+    /// 可通过where platform=aa值查询对应platform的信息
+    ///
+    /// show questions: 返回各节点qps等状态， 同样可以添加where platform=aa
+    ///
+    /// set max_thread/min_thread=1 where platform=aa and host_info=aa: 可以修改对应节点连接池大小
+    /// 但最大值必须大雨等于最小值, 如果不带任何条件则是修改所有， 如果带条件，platform为必须,
+    /// 不能只有host_info, 但可以只有platform，这样是修改对应platform的所有节点
+    pub async fn admin(&self, sql: &String, handler: &mut Handler) -> Result<()> {
+        let admin_sql = AdminSql::Null;
+        let admin_sql = admin_sql.parse_sql(sql).await?;
+        match admin_sql{
+            AdminSql::Set(set_struct) => {
+                if let Err(e) = handler.platform_pool.alter_pool_thread(&set_struct).await {
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                }else {
+                    self.send_ok_packet(handler).await?;
+                }
+            }
+            AdminSql::Show(show_struct) => {
+                let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub async fn check_is_admin_paltform(&self, handler: &mut Handler) -> bool{
+        if let Some(platform) = &handler.platform{
+            if platform == &"admin".to_string(){
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// 处理com_query packet
     ///
     /// 解析处sql语句
@@ -87,6 +131,11 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
+        if self.check_is_admin_paltform(handler).await{
+            self.admin(&sql, handler).await?;
+            return Ok(())
+        }
+
         //info!("{}",&sql);
         let sql_parser = SqlStatement::Default;
         let a = sql_parser.parser(&sql);

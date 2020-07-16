@@ -41,6 +41,7 @@ use chrono;
 use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
 use crate::server::mysql_mp::RouteInfo;
+use crate::dbengine::admin;
 
 
 enum HealthType{
@@ -221,6 +222,56 @@ impl PlatformPool{
             platform_list.push(platform.clone());
         }
         return platform_list
+    }
+
+    /// 修改连接池最小/最大值
+    pub async fn alter_pool_thread(&mut self, set_struct: &admin::SetStruct) -> Result<()> {
+        if let Some(platform) = &set_struct.platform{
+            if let Some(mut platform_pool) = self.get_platform_pool(platform).await{
+                if let Some(host_info) = &set_struct.host_info{
+                    // 获取某一个节点连接池进行操作
+                    platform_pool.alter_set_value(host_info, set_struct).await?;
+                }else {
+                    //对应platform下面所有节点进行操作
+                    let node_list = platform_pool.get_node_list().await;
+                    for host_info in node_list{
+                        platform_pool.alter_set_value(&host_info, set_struct).await?;
+                    }
+                }
+            }else {
+                let err = "there is no connection pool for platfrom".to_string();
+                return Err(Box::new(MyError(err.into())));
+            }
+        }else {
+            let err = "platform is not empty".to_string();
+            return Err(Box::new(MyError(err.into())));
+        }
+        Ok(())
+    }
+
+
+    /// 获取所有连接池状态信息
+    pub async fn show_pool_state(&mut self, show_struct: &admin::ShowStruct) -> Result<admin::ShowState> {
+        let mut show_state = vec![];
+        if let Some(platform) = &show_struct.platform{
+            let pool_state = self.get_state(&platform).await?;
+            show_state.push(pool_state);
+        }else {
+            let platform_list = self.get_platform_list().await;
+            for platform in platform_list{
+                let pool_state = self.get_state(&platform).await?;
+                show_state.push(pool_state);
+            }
+        }
+        Ok(admin::ShowState{ platform_state: show_state })
+    }
+
+    /// 获取某一个platform下的连接池状态信息
+    async fn get_state(&mut self, platform: &String) -> Result<admin::PoolState>{
+        if let Some(mut platform_pool) = self.get_platform_pool(platform).await{
+            return Ok(platform_pool.get_pool_state(platform).await?)
+        }
+        return Err(Box::new(MyError(format!("there is no connection pool for platfrom: {}", platform).into())));
     }
 }
 
@@ -538,6 +589,52 @@ impl ConnectionsPoolPlatform{
         return node_list
     }
 
+    /// 通过set命令修改连接池部分信息
+    async fn alter_set_value(&mut self, host_info: &String, set_struct: &admin::SetStruct) -> Result<()>{
+        if let Some(mut conn_pool) = self.get_node_pool(host_info).await{
+            conn_pool.alter_thread(&set_struct.set_variables).await?;
+        }else {
+            let err = format!("there is no connection pool for {}", host_info);
+            return Err(Box::new(MyError(err.into())));
+        }
+        Ok(())
+    }
+
+    /// 获取连接池状态
+    async fn get_pool_state(&mut self, platform: &String) -> Result<admin::PoolState> {
+        let mut pool_state = admin::PoolState{
+            platform: platform.clone(),
+            write_host: "".to_string(),
+            read_host: vec![],
+            questions: self.questions.load(Ordering::Relaxed),
+            host_state: vec![]
+        };
+        self.get_node_role(&mut pool_state).await;
+
+        let node_list = self.get_node_list().await;
+        for host_info in node_list{
+            if let Some(mut node_pool) = self.get_node_pool(&host_info).await{
+                let one_pool_state = node_pool.get_pool_state(&host_info).await;
+                pool_state.host_state.push(one_pool_state)
+            }
+        }
+        return Ok(pool_state)
+    }
+
+    /// 获取当前业务后端读写节点关系
+    ///
+    /// 这里为了管理端的准确性从连接池获取
+    async fn get_node_role(&mut self, pool_state: &mut admin::PoolState) {
+        let write_lock = self.write.read().await;
+        let read_lock = self.read.read().await;
+        for write_host in &*write_lock{
+            pool_state.write_host = write_host.clone();
+        }
+        for read_host in &*read_lock{
+            pool_state.read_host.push(read_host.clone());
+        }
+    }
+
 }
 
 /// 连接池管理
@@ -564,7 +661,8 @@ pub struct ConnectionsPool {
     panic_count: Arc<AtomicUsize>,                               //记录发生panic连接的数量
     node_role: Arc<AtomicBool>,                                  //主从角色判断，true为主，flase为从
     node_state: Arc<AtomicBool>,                                 //节点状态，如果为flase表示宕机
-    host_info: Arc<Mutex<String>>                                //记录节点信息
+    host_info: Arc<Mutex<String>>,                                //记录节点信息
+    auth: Arc<AtomicBool>
 }
 
 impl ConnectionsPool{
@@ -587,7 +685,8 @@ impl ConnectionsPool{
             panic_count: Arc::new(AtomicUsize::new(0)),
             node_role: Arc::new(AtomicBool::new(true)),
             node_state: Arc::new(AtomicBool::new(true)),
-            host_info: Arc::new(Mutex::new(conf.host_info.clone()))
+            host_info: Arc::new(Mutex::new(conf.host_info.clone())),
+            auth: Arc::new(AtomicBool::new(false))
         })
     }
 
@@ -599,6 +698,30 @@ impl ConnectionsPool{
             SqlStatement::Query => {self.com_select.fetch_sub(1, Ordering::SeqCst);},
             _ =>{}
         }
+    }
+
+    async fn alter_thread(&mut self, set_type: &admin::SetVariables) -> Result<()>{
+        match set_type{
+            admin::SetVariables::MinThread(value) => {
+                self.min_thread_count.store(value.clone(), Ordering::Relaxed);
+            }
+            admin::SetVariables::MaxThread(value) => {
+                self.max_thread_count.store(value.clone(), Ordering::Relaxed);
+            }
+            admin::SetVariables::Auth(value) => {
+                if value == &0{
+                    self.auth.store(false, Ordering::Relaxed);
+                }else {
+                    self.auth.store(true, Ordering::Relaxed);
+                }
+            }
+
+            _ => {
+                let err = "only support set min_thread/max_thread/auth".to_string();
+                return Err(Box::new(MyError(err.into())));
+            }
+        }
+        Ok(())
     }
 
     /// 从空闲队列中获取连接
@@ -687,6 +810,21 @@ impl ConnectionsPool{
         Ok(())
     }
 
+
+    async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
+        admin::HostPoolState{
+            host_info: host_info.clone(),
+            com_select: self.com_select.load(Ordering::Relaxed),
+            com_update: self.com_update.load(Ordering::Relaxed),
+            com_delete: self.com_delete.load(Ordering::Relaxed),
+            com_insert: self.com_insert.load(Ordering::Relaxed),
+            min_thread: self.min_thread_count.load(Ordering::Relaxed),
+            max_thread: self.max_thread_count.load(Ordering::Relaxed),
+            thread_count: self.queued_count.load(Ordering::Relaxed),
+            active_thread: self.active_count.load(Ordering::Relaxed),
+            auth: self.auth.load(Ordering::Relaxed)
+        }
+    }
 
     /// 检查是否有已指定的连接
     ///
