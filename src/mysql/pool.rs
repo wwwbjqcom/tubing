@@ -410,7 +410,7 @@ impl ConnectionsPoolPlatform{
         self.questions.fetch_add(1, Ordering::SeqCst);
         info!("{}, {:?}",host_info, sql_type);
         if let Some(mut node_pool) = self.get_node_pool(host_info).await{
-            node_pool.save_ops_info(sql_type);
+            node_pool.save_ops_info(sql_type).await;
         }
         Ok(())
     }
