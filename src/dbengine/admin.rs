@@ -23,7 +23,7 @@ pub struct ShowStruct{
 impl ShowStruct{
     async fn parse(&mut self,sql_vec: &Vec<String>) -> Result<()>{
         info!("{:?}",&sql_vec);
-        match sql_vec[0].as_ref(){
+        match sql_vec[1].as_ref(){
             "status" => {
                 self.command = ShowCommand::Status;
             }
