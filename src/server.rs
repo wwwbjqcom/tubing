@@ -628,6 +628,10 @@ impl Handler {
     ///
     /// 相同则直接返回
     pub async fn check_cur_platform(&mut self, platform: &String) -> Result<()>{
+        if platform == "admin"{
+            self.platform = Some(platform.clone());
+            return Ok(())
+        }
         if let Some(cur_platform) = &self.platform{
             if cur_platform != platform{
                 //归还连接
