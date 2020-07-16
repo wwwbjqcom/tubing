@@ -408,10 +408,8 @@ impl ConnectionsPoolPlatform{
     /// 修改ops计数状态
     pub async fn save_com_state(&mut self, host_info: &String, sql_type: &SqlStatement) -> Result<()> {
         self.questions.fetch_add(1, Ordering::SeqCst);
-        let mut conn_pool_lock = self.conn_pool.lock().await;
-        if let Some(conn_pool) = conn_pool_lock.get(host_info){
-            let mut tmp_pool = conn_pool.clone();
-            tmp_pool.save_ops_info(sql_type);
+        if let Some(mut node_pool) = self.get_node_pool(host_info).await{
+            node_pool.save_ops_info(sql_type);
         }
         Ok(())
     }
@@ -692,10 +690,10 @@ impl ConnectionsPool{
 
     async fn save_ops_info(&mut self, sql_type: &SqlStatement) {
         match sql_type{
-            SqlStatement::Update => {self.com_update.fetch_sub(1, Ordering::SeqCst);},
-            SqlStatement::Insert => {self.com_insert.fetch_sub(1, Ordering::SeqCst);},
-            SqlStatement::Delete => {self.com_delete.fetch_sub(1, Ordering::SeqCst);},
-            SqlStatement::Query => {self.com_select.fetch_sub(1, Ordering::SeqCst);},
+            SqlStatement::Update => {self.com_update.fetch_add(1, Ordering::SeqCst);},
+            SqlStatement::Insert => {self.com_insert.fetch_add(1, Ordering::SeqCst);},
+            SqlStatement::Delete => {self.com_delete.fetch_add(1, Ordering::SeqCst);},
+            SqlStatement::Query => {self.com_select.fetch_add(1, Ordering::SeqCst);},
             _ =>{}
         }
     }
