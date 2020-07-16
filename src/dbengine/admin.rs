@@ -200,7 +200,7 @@ impl AdminSql{
     }
 
     async fn split_sql(&self, sql: &String) -> Vec<String> {
-        let sql = sql.to_lowercase().replace("=", " ");
+        let sql = sql.to_lowercase().replace("=", " ").replace("\"","");
         let sql_ver = sql.split(" ");
         let sql_ver = sql_ver.collect::<Vec<&str>>();
         let mut tmp: Vec<String> = vec![];
