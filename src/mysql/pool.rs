@@ -166,7 +166,7 @@ impl PlatformPool{
                 ping_last_check_time = now_time;
             }
             //每隔600秒进行一次连接池数量维护
-            if now_time - maintain_last_check_time >= 600000{
+            if now_time - maintain_last_check_time >= 60000{
                 debug!("{}", String::from("maintain_pool"));
                 self.check_health_for_type(HealthType::Maintain).await?;
                 maintain_last_check_time = now_time;
@@ -857,6 +857,7 @@ impl ConnectionsPool{
     pub async fn maintain_pool(&mut self) -> Result<()> {
         let count = self.active_count.load(Ordering::Relaxed) + self.queued_count.load(Ordering::Relaxed) + self.cached_count.load(Ordering::Relaxed);
         let min = self.min_thread_count.load(Ordering::Relaxed);
+        info!("min:{}, count:{}", &min, &count);
         if &count < &min {
             let t = min - count;
             //let &(ref pool, ref condvar) = &*self.conn_queue;
