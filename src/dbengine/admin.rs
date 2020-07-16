@@ -6,6 +6,7 @@
 use crate::mysql::Result;
 use crate::MyError;
 use crate::server::Handler;
+use tracing::field::{debug};
 
 
 pub enum ShowCommand{
@@ -21,6 +22,7 @@ pub struct ShowStruct{
 }
 impl ShowStruct{
     async fn parse(&mut self,sql_vec: &Vec<String>) -> Result<()>{
+        info!("{}",&sql_vec);
         match sql_vec[0].as_ref(){
             "status" => {
                 self.command = ShowCommand::Status;
