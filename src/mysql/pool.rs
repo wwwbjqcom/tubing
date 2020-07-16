@@ -689,6 +689,7 @@ impl ConnectionsPool{
     }
 
     async fn save_ops_info(&mut self, sql_type: &SqlStatement) {
+        info!("{:?}", sql_type);
         match sql_type{
             SqlStatement::Update => {self.com_update.fetch_add(1, Ordering::SeqCst);},
             SqlStatement::Insert => {self.com_insert.fetch_add(1, Ordering::SeqCst);},
