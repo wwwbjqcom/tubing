@@ -166,7 +166,7 @@ impl PlatformPool{
                 ping_last_check_time = now_time;
             }
             //每隔600秒进行一次连接池数量维护
-            if now_time - maintain_last_check_time >= 60000{
+            if now_time - maintain_last_check_time >= 600000{
                 debug!("{}", String::from("maintain_pool"));
                 self.check_health_for_type(HealthType::Maintain).await?;
                 maintain_last_check_time = now_time;
@@ -857,7 +857,6 @@ impl ConnectionsPool{
     pub async fn maintain_pool(&mut self) -> Result<()> {
         let count = self.active_count.load(Ordering::Relaxed) + self.queued_count.load(Ordering::Relaxed) + self.cached_count.load(Ordering::Relaxed);
         let min = self.min_thread_count.load(Ordering::Relaxed);
-        info!("min:{}, count:{}", &min, &count);
         if &count < &min {
             let t = min - count;
             //let &(ref pool, ref condvar) = &*self.conn_queue;
@@ -871,7 +870,6 @@ impl ConnectionsPool{
             // 最低只会减少到最小连接数
             let mut pool = self.conn_queue.lock().await;
             let num = (count - min) as u32;
-            info!("{}",num);
             let mut tmp = 0 as u32;
             for _ in 0..pool.pool.len(){
                 if let Some(mut conn) = pool.pool.pop_front(){
@@ -983,7 +981,7 @@ impl MysqlConnectionInfo{
     pub fn check_sleep(&mut self) -> bool {
         let dt = Local::now();
         let now_time = dt.timestamp_millis() as usize;
-        if now_time - self.last_time > 60000 {
+        if now_time - self.last_time > 600000 {
             return true
         }
         false
