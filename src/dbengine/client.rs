@@ -104,6 +104,8 @@ impl ClientResponse {
             }
             AdminSql::Show(show_struct) => {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
+                info!("{:?}", &show_state);
+                self.send_ok_packet(handler).await?;
             }
             _ => {}
         }
