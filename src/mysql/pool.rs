@@ -393,7 +393,7 @@ impl ConnectionsPoolPlatform{
                 let mut pool_lock = self.conn_pool.lock().await;
                 match pool_lock.remove(info){
                     Some(mut conn_pool) => {
-                        conn_pool.close_pool();
+                        conn_pool.close_pool().await;
                     }
                     None => {}
                 }
@@ -870,6 +870,7 @@ impl ConnectionsPool{
             // 最低只会减少到最小连接数
             let mut pool = self.conn_queue.lock().await;
             let num = (count - min) as u32;
+            info!("{}",num);
             let mut tmp = 0 as u32;
             for _ in 0..pool.pool.len(){
                 if let Some(mut conn) = pool.pool.pop_front(){
@@ -880,6 +881,7 @@ impl ConnectionsPool{
                         self.queued_count.fetch_add(1, Ordering::SeqCst);
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
                     }else {
+                        info!("aaa");
                         conn.close();
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
                         tmp += 1;
