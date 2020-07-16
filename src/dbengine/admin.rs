@@ -6,7 +6,7 @@
 use crate::mysql::Result;
 use crate::MyError;
 use crate::server::Handler;
-use tracing::field::{debug, info};
+use tracing::{debug, error, info, instrument};
 
 
 pub enum ShowCommand{
