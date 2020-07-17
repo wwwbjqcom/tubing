@@ -63,6 +63,7 @@ impl ColumnDefinition41{
         packet.push(self.field_type.clone());
         packet.extend(readvalue::write_u16(self.flags.clone()));
         packet.push(self.decimals.clone());
+        packet.extend(vec![0,0]);
         packet
     }
 
