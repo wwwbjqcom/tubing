@@ -109,7 +109,7 @@ impl ClientResponse {
             }
             AdminSql::Show(show_struct) => {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
-                info!("{:?}", &show_state);
+                debug!("show_state: {:?}", &show_state);
                 //self.send_ok_packet(handler).await?;
                 let mut text_response = TextResponse::new(handler.client_flags.clone());
                 if let Err(e) = text_response.packet(&show_struct, &show_state).await{

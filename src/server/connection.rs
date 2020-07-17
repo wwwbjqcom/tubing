@@ -107,7 +107,6 @@ impl Connection {
     /// send a packet to the connection
     pub async fn send(&mut self, packet: &Vec<u8>, seq_id: &u8) -> io::Result<()> {
         let packet_all = self.packet_value(packet, seq_id);
-        info!("{:?}", &packet_all);
         self.stream.write_all(&packet_all).await?;
         self.stream.flush().await
     }
