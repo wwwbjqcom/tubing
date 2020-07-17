@@ -132,7 +132,7 @@ impl ConnectionsRowValue{
             min_thread: format!("{}",host_state.min_thread.clone()),
             max_thread: format!("{}",host_state.max_thread.clone()),
             active_thread: format!("{}",host_state.active_thread.clone()),
-            pool_count: format!("{}",host_state.active_thread.clone())
+            pool_count: format!("{}",host_state.thread_count.clone())
         }
     }
 
@@ -181,15 +181,17 @@ impl TextResponse{
         match show_struct.command{
             ShowCommand::Connections => {
                 self.packet_column_count(6).await;
+                self.packet_list.extend(ConnectionsRowValue::packet_column_difinition().await);
             }
             ShowCommand::Questions => {
                 self.packet_column_count(7).await;
+                self.packet_list.extend(QuestionsRowValue::packet_column_definitions().await);
             }
             _ => {
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
             }
         }
-        self.packet_list.extend(ConnectionsRowValue::packet_column_difinition().await);
+
         self.packet_eof().await;
         self.packet_result_text(show_struct, show_state).await;
         if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
