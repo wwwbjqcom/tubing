@@ -227,9 +227,9 @@ impl TextResponse{
     /// 字段个数部分以及是否跳过元数据标签
     async fn packet_column_count(&mut self, column_count: u8) {
         let mut packet = vec![];
-//        if (self.client_flags & CLIENT_OPTIONAL_RESULTSET_METADATA as i32) > 0{
-//            packet.push(RESULTSET_METADATA_FULL);
-//        }
+        if (self.client_flags & CLIENT_OPTIONAL_RESULTSET_METADATA as i32) > 0{
+            packet.push(RESULTSET_METADATA_FULL);
+        }
         packet.push(column_count);
         self.packet_list.push(packet);
     }
