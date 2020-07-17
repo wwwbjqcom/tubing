@@ -224,7 +224,7 @@ impl TextResponse{
 
     async fn packet_eof(&mut self) {
         let packet = self.eof().await;
-        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0{
+        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
             self.packet_list.push(packet);
         }
     }
