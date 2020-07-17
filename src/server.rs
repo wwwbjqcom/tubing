@@ -605,6 +605,10 @@ impl Handler {
         self.seq = 0;
     }
 
+    pub fn seq_add(&mut self) {
+        self.seq += 1;
+    }
+
     pub fn get_status_flags(&self) -> u16 {
         if self.auto_commit{
             return (SERVER_STATUS_AUTOCOMMIT | SERVER_STATUS_IN_TRANS) as u16;

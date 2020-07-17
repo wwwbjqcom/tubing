@@ -64,6 +64,16 @@ pub const SERVER_PS_OUT_PARAMS: usize = 4096;
 pub const SERVER_STATUS_IN_TRANS_READONLY: usize = 8192;
 pub const SERVER_SESSION_STATE_CHANGED: usize = (1 << 14);
 
+/// enum_resultset_metadata
+///
+pub const RESULTSET_METADATA_FULL: u8 = 1;  //The server will send all metadata.
+pub const RESULTSET_METADATA_NONE: u8 = 0;  //No metadata will be sent.
+
+/// filed type
+///
+pub const Long: u8 = 8;
+pub const VarString: u8 = 253;
+
 ///
 /// 字符集设置
 pub const UTF8MB4_UNICODE_CI: usize = 224;

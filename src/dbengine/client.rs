@@ -23,6 +23,7 @@ use std::time::Duration;
 use tokio::time::delay_for;
 use tracing::field::debug;
 use crate::dbengine::admin::AdminSql;
+use crate::mysql::query_response::TextResponse;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -86,7 +87,11 @@ impl ClientResponse {
     /// show connections: 返回各节点连接信息，包括目前所有创建的连接数，活跃连接数，连接池最大最小值
     /// 可通过where platform=aa值查询对应platform的信息
     ///
+    /// --platform--host_info--min_thread--max_thread--active_thread--pool_count--
+    ///
     /// show questions: 返回各节点qps等状态， 同样可以添加where platform=aa
+    ///
+    /// --platform--host_info--com_select--com_update--com_delete--com_update--platform_questions
     ///
     /// set max_thread/min_thread=1 where platform=aa and host_info=aa: 可以修改对应节点连接池大小
     /// 但最大值必须大雨等于最小值, 如果不带任何条件则是修改所有， 如果带条件，platform为必须,
@@ -105,7 +110,18 @@ impl ClientResponse {
             AdminSql::Show(show_struct) => {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
                 info!("{:?}", &show_state);
-                self.send_ok_packet(handler).await?;
+                //self.send_ok_packet(handler).await?;
+                let mut text_response = TextResponse::new(handler.client_flags.clone());
+                if let Err(e) = text_response.packet(&show_struct, &show_state).await{
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                }else {
+                    for packet in text_response.packet_list{
+                        //发送数据包
+                        handler.send(&packet).await?;
+                        handler.seq_add();
+                    }
+                    handler.reset_seq();
+                }
             }
             _ => {}
         }

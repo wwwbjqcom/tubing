@@ -11,6 +11,7 @@ pub mod connection;
 use connection::MysqlConnection;
 pub mod scramble;
 pub mod pool;
+pub mod query_response;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
