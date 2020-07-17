@@ -128,9 +128,17 @@ impl ClientResponse {
         Ok(())
     }
 
-    pub async fn check_is_admin_paltform(&self, handler: &mut Handler) -> bool{
+    pub async fn check_is_admin_paltform(&self, handler: &mut Handler, sql_type: &SqlStatement) -> bool{
         if let Some(platform) = &handler.platform{
             if platform == &"admin".to_string(){
+                match sql_type{
+                    SqlStatement::SetVariable(k,v) => {
+                        if k.to_lowercase() == "platform".to_string(){
+                            return false;
+                        }
+                    }
+                    _ => {}
+                }
                 return true;
             }
         }
@@ -149,14 +157,14 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        if self.check_is_admin_paltform(handler).await{
+        let sql_parser = SqlStatement::Default;
+        let a = sql_parser.parser(&sql);
+        if self.check_is_admin_paltform(handler, &a).await{
             self.admin(&sql, handler).await?;
             return Ok(())
         }
 
         //info!("{}",&sql);
-        let sql_parser = SqlStatement::Default;
-        let a = sql_parser.parser(&sql);
         debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
         debug!("{}",format!("{:?}: {}", a, &sql));
 
