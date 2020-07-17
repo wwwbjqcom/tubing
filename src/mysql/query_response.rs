@@ -53,6 +53,7 @@ impl ColumnDefinition41{
         packet.extend(packet_one_column_value(self.org_table.clone()).await);
         packet.extend(packet_one_column_value(self.name.clone()).await);
         packet.extend(packet_one_column_value(self.org_name.clone()).await);
+        packet.push(1);
         packet.push(self.fix_length.clone());
         packet.extend(readvalue::write_u16(self.character_set.clone()));
         packet.extend(readvalue::write_u32(self.column_length.clone()));
