@@ -29,6 +29,10 @@ pub struct ColumnDefinition41{
 impl ColumnDefinition41{
 
     async fn show_status_column(column_name: &String, column_type: &u8) -> ColumnDefinition41{
+        let mut my_column_length = 255 as u32;
+        if column_type == 8{
+            my_column_length = 10;
+        }
         ColumnDefinition41{
             catalog: "def".to_string(),
             schema: "MysqlBus_system".to_string(),
@@ -38,7 +42,7 @@ impl ColumnDefinition41{
             org_name: column_name.clone(),
             fix_length: 0x0c,
             character_set: crate::dbengine::UTF8MB4_UNICODE_CI as u16,
-            column_length: 65535,
+            column_length: my_column_length,
             field_type: column_type.clone(),
             flags: 1,
             decimals: 0
@@ -53,7 +57,6 @@ impl ColumnDefinition41{
         packet.extend(packet_one_column_value(self.org_table.clone()).await);
         packet.extend(packet_one_column_value(self.name.clone()).await);
         packet.extend(packet_one_column_value(self.org_name.clone()).await);
-        packet.push(1);
         packet.push(self.fix_length.clone());
         packet.extend(readvalue::write_u16(self.character_set.clone()));
         packet.extend(readvalue::write_u32(self.column_length.clone()));
