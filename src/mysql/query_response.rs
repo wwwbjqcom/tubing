@@ -30,7 +30,7 @@ impl ColumnDefinition41{
 
     async fn show_status_column(column_name: &String, column_type: &u8) -> ColumnDefinition41{
         let mut my_column_length = 255 as u32;
-        if column_type == 8{
+        if column_type == &8{
             my_column_length = 10;
         }
         ColumnDefinition41{
