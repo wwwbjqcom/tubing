@@ -24,7 +24,7 @@
  4. min/max: 连接池最大最小值
 
  ## 管理命令:
- 没有专用的管理端或者管理端口，直接使用mysql命令行工具进行连接并通过set platform=admin命令设置就可以。
+ 没有专用的管理端或者管理端口，直接使用mysql命令行工具(暂时只支持8.0以下版本的命令行工具)进行连接并通过set platform=admin命令设置就可以。
 
     MySQL [(none)]> set platform=admin;   
     Query OK, 0 rows affected (0.00 sec)
