@@ -10,6 +10,7 @@ use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
 use std::str::from_utf8;
+use num_cpus;
 use crate::{Config, readvalue, MyConfig, mysql};
 use crate::mysql::Result;
 use crate::mysql::pool::{PlatformPool, ConnectionsPoolPlatform};
@@ -39,10 +40,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     let (notify_shutdown_t, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let (shutdown_complete_tx_t, shutdown_complete_rx_t) = mpsc::channel(1);
-
+    let cpus = num_cpus::get();
     let mut runtime = Builder::new()
         .threaded_scheduler()
-        .core_threads(10)
+        .core_threads(cpus * 2)
         .max_threads(100)
         .enable_all()
         .thread_name("my-custom-name")

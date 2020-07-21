@@ -27,6 +27,7 @@ chrono="0.4.11"
 toml="0.5.6"
 serde_derive="1.0.100"
 reqwest = { version = "0.10", features = ["json"] }
+num_cpus="1.13.0"
 
 
 [MysqlBus.release]
