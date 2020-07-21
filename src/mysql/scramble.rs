@@ -5,7 +5,6 @@
 
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
-use crate::Config;
 use std::process;
 use tracing::field::debug;
 

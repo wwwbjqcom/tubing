@@ -3,15 +3,8 @@ mod server;
 mod mysql;
 mod readvalue;
 use structopt::StructOpt;
-use tokio::net::TcpListener;
 use tokio::signal;
-use tokio::runtime::{Runtime, Builder};
-use tokio::prelude::*;
-use std::sync::Arc;
-use std::ops::DerefMut;
-use std::thread;
 use std::fmt;
-use tracing::debug;
 use chrono::prelude::*;
 use chrono;
 

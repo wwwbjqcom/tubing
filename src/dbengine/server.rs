@@ -13,15 +13,12 @@ use crate::dbengine::UTF8MB4_UNICODE_CI;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use crate::{MyError,Config};
 use crate::mysql::Result;
 use byteorder::{WriteBytesExt, LittleEndian};
 use crate::dbengine::client::ClientResponse;
 use crate::mysql::scramble::get_sha1_pass;
-use tracing::{info, debug};
-use std::sync::Arc;
+use tracing::{debug};
 use crate::readvalue;
-use crate::server::Handler;
 use crate::mysql::pool::PlatformPool;
 
 #[derive(Debug)]

@@ -10,10 +10,6 @@ use crate::mysql::FlagsMeta;
 use std::convert::TryInto;
 use crate::Config;
 use crate::mysql::scramble;
-use crate::mysql::connection::pack;
-use std::net::TcpStream;
-use mysql_common::crypto::encrypt;
-use mysql_common;
 
 
 
@@ -127,25 +123,22 @@ impl LocalInfo {
         //all data is put in verctor type
         let mut _payload = Vec::new();
         let mut payload_value: Vec<u8> = vec![];
-        let mut packet_header: Vec<u8> = vec![];
         match pack_type {
-            PackType::HandShake => {},
             PackType::HandShakeResponse => unsafe {
                 if config.database.len() > 0 {
-                    payload_value = Self::pack_handshake(&self,buf, config, 1);
+                    payload_value.extend(Self::pack_handshake(&self,buf, config, 1));
                 }else {
-                    payload_value = Self::pack_handshake(&self,buf, config, 0) ;
+                    payload_value.extend(Self::pack_handshake(&self,buf, config, 0)) ;
                 }
             }
-            _ => payload_value = vec![]
         }
 
         if payload_value.len() > 0{
-            packet_header = pack_header(&payload_value,1)
+            let packet_header = pack_header(&payload_value,1);
+            _payload.extend(packet_header);
         }else {
             return Err("paket payload is failed!!");
         }
-        _payload.extend(packet_header);
         _payload.extend(payload_value);
         return Ok(_payload);
     }

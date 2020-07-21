@@ -6,7 +6,7 @@
 use crate::dbengine::admin::{ShowState, ShowStruct, ShowCommand, HostPoolState, PoolState};
 use crate::dbengine::{CLIENT_OPTIONAL_RESULTSET_METADATA, RESULTSET_METADATA_FULL};
 use crate::dbengine::{CLIENT_PROTOCOL_41};
-use crate::dbengine::{Long, VarString, CLIENT_DEPRECATE_EOF,SERVER_STATUS_IN_TRANS};
+use crate::dbengine::{LONG, VAR_STRING, CLIENT_DEPRECATE_EOF, SERVER_STATUS_IN_TRANS};
 use crate::mysql::Result;
 use crate::{MyError,readvalue};
 
@@ -89,17 +89,17 @@ impl StatusRowValue{
         let mut packet = vec![];
         packet.extend(packet_one_column_value(self.platform.clone()).await);
         packet.extend(packet_one_column_value(self.write.clone()).await);
-        packet.extend(packet_one_column_value(format!("{:?}",self.questions.clone())).await);
+        packet.extend(packet_one_column_value(format!("{:?}",self.read.clone())).await);
         packet.extend(packet_one_column_value(self.questions.clone()).await);
         packet
     }
 
     async fn packet_column_definitions() -> Vec<Vec<u8>> {
         let mut packet = vec![];
-        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("write"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("read"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("questions"), &Long).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("write"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("read"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("questions"), &LONG).await.packet().await);
         packet
     }
 }
@@ -136,18 +136,18 @@ impl QuestionsRowValue{
         packet.extend(packet_one_column_value(self.com_insert.clone()).await);
         packet.extend(packet_one_column_value(self.com_delete.clone()).await);
         packet.extend(packet_one_column_value(self.platform_questions.clone()).await);
-        pakcet
+        packet
     }
 
     async fn packet_column_definitions() -> Vec<Vec<u8>> {
         let mut packet = vec![];
-        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("host_info"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("com_select"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("com_update"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("com_insert"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("com_delete"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("platform_questions"), &VarString).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("host_info"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("com_select"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("com_update"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("com_insert"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("com_delete"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform_questions"), &VAR_STRING).await.packet().await);
         packet
     }
 }
@@ -185,12 +185,12 @@ impl ConnectionsRowValue{
 
     async fn packet_column_difinition() -> Vec<Vec<u8>> {
         let mut packet = vec![];
-        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("host_info"), &VarString).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("min_thread"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("max_thread"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("active_thread"), &Long).await.packet().await);
-        packet.push(ColumnDefinition41::show_status_column(&String::from("pool_count"), &Long).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("host_info"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("min_thread"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("max_thread"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("active_thread"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("pool_count"), &LONG).await.packet().await);
         packet
     }
 }
@@ -246,14 +246,14 @@ impl TextResponse{
 
     /// 数据部分
     async fn packet_result_text(&mut self, show_struct: &ShowStruct, show_state: &ShowState) {
-        'a: for pool_state in &show_state.platform_state{
+        for pool_state in &show_state.platform_state{
             match show_struct.command{
                 ShowCommand::Status => {
                     let c_value = StatusRowValue::new(pool_state).await;
                     self.packet_list.push(c_value.packet().await);
                 }
                 _ => {
-                    'b: for one_pool_state in &pool_state.host_state{
+                    for one_pool_state in &pool_state.host_state{
                         match show_struct.command{
                             ShowCommand::Questions => {
                                 let c_value = QuestionsRowValue::new(&pool_state.platform, &pool_state.questions,one_pool_state).await;

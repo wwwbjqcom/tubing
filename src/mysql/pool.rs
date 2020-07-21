@@ -15,7 +15,6 @@
 */
 
 use tokio::sync::{Mutex, RwLock};
-use tokio::sync::{broadcast, mpsc, Semaphore};
 use crate::mysql::connection::{MysqlConnection, PacketHeader, AllUserInfo};
 use std::collections::{VecDeque, HashMap};
 use crate::{Config, readvalue, Platform, MyConfig};
@@ -25,17 +24,11 @@ use crate::server::mysql_mp;
 use std::net::TcpStream;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 use std::time::{SystemTime, Duration};
-use std::error::Error;
-use std::sync::{Arc, Condvar};
-use std::{thread, time};
-use crate::dbengine::client::ClientResponse;
+use std::sync::{Arc};
 use std::io::{Write, Read};
 use tracing::field::{debug};
-use std::ops::DerefMut;
 use crate::mysql::connection::response::pack_header;
-use tracing::{debug, error, info, instrument};
-use std::future::Future;
-use crate::server::shutdown::Shutdown;
+use tracing::{debug, error, info};
 use chrono::prelude::*;
 use chrono;
 use tokio::time::delay_for;
@@ -59,13 +52,12 @@ pub struct PlatforNodeInfo{
 }
 impl PlatforNodeInfo{
     fn new(platform: &Platform) -> PlatforNodeInfo{
-        let mut read:Option<Vec<String>> = None;
         let mut tmp = vec![];
         if let Some(v) = &platform.read{
             tmp = v.clone();
         }
         tmp.push(platform.get_write_host());
-        read = Some(tmp);
+        let read = Some(tmp);
         PlatforNodeInfo{
             platform: platform.platform.clone(),
             write: platform.get_write_host(),
@@ -157,7 +149,7 @@ impl PlatformPool{
         let mut ping_last_check_time = Local::now().timestamp_millis() as usize;
         let mut maintain_last_check_time = Local::now().timestamp_millis() as usize;
         let mut route_last_check_time = Local::now().timestamp_millis() as usize;
-        'a: loop {
+        loop {
             let now_time = Local::now().timestamp_millis() as usize;
             //每隔60秒检查一次
             if now_time - ping_last_check_time >= 60000{
@@ -187,14 +179,13 @@ impl PlatformPool{
     async fn check_route_for_platform(&mut self) -> Result<()> {
         let ha_ser_route = mysql_mp::get_platform_route(&self.config).await?;
         debug!("{:?}", &ha_ser_route);
-        let platform_list = self.get_platform_list().await;
         for route_info in ha_ser_route.value.route{
             let mut plaform_node_info = self.platform_node_info.clone();
             for platform_node in &mut plaform_node_info{
                 if !platform_node.check(&route_info){
                     //发生变动， 开始修改连接池
                     if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
-                        platform_pool.alter_pool(&route_info, &platform_node).await?;
+                        platform_pool.alter_pool(&platform_node).await?;
                         platform_node.reset_alter();
                     }
                 }
@@ -344,7 +335,7 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 主从关系发生变化进行连接池对应关系变动
-    async fn alter_pool(&mut self, route_info: &RouteInfo, platfor_node: &PlatforNodeInfo) -> Result<()> {
+    async fn alter_pool(&mut self, platfor_node: &PlatforNodeInfo) -> Result<()> {
         if platfor_node.write_is_alter{
             //主从发生变化，新master必然会是已存在的slave， 所以直接设置master节点信息
             let mut write_host_lock = self.write.write().await;
@@ -360,10 +351,10 @@ impl ConnectionsPoolPlatform{
             new_read_list.push(platfor_node.write.clone());
             //首先进行新增判断
             let mut read_host_lock = self.read.write().await;
-            'a: for host_info in &new_read_list{
-                'b: for info in &*read_host_lock{
+            'aa: for host_info in &new_read_list{
+                for info in &*read_host_lock{
                     if info == host_info{
-                        continue 'a;
+                        continue 'aa;
                     }
                 }
                 //不存在当前读取列表中，增加连接池
@@ -384,7 +375,7 @@ impl ConnectionsPoolPlatform{
 
             //反响判断现有节点是否存在新路由关系中，如果不存在则删除
             'a: for info in &*read_host_lock{
-                'b: for host_info in &new_read_list{
+                for host_info in &new_read_list{
                     if info == host_info{
                         continue 'a;
                     }
@@ -423,15 +414,14 @@ impl ConnectionsPoolPlatform{
             SqlStatement::Insert |
             SqlStatement::Drop |
             SqlStatement::Delete |
-            SqlStatement::StartTransaction |
-            SqlStatement::AlterTable => {return Ok(self.get_write_conn(key).await?)}
+            SqlStatement::StartTransaction => {return Ok(self.get_write_conn(key).await?);}
             _ => {
                 //获取读连接
                 return Ok(self.get_read_conn(key).await?)
             }
         }
-        let error = "no available connection".to_string();
-        return Err(Box::new(MyError(error.into())));
+//        let error = "no available connection".to_string();
+//        return Err(Box::new(MyError(error.into())));
     }
 
     /// 归还连接到对应节点的连接池中
@@ -440,7 +430,7 @@ impl ConnectionsPoolPlatform{
         let host_info = mysql_conn.host_info.clone();
         match conn_pool_lock.remove(&host_info){
             Some(mut conn_pool) => {
-                let conn_info = conn_pool.return_pool(mysql_conn).await?;
+                conn_pool.return_pool(mysql_conn).await?;
                 conn_pool_lock.insert(host_info, conn_pool);
             }
             None => {}
@@ -646,7 +636,7 @@ impl ConnectionsPoolPlatform{
 #[derive(Debug, Clone)]
 pub struct ConnectionsPool {
     conn_queue: Arc<Mutex<ConnectionInfo>>,                 //所有连接队列
-    cached_queue: Arc<(Mutex<HashMap<String, MysqlConnectionInfo>>)>,       //已缓存的连接
+    cached_queue: Arc<Mutex<HashMap<String, MysqlConnectionInfo>>>,       //已缓存的连接
     cached_count: Arc<AtomicUsize>,                              //当前缓存的连接数
     queued_count: Arc<AtomicUsize>,                              //当前连接池总连接数
     active_count: Arc<AtomicUsize>,                              //当前活跃连接数
@@ -1062,7 +1052,8 @@ impl MysqlConnectionInfo{
         loop {
             match self.conn.read_exact(&mut header_buf){
                 Ok(_) => {
-                    header = PacketHeader::new(&header_buf)?;
+                    let new_header = PacketHeader::new(&header_buf)?;
+                    header.reset(&new_header);
                     if header.payload > 0 {
                         break;
                     }
@@ -1105,7 +1096,8 @@ impl MysqlConnectionInfo{
         loop {
             match self.conn.read_exact(&mut header_buf){
                 Ok(_) => {
-                    header = PacketHeader::new(&header_buf)?;
+                    let new_header = PacketHeader::new(&header_buf)?;
+                    header.reset(&new_header);
                     if header.payload > 0 {
                         break;
                     }
@@ -1137,7 +1129,7 @@ impl MysqlConnectionInfo{
     pub fn set_default_autocommit(&mut self, autocommit: u8) -> Result<()> {
         let sql = format!("set autocommit={};", autocommit);
         let packet_full = self.set_default_packet(&sql);
-        let (a, b) = self.__send_packet(&packet_full)?;
+        let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
     }
@@ -1145,7 +1137,7 @@ impl MysqlConnectionInfo{
     pub fn set_default_db(&mut self, db: String) -> Result<()> {
         let sql = format!("use {};", db);
         let packet_full = self.set_default_packet(&sql);
-        let (a, b) = self.__send_packet(&packet_full)?;
+        let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
     }
@@ -1153,7 +1145,7 @@ impl MysqlConnectionInfo{
     fn set_autocommit(&mut self) -> Result<()> {
         let sql = format!("set autocommit=0;");
         let packet_full = self.set_default_packet(&sql);
-        let (a, b) = self.__send_packet(&packet_full)?;
+        let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
     }
@@ -1187,7 +1179,7 @@ impl MysqlConnectionInfo{
             return Ok(false);
         };
         match self.get_packet_from_stream().await{
-            Ok((buf, header)) => {
+            Ok((buf, _header)) => {
                 if let Err(e) = self.check_packet_is(&buf){
                     debug(e.to_string());
                     self.close();
@@ -1210,7 +1202,7 @@ impl MysqlConnectionInfo{
         self.set_autocommit()?;
         let sql = String::from("use information_schema");
         let packet_full = self.set_default_packet(&sql);
-        let (a, b) = self.__send_packet(&packet_full)?;
+        let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
 

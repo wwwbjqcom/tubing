@@ -5,10 +5,7 @@
 
 use std::net::{TcpStream, IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::atomic::{AtomicUsize, Ordering};
 pub mod connection;
-use connection::MysqlConnection;
 pub mod scramble;
 pub mod pool;
 pub mod query_response;
@@ -20,7 +17,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// mysql 协议包枚举类型
 pub enum PackType {
     HandShakeResponse,
-    HandShake,
+//    HandShake,
 //    OkPacket,
 //    ErrPacket,
 //    EOFPacket,

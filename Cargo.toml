@@ -1,5 +1,5 @@
 [package]
-name = "MysqlBus"
+name = "mysql_bus"
 version = "0.1.0"
 authors = ["manito <wwwbjqcom@127.com>"]
 edition = "2018"

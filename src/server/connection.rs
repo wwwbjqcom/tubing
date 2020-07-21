@@ -2,17 +2,14 @@
 @author: xiao cai niao
 @datetime: 2020/5/14
 */
-
-use crate::{MyError};
 use crate::mysql::Result;
 use crate::dbengine::client;
 use bytes::{Buf, BytesMut};
 use std::io::{self, Cursor};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter, BufReader, BufStream};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufStream};
 use tokio::net::TcpStream;
-use byteorder::{WriteBytesExt, LittleEndian, ReadBytesExt};
-use tracing::{info, debug};
-use crate::readvalue;
+use byteorder::{WriteBytesExt, LittleEndian};
+use tracing::{debug};
 
 /// Send and receive `Frame` values from a remote peer.
 ///
@@ -52,7 +49,7 @@ impl Connection {
     }
 
     /// read the data stream from the connection
-    pub async fn read(&mut self, seq: &u8) -> Result<Option<client::ClientResponse>> {
+    pub async fn read(&mut self) -> Result<Option<client::ClientResponse>> {
         loop {
             let mut buf = Cursor::new(&self.buffer[..]);
             if self.check_data(&mut buf)? {

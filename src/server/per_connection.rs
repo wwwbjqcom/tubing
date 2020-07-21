@@ -1,8 +1,7 @@
-use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPool, ConnectionsPoolPlatform};
+use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPoolPlatform};
 use std::time::Duration;
 use crate::mysql::Result;
 use tokio::time::delay_for;
-use tracing::{info, debug};
 use crate::server::sql_parser::SqlStatement;
 
 /// mysql connection
@@ -25,7 +24,7 @@ impl PerMysqlConn {
             if let Some(conn) = &mut self.conn_info{
                 if conn.check_cacke_sleep(){
                     conn.reset_conn_default()?;
-                    let mut new_conn = conn.try_clone()?;
+                    let new_conn = conn.try_clone()?;
                     pool.return_pool(new_conn).await?;
                     self.conn_info = None;
                     self.conn_state = false;
@@ -131,7 +130,7 @@ impl PerMysqlConn {
         if let Some(conn) = &mut self.conn_info{
             conn.reset_cached().await?;
             conn.reset_conn_default()?;
-            let mut new_conn = conn.try_clone()?;
+            let new_conn = conn.try_clone()?;
             pool.return_pool(new_conn).await?;
             self.conn_info = None;
             self.conn_state = false;
@@ -142,7 +141,7 @@ impl PerMysqlConn {
     /// mysql发生异常，关闭连接
     pub async fn reset_connection(&mut self, pool: &mut ConnectionsPoolPlatform) -> Result<()>{
         if let Some(conn) = &mut self.conn_info{
-            let mut new_conn = conn.try_clone()?;
+            let new_conn = conn.try_clone()?;
             pool.return_pool(new_conn).await?;
             self.conn_info = None;
             self.conn_state = false;

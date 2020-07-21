@@ -4,11 +4,8 @@
 */
 
 use std::str::from_utf8;
-use std::io::{Cursor, Read};
-use byteorder::{ReadBytesExt, LittleEndian, WriteBytesExt, BigEndian};
-use std::io;
-use std::net::TcpStream;
-use std::error::Error;
+use std::io::{Cursor};
+use byteorder::{ReadBytesExt, LittleEndian, WriteBytesExt};
 use tracing::field::debug;
 
 pub fn read_string_value(pack: &[u8]) -> String{

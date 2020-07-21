@@ -3,24 +3,18 @@
 @datetime: 2020/5/28
 */
 
-use bytes::{BytesMut, Buf};
 use std::io::{Cursor, Read};
 use crate::{ readvalue};
 use crate::mysql::Result;
-use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
-use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, CLIENT_SESSION_TRACK};
+use byteorder::{ReadBytesExt, LittleEndian};
+use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF};
 use crate::server::{Handler, ConnectionStatus};
-use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPool};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
-use std::borrow::{BorrowMut, Borrow};
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing::{error, debug, info, instrument};
+use std::borrow::{Borrow};
+use tracing::{error, debug};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
-use std::net::TcpStream;
-use std::time::Duration;
-use tokio::time::delay_for;
 use tracing::field::debug;
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
@@ -133,7 +127,7 @@ impl ClientResponse {
         if let Some(platform) = &handler.platform{
             if platform == &"admin".to_string(){
                 match sql_type{
-                    SqlStatement::SetVariable(k,v) => {
+                    SqlStatement::SetVariable(k,_v) => {
                         if k.to_lowercase() == "platform".to_string(){
                             return false;
                         }
@@ -275,7 +269,7 @@ impl ClientResponse {
     async fn check_is_set_platform(&self, sql_type: &SqlStatement, handler: &mut Handler) -> Result<bool>{
         if let None = &handler.platform{
             match sql_type{
-                SqlStatement::SetVariable(variable, value) => {
+                SqlStatement::SetVariable(_variable, _value) => {
                     return Ok(true)
                 }
                 _ => {
@@ -318,14 +312,14 @@ impl ClientResponse {
         Ok(())
     }
 
-    /// 检查是否为select 语句，测试用
-    async fn check_is_select(&self, handler: &mut Handler, sql: &String) -> Result<bool> {
-        if sql.to_lowercase().starts_with("select") {
-            self.exec_query(handler).await?;
-            return Ok(true)
-        }
-        return Ok(false)
-    }
+//    /// 检查是否为select 语句，测试用
+//    async fn check_is_select(&self, handler: &mut Handler, sql: &String) -> Result<bool> {
+//        if sql.to_lowercase().starts_with("select") {
+//            self.exec_query(handler).await?;
+//            return Ok(true)
+//        }
+//        return Ok(false)
+//    }
 
     /// 处理查询的连接
     async fn exec_query(&self, handler: &mut Handler) -> Result<()> {
@@ -416,7 +410,7 @@ impl ClientResponse {
 
     /// 用于非事务性的操作
     async fn no_traction(&self, handler: &mut Handler) -> Result<()> {
-        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+        if let Some(_conn) = &mut handler.per_conn_info.conn_info{
 //            if let Err(e) = self.set_conn_db_and_autocommit(handler).await{
 //                self.send_error_packet(handler, &e.to_string()).await?;
 //                return Ok(())
@@ -489,39 +483,39 @@ impl ClientResponse {
 //        return Err(Box::new(MyError(String::from("lost connection").into())));
 //    }
 
-    /// 初始化连接状态
-    async fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
-        if self.check_is_cached(handler)? {
-            return Ok(());
-        }
-        let mut packet = vec![];
-        packet.push(3 as u8);
-        let my_db = handler.db.clone();
-        if let Some(db) = &my_db{
-            if handler.auto_commit{
-                self.__set_autocommit(1, handler).await?;
-            }
-            if db != &String::from("information_schema"){
-                self.__set_default_db(db.clone(), handler).await?;
-            }
-        }else {
-            if handler.auto_commit{
-                self.__set_autocommit(1, handler).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn check_is_cached(&self, handler: &mut Handler) -> Result<bool> {
-        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            if conn.cached != String::from("") {
-                return Ok(true);
-            }
-            return Ok(false);
-        }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
-    }
+//    /// 初始化连接状态
+//    async fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
+//        if self.check_is_cached(handler)? {
+//            return Ok(());
+//        }
+//        let mut packet = vec![];
+//        packet.push(3 as u8);
+//        let my_db = handler.db.clone();
+//        if let Some(db) = &my_db{
+//            if handler.auto_commit{
+//                self.__set_autocommit(1, handler).await?;
+//            }
+//            if db != &String::from("information_schema"){
+//                self.__set_default_db(db.clone(), handler).await?;
+//            }
+//        }else {
+//            if handler.auto_commit{
+//                self.__set_autocommit(1, handler).await?;
+//            }
+//        }
+//
+//        Ok(())
+//    }
+//
+//    fn check_is_cached(&self, handler: &mut Handler) -> Result<bool> {
+//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+//            if conn.cached != String::from("") {
+//                return Ok(true);
+//            }
+//            return Ok(false);
+//        }
+//        return Err(Box::new(MyError(String::from("lost connection").into())));
+//    }
 
     async fn __set_default_db(&self, db: String, handler: &mut Handler) -> Result<()> {
         let mut packet = vec![];
@@ -546,7 +540,7 @@ impl ClientResponse {
         packet_full.extend(pack_header(&packet, 0));
         packet_full.extend(packet);
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
-            let (buf, header) = conn.send_packet(&packet_full).await?;
+            let (buf, _header) = conn.send_packet(&packet_full).await?;
             conn.check_packet_is(&buf)?;
             return Ok(());
         }
@@ -594,37 +588,27 @@ impl ClientResponse {
 //        Ok(false)
     }
 
-    /// 检查是否为set 语句
-    ///
-    /// 因为不需要发送到后端，直接返回OK
-    async fn check_is_set_names(&self,  sql: &String) -> Result<bool> {
-        if sql.to_lowercase().starts_with("set"){
-            let sql = sql.to_lowercase();
-            let sql_ver = sql.split(" ");
-            let sql_ver = sql_ver.collect::<Vec<&str>>();
-            let mut tmp: Vec<String> = vec![];
-            for i in &sql_ver{
-                if &i.to_string() != &"".to_string(){
-                    tmp.push(i.to_string().clone())
-                }
-            }
-            if tmp[1].to_string().to_lowercase() == "names".to_string(){
-                return Ok(true);
-            }
-        }
-        return Ok(false)
-    }
+//    /// 检查是否为set 语句
+//    ///
+//    /// 因为不需要发送到后端，直接返回OK
+//    async fn check_is_set_names(&self,  sql: &String) -> Result<bool> {
+//        if sql.to_lowercase().starts_with("set"){
+//            let sql = sql.to_lowercase();
+//            let sql_ver = sql.split(" ");
+//            let sql_ver = sql_ver.collect::<Vec<&str>>();
+//            let mut tmp: Vec<String> = vec![];
+//            for i in &sql_ver{
+//                if &i.to_string() != &"".to_string(){
+//                    tmp.push(i.to_string().clone())
+//                }
+//            }
+//            if tmp[1].to_string().to_lowercase() == "names".to_string(){
+//                return Ok(true);
+//            }
+//        }
+//        return Ok(false)
+//    }
 
-
-    /// 检查是否为show 语句
-    ///
-    /// 部分show 语句parse无法支持
-    async fn check_is_show(&self, sql: &String) -> Result<bool> {
-        if sql.to_lowercase().starts_with("show") {
-            return Ok(true)
-        }
-        return Ok(false)
-    }
 
     /// 发送ok packet
     ///

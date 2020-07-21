@@ -5,8 +5,7 @@
 
 use crate::mysql::Result;
 use crate::MyError;
-use crate::server::Handler;
-use tracing::{debug, error, info, instrument};
+use tracing::debug;
 
 
 pub enum ShowCommand{
@@ -196,7 +195,6 @@ impl AdminSql{
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
             }
         }
-        Ok(AdminSql::Null)
     }
 
     async fn split_sql(&self, sql: &String) -> Vec<String> {

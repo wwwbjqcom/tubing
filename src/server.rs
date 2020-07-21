@@ -9,14 +9,12 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tracing::{debug, error, info, instrument};
-use std::str::from_utf8;
 use num_cpus;
-use crate::{Config, readvalue, MyConfig, mysql};
+use crate::{MyConfig, mysql};
 use crate::mysql::Result;
 use crate::mysql::pool::{PlatformPool, ConnectionsPoolPlatform};
 use crate::dbengine;
 use crate::MyError;
-use crate::dbengine::client::{ClientResponse};
 use crate::dbengine::server::HandShake;
 pub mod shutdown;
 mod connection;
@@ -24,12 +22,9 @@ mod per_connection;
 pub mod mysql_mp;
 pub mod sql_parser;
 use connection::Connection;
-use tracing_subscriber::util::SubscriberInitExt;
-use crate::mysql::pool::{ConnectionsPool, MysqlConnectionInfo};
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41};
-use crate::mysql::connection::PacketHeader;
+use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS};
 use tokio::runtime::Builder;
 use crate::server::mysql_mp::ResponseValue;
 
@@ -37,9 +32,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
-    let (notify_shutdown_t, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
-    let (shutdown_complete_tx_t, shutdown_complete_rx_t) = mpsc::channel(1);
     let cpus = num_cpus::get();
     let mut runtime = Builder::new()
         .threaded_scheduler()
@@ -85,13 +78,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
         if let Some(l_port) = config.port{
             port = l_port;
         };
-        let mut listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
+        let listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
 
         let mut pool_maintain = ThreadPoolMaintain{
             platform_pool: platform_pool.clone(),
-            notify_shutdown_t,
-            shutdown_complete_rx_t,
-            shutdown_complete_tx_t
         };
 
 
@@ -120,7 +110,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
 
             a = pool_maintain.run() => {
                 if let Err(err) = a {
-                    error!("thread pool maintain faild");
+                    error!("thread pool maintain faild:{:?}",err.to_string());
                 }
 
             }
@@ -140,20 +130,13 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
             ..
         } = server;
 
-        let ThreadPoolMaintain {
-            mut shutdown_complete_rx_t,
-            shutdown_complete_tx_t,
-            ..
-        } = pool_maintain;
 
         drop(shutdown_complete_tx);
-        drop(shutdown_complete_tx_t);
         // Wait for all active connections to finish processing. As the `Sender`
         // handle held by the listener has been dropped above, the only remaining
         // `Sender` instances are held by connection handler tasks. When those drop,
         // the `mpsc` channel will close and `recv()` will return `None`.
         let _ = shutdown_complete_rx.recv().await;
-        let _ = shutdown_complete_rx_t.recv().await;
 
         Ok(())
     })
@@ -164,48 +147,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
 struct ThreadPoolMaintain{
     /// all connections pool
     platform_pool: PlatformPool,
-    /// Broadcasts a shutdown signal to all active connections.
-    ///
-    /// The initial `shutdown` trigger is provided by the `run` caller. The
-    /// server is responsible for gracefully shutting down active connections.
-    /// When a connection task is spawned, it is passed a broadcast receiver
-    /// handle. When a graceful shutdown is initiated, a `()` value is sent via
-    /// the broadcast::Sender. Each active connection receives it, reaches a
-    /// safe terminal state, and completes the task.
-    notify_shutdown_t: broadcast::Sender<()>,
-
-    /// Used as part of the graceful shutdown process to wait for client
-    /// connections to complete processing.
-    ///
-    /// Tokio channels are closed once all `Sender` handles go out of scope.
-    /// When a channel is closed, the receiver receives `None`. This is
-    /// leveraged to detect all connection handlers completing. When a
-    /// connection handler is initialized, it is assigned a clone of
-    /// `shutdown_complete_tx`. When the listener shuts down, it drops the
-    /// sender held by this `shutdown_complete_tx` field. Once all handler tasks
-    /// complete, all clones of the `Sender` are also dropped. This results in
-    /// `shutdown_complete_rx.recv()` completing with `None`. At this point, it
-    /// is safe to exit the server process.
-    shutdown_complete_rx_t: mpsc::Receiver<()>,
-    shutdown_complete_tx_t: mpsc::Sender<()>,
 }
 
 impl ThreadPoolMaintain{
     async fn run(&mut self) -> Result<()> {
-//        let mut shutdown = shutdown::Shutdown::new(self.notify_shutdown_t.subscribe());
-//        while !shutdown.is_shutdown(){
-//            println!("abc");
-//            tokio::select! {
-//                _ = self.pool.check_health() => {
-//                    error!("thread pool maintain faild");
-//                },
-//                _ = shutdown.recv() => {
-//                    // If a shutdown signal is received, return from `run`.
-//                    // This will result in the task terminating.
-//                    return Ok(());
-//                }
-//            };
-//        }
         self.platform_pool.check_health().await?;
         info!("shutdown");
         Ok(())
@@ -296,7 +241,7 @@ impl Listener {
             let socket = self.accept().await?;
 
             // Create the necessary per-connection handler state.
-            let mut handler = Handler {
+            let handler = Handler {
                 platform: None,
                 platform_pool: self.platform_pool.clone(),
                 platform_pool_on: ConnectionsPoolPlatform::default(),
@@ -507,7 +452,7 @@ impl Handler {
             }
             debug!("{}",crate::info_now_time(String::from("start read maybe_response")));
             let maybe_response = tokio::select! {
-                res = self.connection.read(&self.seq) => res?,
+                res = self.connection.read() => res?,
                 _ = self.shutdown.recv() => {
                     // If a shutdown signal is received, return from `run`.
                     // This will result in the task terminating.

@@ -4,8 +4,7 @@
 */
 
 use crate::{Config, readvalue, MyConfig, Platform};
-use std::net::{TcpStream, IpAddr, Ipv4Addr, SocketAddr};
-use std::process;
+use std::net::{TcpStream};
 use std::io::{Cursor, Read, Seek, Write};
 use std::borrow::Borrow;
 use byteorder::ReadBytesExt;
@@ -107,6 +106,11 @@ impl PacketHeader{
             payload,
             seq_id: buf.read_u8()?
         })
+    }
+
+    pub fn reset(&mut self, new_header: &PacketHeader) {
+        self.payload = new_header.payload.clone();
+        self.seq_id = new_header.seq_id.clone();
     }
 }
 
@@ -288,7 +292,8 @@ impl MysqlConnection{
         loop {
             match self.conn.read_exact(&mut header_buf){
                 Ok(_) => {
-                    header = PacketHeader::new(&header_buf)?;
+                    let new_header = PacketHeader::new(&header_buf)?;
+                    header.reset(&new_header);
                     if header.payload > 0 {
                         break;
                     }
