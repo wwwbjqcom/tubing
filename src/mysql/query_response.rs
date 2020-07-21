@@ -3,7 +3,7 @@
 @datetime: 2020/7/17
 */
 
-use crate::dbengine::admin::{ShowState, ShowStruct, ShowCommand, HostPoolState};
+use crate::dbengine::admin::{ShowState, ShowStruct, ShowCommand, HostPoolState, PoolState};
 use crate::dbengine::{CLIENT_OPTIONAL_RESULTSET_METADATA, RESULTSET_METADATA_FULL};
 use crate::dbengine::{CLIENT_PROTOCOL_41};
 use crate::dbengine::{Long, VarString, CLIENT_DEPRECATE_EOF,SERVER_STATUS_IN_TRANS};
@@ -69,6 +69,42 @@ impl ColumnDefinition41{
 
 }
 
+struct StatusRowValue{
+    platform: String,
+    write: String,
+    read: Vec<String>,
+    questions: String,
+}
+impl StatusRowValue{
+    async fn new(pool_state: &PoolState) -> StatusRowValue{
+        StatusRowValue{
+            platform: pool_state.platform.clone(),
+            write: pool_state.write_host.clone(),
+            read: pool_state.read_host.clone(),
+            questions: format!("{}",pool_state.questions.clone())
+        }
+    }
+
+    async fn packet(&self) -> Vec<u8> {
+        let mut packet = vec![];
+        packet.extend(packet_one_column_value(self.platform.clone()).await);
+        packet.extend(packet_one_column_value(self.write.clone()).await);
+        packet.extend(packet_one_column_value(format!("{:?}",self.questions.clone())).await);
+        packet.extend(packet_one_column_value(self.questions.clone()).await);
+        packet
+    }
+
+    async fn packet_column_definitions() -> Vec<Vec<u8>> {
+        let mut packet = vec![];
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VarString).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("write"), &VarString).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("read"), &VarString).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("questions"), &Long).await.packet().await);
+        packet
+    }
+}
+
+
 struct QuestionsRowValue{
     platform: String,
     host_info: String,
@@ -92,14 +128,14 @@ impl QuestionsRowValue{
     }
 
     async fn packet(&self) -> Vec<u8> {
-        let mut pakcet = vec![];
-        pakcet.extend(packet_one_column_value(self.platform.clone()).await);
-        pakcet.extend(packet_one_column_value(self.host_info.clone()).await);
-        pakcet.extend(packet_one_column_value(self.com_select.clone()).await);
-        pakcet.extend(packet_one_column_value(self.com_update.clone()).await);
-        pakcet.extend(packet_one_column_value(self.com_insert.clone()).await);
-        pakcet.extend(packet_one_column_value(self.com_delete.clone()).await);
-        pakcet.extend(packet_one_column_value(self.platform_questions.clone()).await);
+        let mut packet = vec![];
+        packet.extend(packet_one_column_value(self.platform.clone()).await);
+        packet.extend(packet_one_column_value(self.host_info.clone()).await);
+        packet.extend(packet_one_column_value(self.com_select.clone()).await);
+        packet.extend(packet_one_column_value(self.com_update.clone()).await);
+        packet.extend(packet_one_column_value(self.com_insert.clone()).await);
+        packet.extend(packet_one_column_value(self.com_delete.clone()).await);
+        packet.extend(packet_one_column_value(self.platform_questions.clone()).await);
         pakcet
     }
 
@@ -137,14 +173,14 @@ impl ConnectionsRowValue{
     }
 
     async fn packet(&self) -> Vec<u8> {
-        let mut pakcet = vec![];
-        pakcet.extend(packet_one_column_value(self.platform.clone()).await);
-        pakcet.extend(packet_one_column_value(self.host_info.clone()).await);
-        pakcet.extend(packet_one_column_value(self.min_thread.clone()).await);
-        pakcet.extend(packet_one_column_value(self.max_thread.clone()).await);
-        pakcet.extend(packet_one_column_value(self.active_thread.clone()).await);
-        pakcet.extend(packet_one_column_value(self.pool_count.clone()).await);
-        pakcet
+        let mut packet = vec![];
+        packet.extend(packet_one_column_value(self.platform.clone()).await);
+        packet.extend(packet_one_column_value(self.host_info.clone()).await);
+        packet.extend(packet_one_column_value(self.min_thread.clone()).await);
+        packet.extend(packet_one_column_value(self.max_thread.clone()).await);
+        packet.extend(packet_one_column_value(self.active_thread.clone()).await);
+        packet.extend(packet_one_column_value(self.pool_count.clone()).await);
+        packet
     }
 
     async fn packet_column_difinition() -> Vec<Vec<u8>> {
@@ -187,6 +223,10 @@ impl TextResponse{
                 self.packet_column_count(7).await;
                 self.packet_list.extend(QuestionsRowValue::packet_column_definitions().await);
             }
+            ShowCommand::Status => {
+                self.packet_column_count(4).await;
+                self.packet_list.extend(StatusRowValue::packet_column_definitions().await);
+            }
             _ => {
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
             }
@@ -206,22 +246,48 @@ impl TextResponse{
 
     /// 数据部分
     async fn packet_result_text(&mut self, show_struct: &ShowStruct, show_state: &ShowState) {
-        for pool_state in &show_state.platform_state{
-            for one_pool_state in &pool_state.host_state{
-                match show_struct.command{
-                    ShowCommand::Questions => {
-                        let c_value = QuestionsRowValue::new(&pool_state.platform, &pool_state.questions,one_pool_state).await;
-                        self.packet_list.push(c_value.packet().await);
+        'a: for pool_state in &show_state.platform_state{
+            match show_struct.command{
+                ShowCommand::Status => {
+                    let c_value = StatusRowValue::new(pool_state).await;
+                    self.packet_list.push(c_value.packet().await);
+                }
+                _ => {
+                    'b: for one_pool_state in &pool_state.host_state{
+                        match show_struct.command{
+                            ShowCommand::Questions => {
+                                let c_value = QuestionsRowValue::new(&pool_state.platform, &pool_state.questions,one_pool_state).await;
+                                self.packet_list.push(c_value.packet().await);
+                            }
+                            ShowCommand::Connections => {
+                                let c_value = ConnectionsRowValue::new(&pool_state.platform, &one_pool_state).await;
+                                self.packet_list.push(c_value.packet().await);
+                            }
+                            _ => {}
+                        }
                     }
-                    ShowCommand::Status => {}
-                    ShowCommand::Connections => {
-                        let c_value = ConnectionsRowValue::new(&pool_state.platform, &one_pool_state).await;
-                        self.packet_list.push(c_value.packet().await);
-                    }
-                    _ => {}
                 }
             }
         }
+
+
+//        'a: for pool_state in &show_state.platform_state{
+//            'b: for one_pool_state in &pool_state.host_state{
+//                match show_struct.command{
+//                    ShowCommand::Questions => {
+//                        let c_value = QuestionsRowValue::new(&pool_state.platform, &pool_state.questions,one_pool_state).await;
+//                        self.packet_list.push(c_value.packet().await);
+//                    }
+//                    ShowCommand::Status => {}
+//                    ShowCommand::Connections => {
+//                        let c_value = ConnectionsRowValue::new(&pool_state.platform, &one_pool_state).await;
+//                        self.packet_list.push(c_value.packet().await);
+//                    }
+//                    _ => {}
+//                }
+//            }
+//
+//        }
     }
 
     async fn packet_eof(&mut self) {
