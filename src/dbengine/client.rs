@@ -170,18 +170,20 @@ impl ClientResponse {
         debug!("{}",format!("{:?}: {}", a, &sql));
 
         debug!("{}",crate::info_now_time(String::from("start check pool info")));
-        //已经设置了platform则进行连接检查及获取
-        if let Some(platform) = &handler.platform{
-            if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
-            }
-        }
+
         //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
         if !self.check_is_set_platform(&a, handler).await?{
             let error = format!("please set up a business platform first");
             error!("{}", &error);
             self.send_error_packet(handler, &error).await?;
             return Ok(())
+        }
+
+        //已经设置了platform则进行连接检查及获取
+        if let Some(platform) = &handler.platform{
+            if platform != &"admin".to_string(){
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
+            }
         }
 
         //进行ops操作
