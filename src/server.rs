@@ -43,7 +43,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     let cpus = num_cpus::get();
     let mut runtime = Builder::new()
         .threaded_scheduler()
-        .core_threads(cpus * 2)
+        .core_threads(cpus * 4)
         .max_threads(100)
         .enable_all()
         .thread_name("my-custom-name")
