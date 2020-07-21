@@ -977,6 +977,14 @@ impl MysqlConnectionInfo{
         false
     }
 
+//    /// 检查事务超时，如果超过600s则返回true
+//    pub fn check_transaction_timeout(&mut self) -> bool {
+//        if self.is_transaction{
+//            return self.check_sleep();
+//        }
+//        return false;
+//    }
+
     /// 检查空闲时间，超过600s返回true
     pub fn check_sleep(&mut self) -> bool {
         let dt = Local::now();
