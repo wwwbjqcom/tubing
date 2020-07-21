@@ -128,6 +128,7 @@ impl ClientResponse {
         Ok(())
     }
 
+    /// 检测platform是否为admin, 如果为admin且当前语句不是set platfrom则充值platfrom并返回false
     pub async fn check_is_admin_paltform(&self, handler: &mut Handler, sql_type: &SqlStatement) -> bool{
         if let Some(platform) = &handler.platform{
             if platform == &"admin".to_string(){
@@ -171,7 +172,9 @@ impl ClientResponse {
         debug!("{}",crate::info_now_time(String::from("start check pool info")));
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
-            handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
+            if platform != &"admin".to_string(){
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
+            }
         }
         //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
         if !self.check_is_set_platform(&a, handler).await?{
