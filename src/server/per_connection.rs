@@ -74,16 +74,13 @@ impl PerMysqlConn {
         match &self.conn_info {
             Some(conn) =>{
                 if conn.is_transaction{
-                    return Ok(())
-                }else {
                     let err = String::from("must commit outstanding transactions");
                     return Err(Box::new(MyError(err.into())));
                 }
             }
-            _ => {
-                return Ok(())
-            }
+            _ => {}
         }
+        Ok(())
     }
 
     pub async fn set_default_info(&mut self, db: &Option<String>, auto_commit: &bool) -> Result<()> {
