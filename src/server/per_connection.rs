@@ -143,8 +143,6 @@ impl PerMysqlConn {
 
     pub async fn return_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()> {
         if let Some(conn) = &mut self.conn_info{
-            conn.reset_cached().await?;
-            conn.reset_conn_default()?;
             let new_conn = conn.try_clone()?;
             pool.return_pool(new_conn, seq).await?;
             self.conn_info = None;
@@ -154,13 +152,9 @@ impl PerMysqlConn {
     }
 
     /// mysql发生异常，关闭连接
-    pub async fn reset_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()>{
-        if let Some(conn) = &mut self.conn_info{
-            let new_conn = conn.try_clone()?;
-            pool.return_pool(new_conn, seq).await?;
-            self.conn_info = None;
-            self.conn_state = false;
-        }
+    pub async fn reset_connection(&mut self) -> Result<()>{
+        self.conn_info = None;
+        self.conn_state = false;
         Ok(())
     }
 

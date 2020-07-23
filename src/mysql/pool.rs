@@ -435,6 +435,10 @@ impl ConnectionsPoolPlatform{
                 return Ok(())
             }
         }
+
+        mysql_conn.reset_cached().await?;
+        mysql_conn.reset_conn_default()?;
+
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let host_info = mysql_conn.host_info.clone();
         match conn_pool_lock.remove(&host_info){
