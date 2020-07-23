@@ -12,22 +12,21 @@ auth=false
 #cluster=["a"]
 
 [[platform]]
+#platform对应高可用cluster_name
 platform="test1"
+#业务通过set platform设置的名称
+platform_sublist=["test1", "test2"]
 write="192.168.1.126:3306"
-user="test"
-password="test@123"
-clipassword="test"
+#连接池建立使用的账号密码
+user="root"
+password="root"
 min=10
 max=100
 auth=false
 
-#[[platform]]
-#platform="test2"
-#write="127.0.0.1:3309"
-#read=["127.0.0.1:3309", "127.0.0.1:3310"]
-#user="root"
-#password="root"
-#clipassword="root"
-#min=10
-#max=100
-#auth=false
+[[user]]
+user_name="root"
+#前端连接使用的密码,可以随意填写
+password="root"
+#对应platform模块中的platform_sublist
+platform="test1"

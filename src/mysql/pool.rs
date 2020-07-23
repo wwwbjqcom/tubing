@@ -125,9 +125,11 @@ impl PlatformPool{
 
     /// 获取对应业务库总连接池
     pub async fn get_platform_pool(&mut self, platform: &String) -> Option<ConnectionsPoolPlatform>{
-        let platform_pool_lock = self.platform_pool.lock().await;
-        if let Some(on_platform_pool) = platform_pool_lock.get(platform){
-            return Some(on_platform_pool.clone())
+        if let  Some(client_platform) = self.config.get_pool_platform(platform){
+            let platform_pool_lock = self.platform_pool.lock().await;
+            if let Some(on_platform_pool) = platform_pool_lock.get(&client_platform){
+                return Some(on_platform_pool.clone())
+            }
         }
         return None
     }

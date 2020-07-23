@@ -3,7 +3,7 @@
 @datetime: 2019/9/21
 */
 
-use crate::{Config, readvalue, MyConfig, Platform};
+use crate::{Config, readvalue, MyConfig, UserConfig};
 use std::net::{TcpStream};
 use std::io::{Cursor, Read, Seek, Write};
 use std::borrow::Borrow;
@@ -27,11 +27,11 @@ pub struct UserInfo{
     pub platform: String,
 }
 impl UserInfo{
-    pub fn new(conf: &Platform) -> UserInfo{
+    pub fn new(conf: &UserConfig) -> UserInfo{
         UserInfo{
             user: conf.user.clone(),
-            password: conf.clipassword.clone(),
-            platform: conf.platform.clone()
+            password: conf.password.clone(),
+            platform: conf.platform.clone(),
         }
     }
 }
@@ -46,10 +46,14 @@ impl AllUserInfo{
         let mut all_info = HashMap::new();
         let admin_user_info = UserInfo{user: conf.user.clone(), password: conf.password.clone(), platform: "admin".to_string()};
         all_info.insert(conf.user.clone(), admin_user_info);
-        for platform in &conf.platform{
-            let platform_user_info = UserInfo::new(platform);
-            all_info.insert(platform.user.clone(), platform_user_info);
+        for user_info in &conf.user_info{
+            let platform_user_info = UserInfo::new(user_info);
+            all_info.insert(user_info.user.clone(), platform_user_info);
         }
+//        for platform in &conf.platform{
+//            let platform_user_info = UserInfo::new(platform);
+//            all_info.insert(platform.user.clone(), platform_user_info);
+//        }
         AllUserInfo{
             all_info
         }

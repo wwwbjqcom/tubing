@@ -14,6 +14,13 @@ use std::io::prelude::*;
 use crate::server::mysql_mp::RouteInfo;
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct UserConfig{
+    pub user: String,
+    pub password: String,
+    pub platform: String
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct MyConfig {
     pub user: String,
     pub password: String,
@@ -25,6 +32,7 @@ pub struct MyConfig {
     pub cluster: Option<Vec<String>>,
     pub auth: bool,
     pub platform: Vec<Platform>,
+    pub user_info: Vec<UserConfig>,
 }
 impl MyConfig{
     pub fn reset_init_config(&mut self, ha_route: &crate::server::mysql_mp::ResponseValue) {
@@ -52,17 +60,31 @@ impl MyConfig{
         }
         return false;
     }
+
+    pub fn get_pool_platform(&self, client_platform_name: &String) -> Option<String> {
+        for platform_info in &self.platform{
+            if &platform_info.platform == client_platform_name{
+                return Some(platform_info.platform.clone());
+            }
+            for client_platform in &platform_info.platform_sublist{
+                if client_platform == client_platform_name{
+                    return Some(platform_info.platform.clone());
+                }
+            }
+        }
+        return None
+    }
 }
 
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Platform {
     pub platform: String,
+    pub platform_sublist: Vec<String>,
     pub write: Option<String>,
     pub read: Option<Vec<String>>,
     pub user: String,
     pub password: String,
-    pub clipassword: String,
     pub max: usize,
     pub min: usize,
     pub auth: bool
@@ -119,7 +141,7 @@ impl Config{
     pub fn new(platform_conf: &Platform) -> Config{
         Config{
             user: platform_conf.user.clone(),
-            password: platform_conf.clipassword.clone(),
+            password: platform_conf.password.clone(),
             muser: platform_conf.user.clone(),
             mpassword: platform_conf.password.clone(),
             program_name: String::from("MysqlBus"),
