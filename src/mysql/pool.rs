@@ -425,7 +425,15 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 归还连接到对应节点的连接池中
-    pub async fn return_pool(&mut self, mysql_conn: MysqlConnectionInfo) -> Result<()>{
+    pub async fn return_pool(&mut self, mut mysql_conn: MysqlConnectionInfo, seq: u8) -> Result<()>{
+        // 如果有事务存在则回滚， 回滚失败会结束该连接
+        if mysql_conn.is_transaction{
+            mysql_conn.is_transaction = false;
+            if let Err(e) = mysql_conn.rollback_no_commit(seq){
+                mysql_conn.close();
+                return Ok(())
+            }
+        }
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let host_info = mysql_conn.host_info.clone();
         match conn_pool_lock.remove(&host_info){
@@ -1126,9 +1134,17 @@ impl MysqlConnectionInfo{
         return Ok((packet_buf,header));
     }
 
+    pub fn rollback_no_commit(&mut self, seq: u8) -> Result<()>{
+        let sql = String::from("rollback;");
+        let packet_full = self.set_default_packet(&sql, seq);
+        let (a, _b) = self.__send_packet(&packet_full)?;
+        self.check_packet_is(&a)?;
+        Ok(())
+    }
+
     pub fn set_default_autocommit(&mut self, autocommit: u8) -> Result<()> {
         let sql = format!("set autocommit={};", autocommit);
-        let packet_full = self.set_default_packet(&sql);
+        let packet_full = self.set_default_packet(&sql, 0);
         let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
@@ -1136,26 +1152,26 @@ impl MysqlConnectionInfo{
 
     pub fn set_default_db(&mut self, db: String) -> Result<()> {
         let sql = format!("use {};", db);
-        let packet_full = self.set_default_packet(&sql);
+        let packet_full = self.set_default_packet(&sql, 0);
         let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
     }
 
     fn set_autocommit(&mut self) -> Result<()> {
-        let sql = format!("set autocommit=0;");
-        let packet_full = self.set_default_packet(&sql);
+        let sql = format!("set autocommit=1;");
+        let packet_full = self.set_default_packet(&sql, 0);
         let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())
     }
 
-    fn set_default_packet(&mut self, sql: &String) -> Vec<u8> {
+    fn set_default_packet(&mut self, sql: &String, seq: u8) -> Vec<u8> {
         let mut packet = vec![];
         packet.push(3 as u8);
         packet.extend(sql.as_bytes());
         let mut packet_full = vec![];
-        packet_full.extend(pack_header(&packet, 0));
+        packet_full.extend(pack_header(&packet, seq));
         packet_full.extend(packet);
         return packet_full;
     }
@@ -1201,7 +1217,7 @@ impl MysqlConnectionInfo{
     pub fn reset_conn_default(&mut self) -> Result<()>{
         self.set_autocommit()?;
         let sql = String::from("use information_schema");
-        let packet_full = self.set_default_packet(&sql);
+        let packet_full = self.set_default_packet(&sql, 0);
         let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;
         Ok(())

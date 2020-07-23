@@ -445,7 +445,7 @@ impl Handler {
                     return Ok(())
                 }
                 ConnectionStatus::Quit => {
-                    self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
+                    self.per_conn_info.return_connection(&mut self.platform_pool_on, self.seq.clone()).await?;
                     return Ok(())
                 }
                 _ => {}
@@ -504,7 +504,7 @@ impl Handler {
                 _ => {}
             }
         }
-        self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
+        self.per_conn_info.return_connection(&mut self.platform_pool_on, self.seq.clone()).await?;
         Ok(())
     }
 
@@ -585,7 +585,7 @@ impl Handler {
         if let Some(cur_platform) = &self.platform{
             if cur_platform != platform{
                 //归还连接
-                self.per_conn_info.return_connection(&mut self.platform_pool_on).await?;
+                self.per_conn_info.return_connection(&mut self.platform_pool_on, 0).await?;
                 self.check_get_connection(platform).await?;
             }
         }else {

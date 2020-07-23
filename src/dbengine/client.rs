@@ -53,7 +53,7 @@ impl ClientResponse {
                 if let Err(e) = self.parse_query_packet(handler).await{
                     error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
-                    handler.per_conn_info.reset_connection(&mut handler.platform_pool_on).await?;
+                    handler.per_conn_info.reset_connection(&mut handler.platform_pool_on, 0).await?;
                     //return Err(Box::new(MyError(e.to_string().into())));
                 };
             }
@@ -176,7 +176,7 @@ impl ClientResponse {
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a).await?;
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a, handler.seq.clone()).await?;
             }
         }
 
@@ -193,6 +193,12 @@ impl ClientResponse {
                 if variable.to_lowercase() == String::from("autocommit"){
                     self.set_autocommit(handler, &value).await?;
                 }else if variable.to_lowercase() == String::from("platform") {
+                    // 首先判断是否有未提交事务
+                    if let Err(e) = handler.per_conn_info.check_have_transaction().await{
+                        self.send_error_packet(handler, &e.to_string()).await?;
+                        return Ok(())
+                    }
+
                     // 设置platform
                     if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
                         if let Err(e) = handler.check_cur_platform(&value).await{

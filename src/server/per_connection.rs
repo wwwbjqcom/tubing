@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::mysql::Result;
 use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
+use crate::MyError;
 
 /// mysql connection
 #[derive(Debug)]
@@ -25,7 +26,7 @@ impl PerMysqlConn {
                 if conn.check_cacke_sleep(){
                     conn.reset_conn_default()?;
                     let new_conn = conn.try_clone()?;
-                    pool.return_pool(new_conn).await?;
+                    pool.return_pool(new_conn, 0).await?;
                     self.conn_info = None;
                     self.conn_state = false;
                     self.cur_db = "information_schema".to_string();
@@ -38,7 +39,7 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>, auto_commit: &bool, sql_type: &SqlStatement) -> Result<()> {
+    pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>, auto_commit: &bool, sql_type: &SqlStatement,seq: u8) -> Result<()> {
         if !self.conn_state{
             self.check_get(pool, key, db, auto_commit, sql_type).await?;
         }else {
@@ -49,7 +50,7 @@ impl PerMysqlConn {
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
                     let new_conn = conn.try_clone()?;
-                    pool.return_pool(new_conn).await?;
+                    pool.return_pool(new_conn, seq).await?;
                     self.conn_state = false;
                     self.check_get(pool, key, db, auto_commit, sql_type).await?;
                 }
@@ -66,6 +67,23 @@ impl PerMysqlConn {
         self.set_default_info(db, auto_commit).await?;
         self.conn_state = true;
         Ok(())
+    }
+
+    /// 检查是否存在未提交事务
+    pub async fn check_have_transaction(&self) -> Result<()>{
+        match &self.conn_info {
+            Some(conn) =>{
+                if conn.is_transaction{
+                    return Ok(())
+                }else {
+                    let err = String::from("must commit outstanding transactions");
+                    return Err(Box::new(MyError(err.into())));
+                }
+            }
+            _ => {
+                return Ok(())
+            }
+        }
     }
 
     pub async fn set_default_info(&mut self, db: &Option<String>, auto_commit: &bool) -> Result<()> {
@@ -126,12 +144,12 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    pub async fn return_connection(&mut self, pool: &mut ConnectionsPoolPlatform) -> Result<()> {
+    pub async fn return_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()> {
         if let Some(conn) = &mut self.conn_info{
             conn.reset_cached().await?;
             conn.reset_conn_default()?;
             let new_conn = conn.try_clone()?;
-            pool.return_pool(new_conn).await?;
+            pool.return_pool(new_conn, seq).await?;
             self.conn_info = None;
             self.conn_state = false;
         }
@@ -139,10 +157,10 @@ impl PerMysqlConn {
     }
 
     /// mysql发生异常，关闭连接
-    pub async fn reset_connection(&mut self, pool: &mut ConnectionsPoolPlatform) -> Result<()>{
+    pub async fn reset_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()>{
         if let Some(conn) = &mut self.conn_info{
             let new_conn = conn.try_clone()?;
-            pool.return_pool(new_conn).await?;
+            pool.return_pool(new_conn, seq).await?;
             self.conn_info = None;
             self.conn_state = false;
         }
