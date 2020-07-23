@@ -430,7 +430,7 @@ impl ConnectionsPoolPlatform{
         if mysql_conn.is_transaction{
             mysql_conn.is_transaction = false;
             if let Err(e) = mysql_conn.rollback_no_commit(seq){
-                info!("{:?}", e.to_string);
+                info!("{:?}", e.to_string());
                 mysql_conn.close();
                 return Ok(())
             }
