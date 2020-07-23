@@ -24,8 +24,8 @@ min=10
 max=100
 auth=false
 
-[[user]]
-user_name="root"
+[[user_info]]
+user="root"
 #前端连接使用的密码,可以随意填写
 password="root"
 #对应platform模块中的platform_sublist
