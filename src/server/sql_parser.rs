@@ -4,8 +4,9 @@
 */
 use tracing::{debug};
 
+
 /// 解析sql类型
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SqlStatement {
     SetVariable(String, String),
     Query,              //select、with
@@ -23,11 +24,12 @@ pub enum SqlStatement {
     Default
 }
 impl SqlStatement{
-    pub fn parser(&self, sql: &String) -> SqlStatement{
+    pub fn parser(&self, sql: &String) -> (SqlStatement, Vec<String>){
         debug!("{}",crate::info_now_time(String::from("start parser sql")));
         debug!("{}",format!("parser sql: {}", sql));
         let sql_vec = self.split_sql(sql);
-        match sql_vec[0].as_ref(){
+        let tbl_info = self.get_sql_tb_info(&sql_vec);
+        let stamen_type = match sql_vec[0].as_ref(){
             "desc" => SqlStatement::Query,
             "select" => SqlStatement::Query,
             "with" => SqlStatement::Query,
@@ -41,9 +43,9 @@ impl SqlStatement{
             "begin" => SqlStatement::StartTransaction,
             "start" => {
                 if sql_vec[1] == "transaction"{
-                    return SqlStatement::StartTransaction;
+                    SqlStatement::StartTransaction
                 }else {
-                    return SqlStatement::Default;
+                    SqlStatement::Default
                 }
             }
             "alter" => SqlStatement::AlterTable,
@@ -52,7 +54,19 @@ impl SqlStatement{
             "show" => SqlStatement::Show,
             "use" => SqlStatement::ChangeDatabase,
             _ => SqlStatement::Default
+        };
+        return (stamen_type, tbl_info)
+    }
+
+    /// 从sql中获取db、table信息
+    fn get_sql_tb_info(&self, sql_vec: &Vec<String>) -> Vec<String>{
+        let mut list = vec![];
+        for (index, i) in sql_vec.iter().enumerate(){
+            if i == "from" || i == "join" || i == "use" {
+                list.push(sql_vec[index+1].clone());
+            }
         }
+        list
     }
 
     fn split_sql(&self, sql: &String) -> Vec<String> {

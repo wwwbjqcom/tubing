@@ -27,6 +27,7 @@ use rand::distributions::Alphanumeric;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS};
 use tokio::runtime::Builder;
 use crate::server::mysql_mp::ResponseValue;
+use crate::mysql::privileges::AllUserPri;
 
 pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     // A broadcast channel is used to signal shutdown to each of the active
@@ -72,7 +73,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
         }
 
         //创建各业务后端连接池
-        let platform_pool = mysql::pool::PlatformPool::new(&config)?;
+        let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
+
+        let mut user_pri = AllUserPri::new(&platform_pool);
+        user_pri.get_pris(&all_user_info).await?;
 
         let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
         if let Some(l_port) = config.port{
@@ -88,6 +92,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
         // Initialize the listener state
         let mut server = Listener {
             platform_pool,
+            user_privileges: user_pri,
             listener,
             limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
             notify_shutdown,
@@ -164,6 +169,9 @@ struct Listener {
     /// all connections pool
     platform_pool: PlatformPool,
 
+    /// mysql account privileges
+    user_privileges: AllUserPri,
+    
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
 
@@ -239,7 +247,7 @@ impl Listener {
             // The `accept` method internally attempts to recover errors, so an
             // error here is non-recoverable.
             let socket = self.accept().await?;
-
+            let host = socket.peer_addr()?.to_string();
             // Create the necessary per-connection handler state.
             let handler = Handler {
                 platform: None,
@@ -250,10 +258,12 @@ impl Listener {
                     .sample_iter(&Alphanumeric)
                     .take(32)
                     .collect(),
+                user_privileges: self.user_privileges.clone(),
                 auto_commit: false,
                 commited: false,
                 client_flags: 0,
                 db: Some("information_schema".to_string()),
+                host,
                 user_name: "".to_string(),
                 seq: 0,
 
@@ -367,9 +377,13 @@ pub struct Handler {
 
     pub client_flags: i32,
 
+    pub user_privileges: AllUserPri,
+
     /// current used database
     /// default information_schema
     pub db: Option<String>,
+
+    pub host: String,
 
     pub user_name: String,
     /// current sequence id

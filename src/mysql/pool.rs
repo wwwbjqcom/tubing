@@ -35,6 +35,7 @@ use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
 use crate::server::mysql_mp::RouteInfo;
 use crate::dbengine::admin;
+use crate::mysql::privileges::MetaColumn;
 
 
 enum HealthType{
@@ -103,8 +104,9 @@ pub struct PlatformPool{
 }
 
 impl PlatformPool{
-    pub fn new(conf: &MyConfig) -> Result<PlatformPool>{
-        let user_info = Arc::new(RwLock::new(AllUserInfo::new(conf)));
+    pub fn new(conf: &MyConfig) -> Result<(PlatformPool,AllUserInfo)>{
+        let all_user_info = AllUserInfo::new(conf);
+        let user_info = Arc::new(RwLock::new(all_user_info.clone()));
         let mut pool = HashMap::new();
         let mut platform_node_info = vec![];
         for platform in &conf.platform{
@@ -113,13 +115,13 @@ impl PlatformPool{
             platform_node_info.push(PlatforNodeInfo::new(platform));
         }
         let platform_pool = Arc::new(Mutex::new(pool));
-        Ok(
+        Ok((
             PlatformPool{
                 platform_pool,
                 user_info,
                 platform_node_info,
                 config: conf.clone()
-            }
+            }, all_user_info)
         )
     }
 
@@ -1237,6 +1239,85 @@ impl MysqlConnectionInfo{
         packet.push(0);
         packet.push(1);
         if let Err(_e) = self.conn.write_all(&packet){}
+    }
+
+    /// 执行sql语句并返回结果
+    pub async fn execute_command(&mut self, sql: &String) -> Result<Vec<HashMap<String, String>>>{
+        let packet = self.set_default_packet(&sql, 0);
+        return Ok(self.unpack_text_packet(&packet).await?);
+    }
+
+    /// 获取返回结果
+    async fn unpack_text_packet(&mut self, packet: &Vec<u8>) -> Result<Vec<HashMap<String, String>>> {
+        let (packet, _) = self.__send_packet(&packet)?;
+        self.check_packet_is(&packet)?;
+        let mut values_info = vec![];   //数据值
+        let mut column_info = vec![];   //每个column的信息
+
+        let column_count = packet[0];
+        for _ in 0..column_count {
+            let (buf, _) = self.get_packet_from_stream().await?;
+            let column = MetaColumn::new(&buf);
+            column_info.push(column);
+        }
+        //开始获取返回数据
+        loop {
+            let (buf, header) = self.get_packet_from_stream().await?;
+            //println!("{},{}",buf[0], header.payload);
+            if buf[0] == 0x00{
+                if header.payload < 9{
+                    break;
+                }
+            }else if buf[0] == 0xfe {
+                break;
+            }
+            let values = self.unpack_text_value(&buf, &column_info);
+            values_info.push(values);
+        }
+        return Ok(values_info);
+    }
+
+    /// 解析行数据
+    fn unpack_text_value(&self, buf: &Vec<u8>,column_info: &Vec<MetaColumn>) -> HashMap<String,String> {
+        //解析每行数据
+        let mut values_info = HashMap::new();
+        let mut offset = 0;
+        for cl in column_info.iter(){
+            let value: String;
+            let cl_name = cl.name.clone();
+            let mut var_len = buf[offset] as usize;
+            offset += 1;
+            if var_len == 0xfc {
+                var_len = readvalue::read_u16(&buf[offset..offset + 2]) as usize;
+                offset += 2;
+                value = readvalue::read_string_value(&buf[offset..offset + var_len]);
+                offset += var_len;
+            }
+            else if var_len == 0xfd {
+                var_len = readvalue::read_u24(&buf[offset..offset + 3]) as usize;
+                offset += 3;
+                value = readvalue::read_string_value(&buf[offset..offset + var_len]);
+                offset += var_len;
+            }
+            else if var_len == 0xfe {
+                var_len = readvalue::read_u64(&buf[offset..offset + 8]) as usize;
+                offset += 8;
+                value = readvalue::read_string_value(&buf[offset..offset + var_len]);
+                offset += var_len;
+            }
+            else if var_len == 0xfb {
+                value = String::from("");
+            }
+            else {
+                value = readvalue::read_string_value(&buf[offset..offset + var_len]);
+                offset += var_len;
+            }
+
+
+            values_info.insert(cl_name,value);
+        }
+
+        return values_info;
     }
 }
 

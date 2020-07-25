@@ -18,6 +18,7 @@ use crate::server::sql_parser::SqlStatement;
 use tracing::field::debug;
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
+use crate::mysql::privileges::CheckPrivileges;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -140,6 +141,12 @@ impl ClientResponse {
         return false;
     }
 
+    async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: Vec<String>) -> Result<()>{
+        let check_privileges = CheckPrivileges::new(&handler.db, tbl_info, sql_type, &handler.user_name, &handler.host);
+        handler.user_privileges.check_privileges(&check_privileges).await?;
+        Ok(())
+    }
+
     /// 处理com_query packet
     ///
     /// 解析处sql语句
@@ -153,7 +160,12 @@ impl ClientResponse {
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let sql_parser = SqlStatement::Default;
-        let a = sql_parser.parser(&sql);
+        let (a, tbl_info_list) = sql_parser.parser(&sql);
+        if let Err(e) = self.check_user_privileges(handler,  &a, tbl_info_list).await{
+            self.send_error_packet(handler, &e.to_string()).await?;
+            return Ok(())
+        }
+
         if self.check_is_admin_paltform(handler, &a).await{
             self.admin(&sql, handler).await?;
             return Ok(())

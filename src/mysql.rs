@@ -9,6 +9,7 @@ pub mod connection;
 pub mod scramble;
 pub mod pool;
 pub mod query_response;
+pub mod privileges;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
