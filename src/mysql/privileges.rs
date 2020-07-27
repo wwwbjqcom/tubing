@@ -417,7 +417,7 @@ impl UserPri{
         if self.check_user_privileges(check_struct).await{return Ok(())}
         if self.check_db_privileges(check_struct).await{return Ok(())}
         if self.check_table_privileges(check_struct).await{return Ok(())}
-        let err = format!("Access denied for user '{}'@'{}' to tables info '{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_sql_table_info);
+        let err = format!("Access denied for user '{}'@'{}' to tables info '{:?}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_sql_table_info);
         return Err(Box::new(MyError(err.into())));
     }
 
