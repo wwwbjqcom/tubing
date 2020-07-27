@@ -1244,6 +1244,7 @@ impl MysqlConnectionInfo{
     /// 执行sql语句并返回结果
     pub async fn execute_command(&mut self, sql: &String) -> Result<Vec<HashMap<String, String>>>{
         let packet = self.set_default_packet(&sql, 0);
+        info!("{}", sql);
         return Ok(self.unpack_text_packet(&packet).await?);
     }
 
@@ -1279,6 +1280,7 @@ impl MysqlConnectionInfo{
             let values = self.unpack_text_value(&buf, &column_info);
             values_info.push(values);
         }
+        info!("{:?}", &values_info);
         return Ok(values_info);
     }
 
