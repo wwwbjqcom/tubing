@@ -1277,6 +1277,8 @@ impl MysqlConnectionInfo{
                     eof_num += 1;
                 }
             }else if buf[0] == 0xfe {
+                eof_num += 1;
+            }else if buf[0] == 0xff {
                 break;
             }
             let values = self.unpack_text_value(&buf, &column_info);
