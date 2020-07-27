@@ -643,11 +643,13 @@ impl CheckPrivileges{
 
     /// 检查用户操作权限
     pub async fn check_user_privileges(&self, user_privileges: &AllUserPri) -> Result<()>{
-        if self.check_information_schema().await{return Ok(())}
         for user_pri in &user_privileges.all_pri{
             //首先检查用户是否存在权限
             if user_pri.check_user_name(&self.user_name){
-                for tble_info in &self.cur_sql_table_info{
+                'a: for tble_info in &self.cur_sql_table_info{
+                    if self.check_information_schema(tble_info).await{
+                        continue 'a;
+                    }
                     user_pri.check_privileges(self, &tble_info).await?
                 }
             }
@@ -683,27 +685,41 @@ impl CheckPrivileges{
         return false;
     }
 
-    async fn check_information_schema(&self) -> bool{
-        for tble_all in &self.cur_sql_table_info{
-            if let Some(db) = &tble_all.db{
-                if db == &String::from("information_schema"){
-                    continue;
-                }else {
-                    return false;
-                }
-            }else {
-                if &self.cur_db == &String::from("information_schema"){
-                    continue;
-                }else {
-                    return false;
-                }
+    async fn check_information_schema(&self, tbl_info: &TableInfo) -> bool{
+        return if let Some(db) = &tbl_info.db {
+            if db == &String::from("information_schema") {
+                true
+            } else {
+                false
+            }
+        } else {
+            if &self.cur_db == &String::from("information_schema") {
+                true
+            } else {
+                false
             }
         }
-
-        if &self.cur_db == &String::from("information_schema"){
-            return true;
-        }
-        return false;
+        //
+        // for tble_all in &self.cur_sql_table_info{
+        //     if let Some(db) = &tble_all.db{
+        //         if db == &String::from("information_schema"){
+        //             continue;
+        //         }else {
+        //             return false;
+        //         }
+        //     }else {
+        //         if &self.cur_db == &String::from("information_schema"){
+        //             continue;
+        //         }else {
+        //             return false;
+        //         }
+        //     }
+        // }
+        //
+        // if &self.cur_db == &String::from("information_schema"){
+        //     return true;
+        // }
+        // return false;
     }
 }
 
