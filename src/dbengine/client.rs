@@ -61,6 +61,9 @@ impl ClientResponse {
             PacketType::ComInitDb => {
                 let db = readvalue::read_string_value(&self.buf[1..]);
                 debug(format!("initdb {}", &db));
+                if !self.check_change_db_privileges(handler){
+                    return Ok(())
+                }
                 handler.db = Some(db);
                 self.send_ok_packet(handler).await?;
             }
@@ -141,6 +144,14 @@ impl ClientResponse {
         return false;
     }
 
+    async fn check_change_db_privileges(&self,  handler: &mut Handler) -> bool{
+        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, vec!["".to_string()]).await{
+            self.send_error_packet(handler, &e.to_string()).await?;
+            return false;
+        }
+        return true;
+    }
+
     async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: Vec<String>) -> Result<()>{
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
@@ -201,6 +212,9 @@ impl ClientResponse {
         //进行语句操作
         match a{
             SqlStatement::ChangeDatabase => {
+                if !self.check_change_db_privileges(handler){
+                    return Ok(())
+                }
                 self.check_is_change_db(handler, &sql).await?;
                 //handler.set_per_conn_cached().await?;
             }

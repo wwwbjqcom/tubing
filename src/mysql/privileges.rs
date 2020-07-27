@@ -12,6 +12,7 @@ use tracing::{debug};
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
+    fn check_show_type(&self) -> bool;
 }
 
 impl CheckSqlType for User{
@@ -24,11 +25,19 @@ impl CheckSqlType for User{
             SqlStatement::Create => self.create.clone(),
             SqlStatement::Drop => self.drop.clone(),
             SqlStatement::AlterTable => self.alter.clone(),
+            SqlStatement::ChangeDatabase => self.check_show_type(),
             _ => {
                 false
             }
         }
     }
+    fn check_show_type(&self) -> bool{
+        if self.select || self.delete || self.insert || self.update || self.create || self.drop || self.alter{
+            return true;
+        }
+        return false;
+    }
+
 }
 
 impl CheckSqlType for DBPri{
@@ -41,10 +50,17 @@ impl CheckSqlType for DBPri{
             SqlStatement::Create => self.create.clone(),
             SqlStatement::Drop => self.drop.clone(),
             SqlStatement::AlterTable => self.alter.clone(),
+            SqlStatement::ChangeDatabase => self.check_show_type(),
             _ => {
                 false
             }
         }
+    }
+    fn check_show_type(&self) -> bool{
+        if self.select || self.delete || self.insert || self.update || self.create || self.drop || self.alter{
+            return true;
+        }
+        return false;
     }
 }
 
@@ -58,10 +74,17 @@ impl CheckSqlType for TablePri{
             SqlStatement::Create => self.create.clone(),
             SqlStatement::Drop => self.drop.clone(),
             SqlStatement::AlterTable => self.alter.clone(),
+            SqlStatement::ChangeDatabase => self.check_show_type(),
             _ => {
                 false
             }
         }
+    }
+    fn check_show_type(&self) -> bool{
+        if self.select || self.delete || self.insert || self.update || self.create || self.drop || self.alter{
+            return true;
+        }
+        return false;
     }
 }
 
@@ -394,7 +417,7 @@ impl UserPri{
         if self.check_user_privileges(check_struct).await{return Ok(())}
         if self.check_db_privileges(check_struct).await{return Ok(())}
         if self.check_table_privileges(check_struct).await{return Ok(())}
-        let err = format!("Access denied for user '{}'@'{}' to database '{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_db);
+        let err = format!("Access denied for user '{}'@'{}' to tables info '{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_sql_table_info);
         return Err(Box::new(MyError(err.into())));
     }
 
@@ -584,16 +607,23 @@ impl CheckPrivileges{
         }else {
             my_cur_db = "".to_string();
         }
+
         let mut cur_sql_table_info = vec![];
-        for i in sql_table_info{
-            let one_vec = i.split(".");
-            let one_vec = one_vec.collect::<Vec<&str>>();
-            if one_vec.len() > 1{
-                cur_sql_table_info.push(TableInfo{db: Some(one_vec[0].to_string().clone()), table: one_vec[1].to_string().clone()});
-            }else {
-                cur_sql_table_info.push(TableInfo{db: None, table: one_vec[0].to_string().clone()});
+        match sql_type{
+            SqlStatement::ChangeDatabase => {}
+            _ => {
+                for i in sql_table_info{
+                    let one_vec = i.split(".");
+                    let one_vec = one_vec.collect::<Vec<&str>>();
+                    if one_vec.len() > 1{
+                        cur_sql_table_info.push(TableInfo{db: Some(one_vec[0].to_string().clone()), table: one_vec[1].to_string().clone()});
+                    }else {
+                        cur_sql_table_info.push(TableInfo{db: None, table: one_vec[0].to_string().clone()});
+                    }
+                }
             }
         }
+
         CheckPrivileges{
             cur_db: my_cur_db,
             cur_sql_table_info,
