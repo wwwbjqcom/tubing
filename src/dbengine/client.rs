@@ -144,8 +144,8 @@ impl ClientResponse {
         return false;
     }
 
-    async fn check_change_db_privileges(&self,  handler: &mut Handler) -> Result<bool>{
-        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, vec!["".to_string()]).await{
+    async fn check_change_db_privileges(&self,  handler: &mut Handler, database: &String) -> Result<bool>{
+        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, vec![format!("{}",database)]).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false);
         }
@@ -212,9 +212,7 @@ impl ClientResponse {
         //进行语句操作
         match a{
             SqlStatement::ChangeDatabase => {
-                if !self.check_change_db_privileges(handler).await?{
-                    return Ok(())
-                }
+
                 self.check_is_change_db(handler, &sql).await?;
                 //handler.set_per_conn_cached().await?;
             }
@@ -612,6 +610,10 @@ impl ClientResponse {
             }
         }
         let my_tmp = tmp[1].to_string().clone();
+        if !self.check_change_db_privileges(handler, &my_tmp).await?{
+            return Ok(())
+        }
+
         if let Err(e) = self.__set_default_db(my_tmp.clone(), handler).await{
             self.send_error_packet(handler, &e.to_string()).await?;
         }else {

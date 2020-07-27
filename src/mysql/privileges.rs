@@ -610,7 +610,9 @@ impl CheckPrivileges{
 
         let mut cur_sql_table_info = vec![];
         match sql_type{
-            SqlStatement::ChangeDatabase => {}
+            SqlStatement::ChangeDatabase => {
+                my_cur_db = sql_table_info[0].clone();
+            }
             _ => {
                 for i in sql_table_info{
                     let one_vec = i.split(".");
