@@ -288,6 +288,7 @@ impl TablePri{
             let value_ver = value.split(",");
             let value_ver = value_ver.collect::<Vec<&str>>();
             for i in &value_ver{
+                info!{"aa:{}", i};
                 match i.as_ref(){
                     "Select" => self.select = true,
                     "Update" => self.update = true,
