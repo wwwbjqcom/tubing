@@ -288,15 +288,14 @@ impl TablePri{
             let value_ver = value.split(",");
             let value_ver = value_ver.collect::<Vec<&str>>();
             for i in &value_ver{
-                info!{"aa:{}", i};
                 match i.as_ref(){
-                    "Select" => self.select = true,
-                    "Update" => self.update = true,
-                    "Delete" => self.delete = true,
-                    "Insert" => self.insert = true,
-                    "Alter" => self.alter = true,
-                    "Drop" => self.drop = true,
-                    "Create" => self.create = true,
+                    "select" => self.select = true,
+                    "update" => self.update = true,
+                    "delete" => self.delete = true,
+                    "insert" => self.insert = true,
+                    "alter" => self.alter = true,
+                    "drop" => self.drop = true,
+                    "create" => self.create = true,
                     _ => {}
                 }
             }
@@ -469,10 +468,7 @@ impl UserPri{
     async fn check_table_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
         if let Some(tbl_pri_all) = &self.table_pri{
             for tbl_pri in tbl_pri_all{
-                info!{"{},{},{:?}", &tbl_pri.db, &tbl_pri.table, tbl_info};
                 if check_host(&check_struct.host, &tbl_pri.host) && check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, tbl_info){
-                    info!("ccccc");
-                    info!("{:?}", tbl_pri);
                     return tbl_pri.check_sql_type(&check_struct.sql_type);
                 }
             }
