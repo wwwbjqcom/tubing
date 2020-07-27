@@ -1261,12 +1261,16 @@ impl MysqlConnectionInfo{
             column_info.push(column);
         }
         //开始获取返回数据
-        loop {
+        let mut eof_num = 0;
+        'b: loop {
+            if eof_num > 1{
+                break 'b;
+            }
             let (buf, header) = self.get_packet_from_stream().await?;
             //println!("{},{}",buf[0], header.payload);
             if buf[0] == 0x00{
                 if header.payload < 9{
-                    break;
+                    eof_num += 1;
                 }
             }else if buf[0] == 0xfe {
                 break;
