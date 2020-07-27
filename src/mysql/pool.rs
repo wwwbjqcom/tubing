@@ -1250,12 +1250,14 @@ impl MysqlConnectionInfo{
 
     /// 获取返回结果
     async fn unpack_text_packet(&mut self, packet: &Vec<u8>) -> Result<Vec<HashMap<String, String>>> {
-        let (packet, _) = self.__send_packet(&packet)?;
+        let (packet, header) = self.__send_packet(&packet)?;
+        info!("{:?}", header);
         self.check_packet_is(&packet)?;
         let mut values_info = vec![];   //数据值
         let mut column_info = vec![];   //每个column的信息
 
         let column_count = packet[0];
+        info!("column_count: {}", &column_count);
         for _ in 0..column_count {
             let (buf, header) = self.get_packet_from_stream().await?;
             info!("header: {:?}", header);
