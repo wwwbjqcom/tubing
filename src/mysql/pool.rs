@@ -1256,7 +1256,8 @@ impl MysqlConnectionInfo{
 
         let column_count = packet[0];
         for _ in 0..column_count {
-            let (buf, _) = self.get_packet_from_stream().await?;
+            let (buf, header) = self.get_packet_from_stream().await?;
+            info!("header: {:?}", header);
             let column = MetaColumn::new(&buf);
             column_info.push(column);
         }
