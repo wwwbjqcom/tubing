@@ -61,7 +61,7 @@ impl ClientResponse {
             PacketType::ComInitDb => {
                 let db = readvalue::read_string_value(&self.buf[1..]);
                 debug(format!("initdb {}", &db));
-                if !self.check_change_db_privileges(handler).await?{
+                if !self.check_change_db_privileges(handler, &db).await?{
                     return Ok(())
                 }
                 handler.db = Some(db);
