@@ -157,6 +157,7 @@ impl ClientResponse {
             return Ok(());
         }
         let check_privileges = CheckPrivileges::new(&handler.db, tbl_info, sql_type, &handler.user_name, &handler.host);
+        info!("{:?}", &check_privileges);
         handler.user_privileges.check_privileges(&check_privileges).await?;
         Ok(())
     }
