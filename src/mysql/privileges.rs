@@ -460,7 +460,7 @@ impl UserPri{
             let mut true_count = 0;
             for tbl_pri in tbl_pri_all{
                 if check_host(&check_struct.host, &tbl_pri.host) &&
-                    check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table){
+                    check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, check_struct){
                     if tbl_pri.check_sql_type(&check_struct.sql_type){
                         true_count += 1;
                     }
@@ -614,6 +614,7 @@ impl CheckPrivileges{
         let mut cur_sql_table_info = vec![];
         match sql_type{
             SqlStatement::ChangeDatabase => {
+                cur_sql_table_info.push(TableInfo{db: Some(sql_table_info[0].clone()), table: "".to_string()});
                 my_cur_db = sql_table_info[0].clone();
             }
             _ => {
@@ -648,10 +649,21 @@ impl CheckPrivileges{
         return false;
     }
 
-    fn check_cur_sql_table_info(&self, db: &String, table: &String) -> bool{
-        for table_info in &self.cur_sql_table_info{
+    fn check_cur_sql_table_info(&self, db: &String, table: &String, check_struct: &CheckPrivileges) -> bool{
+        'a: for table_info in &self.cur_sql_table_info{
             if let Some(my_db) = &table_info.db{
                 if my_db == db {
+                    // table为空表示为use 语句
+                    if &table_info.table == &"".to_string(){
+                        match check_struct.sql_type {
+                            SqlStatement::ChangeDatabase => {
+                                return true;
+                            }
+                            _ => {
+                                continue 'a;
+                            }
+                        }
+                    }
                     if table == &table_info.table{
                         return true;
                     }
