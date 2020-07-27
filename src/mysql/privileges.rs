@@ -601,7 +601,7 @@ pub struct CheckPrivileges{
 }
 impl CheckPrivileges{
     pub fn new(cur_db: &Option<String>, sql_table_info: Vec<String>, sql_type: &SqlStatement, user_name: &String, host: &String) -> CheckPrivileges{
-        let my_cur_db;
+        let mut my_cur_db;
         if let Some(db) = cur_db{
             my_cur_db = db.clone();
         }else {
