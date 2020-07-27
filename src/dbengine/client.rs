@@ -12,7 +12,7 @@ use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{Borrow};
-use tracing::{error, debug};
+use tracing::{error, debug, info};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
 use tracing::field::debug;
