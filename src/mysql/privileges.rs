@@ -8,7 +8,7 @@ use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
-use tracing::{debug};
+use tracing::{debug, info};
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
