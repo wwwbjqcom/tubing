@@ -471,6 +471,7 @@ impl UserPri{
                 info!{"{},{},{:?}", &tbl_pri.db, &tbl_pri.table, tbl_info};
                 if check_host(&check_struct.host, &tbl_pri.host) && check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, tbl_info){
                     info!("ccccc");
+                    info!("{:?}", tbl_pri);
                     return tbl_pri.check_sql_type(&check_struct.sql_type);
                 }
             }
