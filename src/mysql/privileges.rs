@@ -8,7 +8,7 @@ use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
-use tracing::{debug};
+use tracing::{debug, info};
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
@@ -468,7 +468,9 @@ impl UserPri{
     async fn check_table_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
         if let Some(tbl_pri_all) = &self.table_pri{
             for tbl_pri in tbl_pri_all{
+                info!{"{},{},{:?}", &tbl_pri.db, &tbl_pri.table, tbl_info};
                 if check_host(&check_struct.host, &tbl_pri.host) && check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, tbl_info){
+                    info!("ccccc");
                     return tbl_pri.check_sql_type(&check_struct.sql_type);
                 }
             }
