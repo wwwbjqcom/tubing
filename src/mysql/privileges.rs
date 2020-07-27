@@ -8,7 +8,7 @@ use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
-use tracing::{debug, info};
+use tracing::{debug};
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
@@ -412,16 +412,28 @@ impl UserPri{
         return false
     }
 
-    async fn check_privileges(&self, check_struct: &CheckPrivileges) -> Result<()>{
-        if check_struct.check_information_schema(){return Ok(())}
+    async fn check_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> Result<()>{
         if self.check_user_privileges(check_struct).await{return Ok(())}
-        info!("aa");
-        if self.check_db_privileges(check_struct).await{return Ok(())}
-        info!("bb");
-        if self.check_table_privileges(check_struct).await{return Ok(())}
-        info!("cc");
-        let err = format!("Access denied for user '{}'@'{}' to tables info '{:?}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_sql_table_info);
-        return Err(Box::new(MyError(err.into())));
+        if self.check_db_privileges(check_struct,tbl_info).await{return Ok(())}
+        if self.check_table_privileges(check_struct,tbl_info).await{return Ok(())}
+        return Err(Box::new(MyError(self.get_error_string(tbl_info,check_struct).into())));
+    }
+
+    fn get_error_string(&self, tbl_info: &TableInfo, check_struct: &CheckPrivileges) -> String{
+        let err;
+        if let Some(db) = &tbl_info.db{
+            match check_struct.sql_type {
+                SqlStatement::ChangeDatabase => {
+                    err = format!("Access denied for user '{}'@'{}' to database '{}'", &check_struct.user_name, &check_struct.host, db);
+                }
+                _ => {
+                    err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, db, &tbl_info.table);
+                }
+            }
+        }else {
+            err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_db, &tbl_info.table);
+        }
+        return err;
     }
 
     async fn check_user_privileges(&self, check_struct: &CheckPrivileges) -> bool{
@@ -436,39 +448,29 @@ impl UserPri{
         return false;
     }
 
-    async fn check_db_privileges(&self, check_struct: &CheckPrivileges) -> bool{
+    async fn check_db_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
         if let Some(db_pri_all) = &self.db_pri{
-            let mut true_count = 0;
             for db_pri in db_pri_all{
-                if (&db_pri.db == &check_struct.cur_db || check_struct.check_cur_sql_db_info(&db_pri.db))
-                    && check_host(&check_struct.host, &db_pri.host){
-                    if db_pri.check_sql_type(&check_struct.sql_type){
-                        true_count += 1;
+                if let Some(tbl_db) = &tbl_info.db {
+                    if tbl_db == &db_pri.db && check_host(&check_struct.host, &db_pri.host){
+                        return db_pri.check_sql_type(&check_struct.sql_type);
                     }
-                    //return self.check_sql_privileges(db_pri, check_struct).await;
+                }else {
+                    if &check_struct.cur_db == &db_pri.db && check_host(&check_struct.host, &db_pri.host){
+                        return db_pri.check_sql_type(&check_struct.sql_type);
+                    }
                 }
-            }
-            if true_count == check_struct.cur_sql_table_info.len(){
-                return true;
             }
         }
         return false;
     }
 
-    async fn check_table_privileges(&self, check_struct: &CheckPrivileges) -> bool{
+    async fn check_table_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
         if let Some(tbl_pri_all) = &self.table_pri{
-            let mut true_count = 0;
             for tbl_pri in tbl_pri_all{
-                if check_host(&check_struct.host, &tbl_pri.host) &&
-                    check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, check_struct){
-                    if tbl_pri.check_sql_type(&check_struct.sql_type){
-                        true_count += 1;
-                    }
-                    //return self.check_sql_privileges(tbl_pri, check_struct).await;
+                if check_host(&check_struct.host, &tbl_pri.host) && check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, tbl_info){
+                    return tbl_pri.check_sql_type(&check_struct.sql_type);
                 }
-            }
-            if true_count == check_struct.cur_sql_table_info.len(){
-                return true;
             }
         }
         return false;
@@ -572,19 +574,19 @@ impl AllUserPri{
         Ok(())
     }
 
-    /// 判断用户权限
-    ///
-    /// 按权限从大到小的优先级进行判断，新判断user表中、再db表最后判断table表
-    pub async fn check_privileges(&self, check_struct: &CheckPrivileges) -> Result<()>{
-        for user_pri in &self.all_pri{
-            if user_pri.check_user_name(&check_struct.user_name){
-                user_pri.check_privileges(check_struct).await?;
-                return Ok(())
-            }
-        }
-        let err = format!("Access denied for user '{}'@'{}'", &check_struct.user_name, &check_struct.host);
-        return Err(Box::new(MyError(err.into())))
-    }
+    // /// 判断用户权限
+    // ///
+    // /// 按权限从大到小的优先级进行判断，新判断user表中、再db表最后判断table表
+    // pub async fn check_privileges(&self, check_struct: &CheckPrivileges) -> Result<()>{
+    //     for user_pri in &self.all_pri{
+    //         if user_pri.check_user_name(&check_struct.user_name){
+    //             user_pri.check_privileges(check_struct).await?;
+    //             return Ok(())
+    //         }
+    //     }
+    //     let err = format!("Access denied for user '{}'@'{}'", &check_struct.user_name, &check_struct.host);
+    //     return Err(Box::new(MyError(err.into())))
+    // }
 
 }
 
@@ -638,10 +640,42 @@ impl CheckPrivileges{
             host: host.clone()
         }
     }
-    fn check_cur_sql_db_info(&self, db: &String) -> bool{
-        for table_info in &self.cur_sql_table_info{
-            if let Some(my_db) = &table_info.db{
-                if my_db == db {
+
+    /// 检查用户操作权限
+    pub async fn check_user_privileges(&self, user_privileges: &AllUserPri) -> Result<()>{
+        if self.check_information_schema().await{return Ok(())}
+        for user_pri in &user_privileges.all_pri{
+            //首先检查用户是否存在权限
+            if user_pri.check_user_name(&self.user_name){
+                for tble_info in &self.cur_sql_table_info{
+                    user_pri.check_privileges(self, &tble_info).await?
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn check_cur_sql_table_info(&self, db: &String, table: &String, tbl_info: &TableInfo) -> bool{
+        if let Some(my_db) = &tbl_info.db{
+            if my_db == db {
+                // table为空表示为use 语句
+                if &tbl_info.table == &"".to_string(){
+                    match self.sql_type {
+                        SqlStatement::ChangeDatabase => {
+                            return true;
+                        }
+                        _ => {
+                            return false;
+                        }
+                    }
+                }
+                if table == &tbl_info.table{
+                    return true;
+                }
+            }
+        }else {
+            if &self.cur_db == db{
+                if table == &tbl_info.table{
                     return true;
                 }
             }
@@ -649,38 +683,7 @@ impl CheckPrivileges{
         return false;
     }
 
-    fn check_cur_sql_table_info(&self, db: &String, table: &String, check_struct: &CheckPrivileges) -> bool{
-        'a: for table_info in &self.cur_sql_table_info{
-            if let Some(my_db) = &table_info.db{
-                if my_db == db {
-                    // table为空表示为use 语句
-                    if &table_info.table == &"".to_string(){
-                        match check_struct.sql_type {
-                            SqlStatement::ChangeDatabase => {
-                                return true;
-                            }
-                            _ => {
-                                continue 'a;
-                            }
-                        }
-                    }
-                    if table == &table_info.table{
-                        return true;
-                    }
-                }
-            }else {
-                if &self.cur_db == db{
-                    if table == &table_info.table{
-                        return true;
-                    }
-                }
-            }
-
-        }
-        return false;
-    }
-
-    fn check_information_schema(&self) -> bool{
+    async fn check_information_schema(&self) -> bool{
         for tble_all in &self.cur_sql_table_info{
             if let Some(db) = &tble_all.db{
                 if db == &String::from("information_schema"){

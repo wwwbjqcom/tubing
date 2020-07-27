@@ -12,7 +12,7 @@ use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{Borrow};
-use tracing::{error, debug, info};
+use tracing::{error, debug};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
 use tracing::field::debug;
@@ -157,8 +157,8 @@ impl ClientResponse {
             return Ok(());
         }
         let check_privileges = CheckPrivileges::new(&handler.db, tbl_info, sql_type, &handler.user_name, &handler.host);
-        info!("{:?}", &check_privileges);
-        handler.user_privileges.check_privileges(&check_privileges).await?;
+        check_privileges.check_user_privileges(&handler.user_privileges).await?;
+        //handler.user_privileges.check_privileges(&check_privileges).await?;
         Ok(())
     }
 
