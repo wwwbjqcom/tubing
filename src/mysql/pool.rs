@@ -1244,23 +1244,23 @@ impl MysqlConnectionInfo{
     /// 执行sql语句并返回结果
     pub async fn execute_command(&mut self, sql: &String) -> Result<Vec<HashMap<String, String>>>{
         let packet = self.set_default_packet(&sql, 0);
-        info!("{}", sql);
+        debug!("{}", sql);
         return Ok(self.unpack_text_packet(&packet).await?);
     }
 
     /// 获取返回结果
     async fn unpack_text_packet(&mut self, packet: &Vec<u8>) -> Result<Vec<HashMap<String, String>>> {
         let (packet, header) = self.__send_packet(&packet)?;
-        info!("{:?}", header);
+        debug!("{:?}", header);
         self.check_packet_is(&packet)?;
         let mut values_info = vec![];   //数据值
         let mut column_info = vec![];   //每个column的信息
 
         let column_count = packet[0];
-        info!("column_count: {}", &column_count);
+        debug!("column_count: {}", &column_count);
         for _ in 0..column_count {
             let (buf, header) = self.get_packet_from_stream().await?;
-            info!("header: {:?}", header);
+            debug!("header: {:?}", header);
             let column = MetaColumn::new(&buf);
             column_info.push(column);
         }
@@ -1286,7 +1286,7 @@ impl MysqlConnectionInfo{
             let values = self.unpack_text_value(&buf, &column_info);
             values_info.push(values);
         }
-        info!("{:?}", &values_info);
+        debug!("{:?}", &values_info);
         return Ok(values_info);
     }
 

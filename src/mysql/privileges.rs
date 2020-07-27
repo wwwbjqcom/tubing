@@ -8,6 +8,7 @@ use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
+use tracing::{debug};
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
@@ -493,6 +494,7 @@ impl AllUserPri{
                 self.all_pri.push(one_user_pri);
             }
         }
+        debug!("all user privileges: {:?}", &self.all_pri);
         Ok(())
     }
 
@@ -530,7 +532,7 @@ impl AllUserPri{
 
     /// 获取table_pri表中的table权限信息
     async fn get_table_pri(&mut self, mysql_conn: &mut MysqlConnectionInfo, user_pri: &mut UserPri) -> Result<()>{
-        let sql = format!("select * from mysql.table_pri where user='{}'",user_pri.user);
+        let sql = format!("select * from mysql.tables_priv where user='{}'",user_pri.user);
         let value = mysql_conn.execute_command(&sql).await?;
         let mut tbl_pri = vec![];
         for row_value in value{
