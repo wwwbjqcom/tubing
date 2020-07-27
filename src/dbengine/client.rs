@@ -142,6 +142,9 @@ impl ClientResponse {
     }
 
     async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: Vec<String>) -> Result<()>{
+        if &handler.user_name == &handler.platform_pool.config.user{
+            return Ok(());
+        }
         let check_privileges = CheckPrivileges::new(&handler.db, tbl_info, sql_type, &handler.user_name, &handler.host);
         handler.user_privileges.check_privileges(&check_privileges).await?;
         Ok(())

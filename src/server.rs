@@ -247,7 +247,7 @@ impl Listener {
             // The `accept` method internally attempts to recover errors, so an
             // error here is non-recoverable.
             let socket = self.accept().await?;
-            let host = socket.peer_addr()?.to_string();
+            let host = socket.peer_addr()?.ip().to_string();
             // Create the necessary per-connection handler state.
             let handler = Handler {
                 platform: None,
