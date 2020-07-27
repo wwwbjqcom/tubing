@@ -1275,9 +1275,11 @@ impl MysqlConnectionInfo{
             if buf[0] == 0x00{
                 if header.payload < 9{
                     eof_num += 1;
+                    continue 'b;
                 }
             }else if buf[0] == 0xfe {
                 eof_num += 1;
+                continue 'b;
             }else if buf[0] == 0xff {
                 break;
             }
