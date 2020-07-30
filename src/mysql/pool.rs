@@ -339,6 +339,7 @@ impl ConnectionsPoolPlatform{
         let write_pool = ConnectionsPool::new(&write_config)?;
         conn_pool.insert(my_config.host_info.clone(), write_pool);
         read_list.push(my_config.host_info.clone());
+        println!("{:?}", my_config);
         let write = Arc::new(RwLock::new(vec![my_config.host_info.clone()]));
 
         //遍历slave节点并创建对应连接池，放入conn_pool
@@ -350,6 +351,7 @@ impl ConnectionsPoolPlatform{
                 conn_pool.insert(my_config.host_info.clone(), read_pool);
             }
         }
+        println!("{:?}", read_list);
         let read = Arc::new(RwLock::new(read_list));
 
         let is_alter = Arc::new(AtomicUsize::new(0));
