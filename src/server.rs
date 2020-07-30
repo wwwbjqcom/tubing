@@ -74,6 +74,13 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
 
         //创建各业务后端连接池
         let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
+        println!("{:?}",platform_pool);
+        use std::{thread, time};
+
+        let ten_millis = time::Duration::from_millis(10000000);
+        let now = time::Instant::now();
+
+        thread::sleep(ten_millis);
 
         let mut user_pri = AllUserPri::new(&platform_pool);
         user_pri.get_pris(&all_user_info).await?;

@@ -185,9 +185,9 @@ impl PlatformPool{
                         error!("Check route change error:{}", e.to_string());
                     }
 
-                    // if let Err(e) = self.check_route_for_mgr().await{
-                    //     error!("Check mgr route error:{}", e.to_string());
-                    // }
+                    if let Err(e) = self.check_route_for_mgr().await{
+                        error!("Check mgr route error:{}", e.to_string());
+                    }
                     route_last_check_time = now_time;
                 }
             }
