@@ -218,7 +218,9 @@ impl PlatformPool{
         for route_info in ha_ser_route.value.route{
             let mut plaform_node_info = self.platform_node_info.clone();
             for platform_node in &mut plaform_node_info{
-                self.alter_platform_pool(&route_info, platform_node).await?;
+                if platform_node.platform == route_info.cluster_name{
+                    self.alter_platform_pool(&route_info, platform_node).await?;
+                }
             }
             self.platform_node_info = plaform_node_info;
         }
