@@ -116,6 +116,7 @@ impl PlatformPool{
         let mut pool = HashMap::new();
         let mut platform_node_info = vec![];
         for platform in &conf.platform{
+            println!("{:?}", platform);
             let platform_pool = ConnectionsPoolPlatform::new(platform)?;
             pool.insert(platform.platform.clone(), platform_pool);
             platform_node_info.push(PlatforNodeInfo::new(platform));
