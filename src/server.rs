@@ -71,7 +71,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
             let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
             config.reset_init_config(&ha_route);
         }
-
+        print!("{:?}", &config);
         //创建各业务后端连接池
         let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
 

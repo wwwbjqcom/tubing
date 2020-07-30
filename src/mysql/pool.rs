@@ -442,6 +442,7 @@ impl ConnectionsPoolPlatform{
         let mut conn_info = self.get_pool(&SqlStatement::Query, &"".to_string()).await?;
         let sql = String::from("select member_host,member_port,member_state,member_role from performance_schema.replication_group_members;");
         let result = conn_info.execute_command(&sql).await?;
+        self.return_pool(conn_info, 0).await?;
         Ok(RouteInfo::new_mgr_route(&result, platform))
     }
 
