@@ -440,7 +440,7 @@ impl ConnectionsPoolPlatform{
     /// 对mgr集群获取节点状态信息
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
         let mut conn_info = self.get_pool(&SqlStatement::Query, &"".to_string()).await?;
-        let sql = String::from("select member_host,member_port,member_state,member_role from replication_group_members;");
+        let sql = String::from("select member_host,member_port,member_state,member_role from performance_schema.replication_group_members;");
         let result = conn_info.execute_command(&sql).await?;
         Ok(RouteInfo::new_mgr_route(&result, platform))
     }

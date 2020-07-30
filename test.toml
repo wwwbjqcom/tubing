@@ -4,19 +4,18 @@ bind="0.0.0.0"
 port=3306
 auth=false
 #配置文件读取还是MysqlMP获取，可配置file、mp, 默认file也可以不配置
-#mod="mp"
-#server_url="http://192.168.0.47:8099/getrouteinfo"
+mode="mp"
+server_url="http://192.168.0.47:8099/getrouteinfo"
 #配置高可用用户验证id
-#hook_id="WhHYnV1psD9Nyba3EbriIKuPPcTHnu6c"
+hook_id="WhHYnV1psD9Nyba3EbriIKuPPcTHnu6c"
 #配置获取路由信息的集群名称
-#cluster=["a"]
+cluster=["test1"]
 
 [[platform]]
 #platform对应高可用cluster_name
 platform="test1"
 #业务通过set platform设置的名称
 platform_sublist=["test1", "test2"]
-write="192.168.1.126:3306"
 #连接池建立使用的账号密码
 user="root"
 password="root"

@@ -197,7 +197,6 @@ fn main() -> mysql::Result<()> {
         Err(e) => panic!("Error Reading file: {}", e)
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
-
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
     server::run(my_config, signal::ctrl_c())
 }
