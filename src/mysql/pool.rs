@@ -117,7 +117,6 @@ impl PlatformPool{
         let mut platform_node_info = vec![];
         for platform in &conf.platform{
             let platform_pool = ConnectionsPoolPlatform::new(platform)?;
-            println!("{:?}, {:?}", platform_pool.write, platform_pool.read);
             pool.insert(platform.platform.clone(), platform_pool);
             platform_node_info.push(PlatforNodeInfo::new(platform));
         }
@@ -186,9 +185,9 @@ impl PlatformPool{
                         error!("Check route change error:{}", e.to_string());
                     }
 
-                    if let Err(e) = self.check_route_for_mgr().await{
-                        error!("Check mgr route error:{}", e.to_string());
-                    }
+                    // if let Err(e) = self.check_route_for_mgr().await{
+                    //     error!("Check mgr route error:{}", e.to_string());
+                    // }
                     route_last_check_time = now_time;
                 }
             }
@@ -339,7 +338,6 @@ impl ConnectionsPoolPlatform{
         let write_pool = ConnectionsPool::new(&write_config)?;
         conn_pool.insert(my_config.host_info.clone(), write_pool);
         read_list.push(my_config.host_info.clone());
-        println!("{:?}", my_config);
         let write = Arc::new(RwLock::new(vec![my_config.host_info.clone()]));
 
         //遍历slave节点并创建对应连接池，放入conn_pool
@@ -351,7 +349,6 @@ impl ConnectionsPoolPlatform{
                 conn_pool.insert(my_config.host_info.clone(), read_pool);
             }
         }
-        println!("{:?}", read_list);
         let read = Arc::new(RwLock::new(read_list));
 
         let is_alter = Arc::new(AtomicUsize::new(0));
