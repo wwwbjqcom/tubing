@@ -43,12 +43,21 @@ impl MyConfig{
         self.platform = platform_config_list;
     }
 
+    /// 初始化读写节点信息， 如果为mgr则不修改，使用原始配置
     fn alter_platform_config(&self, platform_config: &mut Vec<Platform>, route_info: &RouteInfo) {
         for platform in platform_config{
-            if platform.platform == route_info.cluster_name{
+            if platform.platform == route_info.cluster_name && !self.check_mgr(platform){
                 platform.write = Some(route_info.get_write_host_info());
                 platform.read = route_info.get_read_host_info();
             }
+        }
+    }
+
+    fn check_mgr(&self, platform_config: &Platform) -> bool{
+        return if let Some(v) = &platform_config.mgr {
+            v.clone()
+        } else {
+            false
         }
     }
 
@@ -87,6 +96,7 @@ pub struct Platform {
     pub password: String,
     pub max: usize,
     pub min: usize,
+    pub mgr: Option<bool>,
     pub auth: bool
 }
 impl Platform{

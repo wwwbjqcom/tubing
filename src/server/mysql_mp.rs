@@ -7,6 +7,7 @@ use reqwest;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use crate::{MyConfig, mysql, MyError};
+use std::collections::HashMap;
 
 #[derive(Serialize)]
 pub struct GetRouteInfo {
@@ -67,6 +68,41 @@ impl RouteInfo{
             return None;
         }
 
+    }
+    pub fn new_mgr_route(result: &Vec<HashMap<String, String>>, cluster_name: &String) -> RouteInfo{
+        let mut read = vec![];
+        let mut write = MysqlHostInfo{ host: "".to_string(), port: 0 };
+        for row_value in result{
+            let mut host = "".to_string();
+            let mut port: usize = 3306;
+            let mut member_state= "".to_string();
+            let mut member_role= "".to_string();
+            if let Some(v) = row_value.get(&"member_host".to_string()){
+                host = v.clone();
+            }
+            if let Some(v) = row_value.get(&"member_port".to_string()){
+                port = v.parse().unwrap();
+            }
+            if let Some(v) = row_value.get(&"member_state".to_string()){
+                member_state = v.clone();
+            }
+            if let Some(v) = row_value.get(&"member_role".to_string()){
+                member_role = v.clone();
+            }
+
+            if &member_state == &"ONLINE".to_string() {
+                if &member_role == &"PRIMARY".to_string(){
+                    write = MysqlHostInfo{ host, port }
+                }else if &member_role == &"SECONDARY".to_string() {
+                    read.push(MysqlHostInfo{ host, port });
+                }
+            }
+        }
+        RouteInfo{
+            cluster_name: cluster_name.clone(),
+            write,
+            read
+        }
     }
 }
 

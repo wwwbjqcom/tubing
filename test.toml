@@ -24,6 +24,23 @@ min=10
 max=100
 auth=false
 
+
+[[platform]]
+#当该platform模块属于mgr复制集时， platform代表该集群名称，不会从高可用获取
+platform="pay_mgr"
+#业务通过set platform设置的名称
+platform_sublist=["mgr_test1", "mgr_test2"]
+write="192.168.1.126:3306"
+read=["192.168.1.126:3306"]
+#连接池建立使用的账号密码
+user="root"
+password="root"
+min=10
+max=100
+mgr=true
+auth=false
+
+
 [[user_info]]
 user="root"
 #前端连接使用的密码,可以随意填写

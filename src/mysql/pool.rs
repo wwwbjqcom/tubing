@@ -46,8 +46,9 @@ enum HealthType{
 #[derive(Clone, Debug)]
 pub struct PlatforNodeInfo{
     pub platform: String,
+    pub mgr: bool,
     pub write: String,
-    pub read: Option<Vec<String>>,
+    pub read: Option<Vec<String>>,      //这里仅slav节点信息，和platformpool中的read不一样
     pub read_is_alter: bool,
     pub write_is_alter: bool
 }
@@ -59,8 +60,13 @@ impl PlatforNodeInfo{
         }
         tmp.push(platform.get_write_host());
         let read = Some(tmp);
+        let mut mgr = false;
+        if let Some(v) = platform.mgr{
+            mgr = v;
+        }
         PlatforNodeInfo{
             platform: platform.platform.clone(),
+            mgr,
             write: platform.get_write_host(),
             read,
             read_is_alter: false,
@@ -158,25 +164,51 @@ impl PlatformPool{
             //每隔60秒检查一次
             if now_time - ping_last_check_time >= 60000{
                 debug!("{}", String::from("check_ping"));
-                self.check_health_for_type(HealthType::Ping).await?;
+                if let Err(e) = self.check_health_for_type(HealthType::Ping).await{
+                    error!("check ping error:{}", e.to_string());
+                };
                 ping_last_check_time = now_time;
             }
             //每隔600秒进行一次连接池数量维护
             if now_time - maintain_last_check_time >= 600000{
                 debug!("{}", String::from("maintain_pool"));
-                self.check_health_for_type(HealthType::Maintain).await?;
+                if let Err(e) = self.check_health_for_type(HealthType::Maintain).await{
+                    error!("pool maintain error:{}", e.to_string());
+                }
                 maintain_last_check_time = now_time;
             }
 
             //定时检查路由是否发生变动
             if self.config.check_is_mp(){
                 if now_time - route_last_check_time >= 1000 {
-                    self.check_route_for_platform().await?;
+                    if let Err(e) = self.check_route_for_platform().await{
+                        error!("Check route change error:{}", e.to_string());
+                    }
+
+                    if let Err(e) = self.check_route_for_mgr().await{
+                        error!("Check mgr route error:{}", e.to_string());
+                    }
                     route_last_check_time = now_time;
                 }
             }
             delay_for(Duration::from_millis(50)).await;
         }
+    }
+
+    /// 检查mgr主从变化, 这里只对mgr集群进行检测
+    async fn check_route_for_mgr(&mut self) -> Result<()>{
+        let mut plaform_node_info = self.platform_node_info.clone();
+        for platform_node in &mut plaform_node_info{
+            if platform_node.mgr{
+                if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
+                    let new_route_info = platform_pool.get_mgr_cluster_role_state(&platform_node.platform).await?;
+                    if new_route_info.write.host != "".to_string(){
+                        self.alter_platform_pool(&new_route_info, platform_node).await?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     ///检查路由信息变动
@@ -186,15 +218,20 @@ impl PlatformPool{
         for route_info in ha_ser_route.value.route{
             let mut plaform_node_info = self.platform_node_info.clone();
             for platform_node in &mut plaform_node_info{
-                if !platform_node.check(&route_info){
-                    //发生变动， 开始修改连接池
-                    if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
-                        platform_pool.alter_pool(&platform_node).await?;
-                        platform_node.reset_alter();
-                    }
-                }
+                self.alter_platform_pool(&route_info, platform_node).await?;
             }
             self.platform_node_info = plaform_node_info;
+        }
+        Ok(())
+    }
+
+    async fn alter_platform_pool(&mut self, route_info: &RouteInfo, platform_node: &mut PlatforNodeInfo) -> Result<()>{
+        if !platform_node.check(&route_info){
+            //发生变动， 开始修改连接池
+            if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
+                platform_pool.alter_pool(&platform_node).await?;
+                platform_node.reset_alter();
+            }
         }
         Ok(())
     }
@@ -276,7 +313,7 @@ impl PlatformPool{
 ///
 /// write： 存放当前master节点host_info
 ///
-/// read： 以vec存放当前slave节点host_info
+/// read： 以vec存放当前slave和master节点host_info
 ///
 /// is_alter： 记录当前主从关系版本号，如果发生改变则加一，获取到的线程会通过这个值的改变判断是否重新获取连接
 #[derive(Clone, Debug)]
@@ -377,7 +414,7 @@ impl ConnectionsPoolPlatform{
                 }
             }
 
-            //反响判断现有节点是否存在新路由关系中，如果不存在则删除
+            //反向判断现有节点是否存在新路由关系中，如果不存在则删除
             'a: for info in &*read_host_lock{
                 for host_info in &new_read_list{
                     if info == host_info{
@@ -398,6 +435,14 @@ impl ConnectionsPoolPlatform{
         }
 
         Ok(())
+    }
+
+    /// 对mgr集群获取节点状态信息
+    async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
+        let mut conn_info = self.get_pool(&SqlStatement::Query, &"".to_string()).await?;
+        let sql = String::from("select member_host,member_port,member_state,member_role from replication_group_members;");
+        let result = conn_info.execute_command(&sql).await?;
+        Ok(RouteInfo::new_mgr_route(&result, platform))
     }
 
     /// 修改ops计数状态
@@ -487,6 +532,14 @@ impl ConnectionsPoolPlatform{
             match conn_pool_lock.get(read_host_info){
                 Some(v) => {
                     let tmp_count = v.active_count.load(Ordering::SeqCst);
+
+                    // 判断当前连接池大小, 如果小于最小连接池大小，则有可能是节点异常，排除该节点
+                    let tmp_queued_count = v.queued_count.load(Ordering::Relaxed);
+                    let tmp_min = v.min_thread_count.load(Ordering::Relaxed);
+                    if tmp_queued_count + tmp_count < tmp_min {
+                        continue;
+                    }
+
                     //开始
                     if !start{
                         active_count = tmp_count;
