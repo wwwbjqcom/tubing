@@ -910,6 +910,7 @@ impl ConnectionsPool{
             min_thread: self.min_thread_count.load(Ordering::Relaxed),
             max_thread: self.max_thread_count.load(Ordering::Relaxed),
             thread_count: self.queued_count.load(Ordering::Relaxed),
+            cached_count: self.cached_count.load(Ordering::Relaxed),
             active_thread: self.active_count.load(Ordering::Relaxed),
             auth: self.auth.load(Ordering::Relaxed)
         }

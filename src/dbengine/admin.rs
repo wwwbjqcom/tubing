@@ -225,6 +225,7 @@ pub struct HostPoolState{
     pub max_thread: usize,
     pub thread_count: usize,
     pub active_thread: usize,
+    pub cached_count: usize,
     pub auth: bool
 }
 

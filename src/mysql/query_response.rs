@@ -159,6 +159,7 @@ struct ConnectionsRowValue{
     max_thread: String,
     active_thread: String,
     pool_count: String,
+    cached_count: String,
 }
 impl ConnectionsRowValue{
     async fn new(platform: &String, host_state: &HostPoolState) -> ConnectionsRowValue{
@@ -168,7 +169,8 @@ impl ConnectionsRowValue{
             min_thread: format!("{}",host_state.min_thread.clone()),
             max_thread: format!("{}",host_state.max_thread.clone()),
             active_thread: format!("{}",host_state.active_thread.clone()),
-            pool_count: format!("{}",host_state.thread_count.clone())
+            pool_count: format!("{}",host_state.thread_count.clone()),
+            cached_count: format!("{}",host_state.cached_count.clone()),
         }
     }
 
@@ -180,6 +182,7 @@ impl ConnectionsRowValue{
         packet.extend(packet_one_column_value(self.max_thread.clone()).await);
         packet.extend(packet_one_column_value(self.active_thread.clone()).await);
         packet.extend(packet_one_column_value(self.pool_count.clone()).await);
+        packet.extend(packet_one_column_value(self.cached_count.clone()).await);
         packet
     }
 
@@ -191,6 +194,7 @@ impl ConnectionsRowValue{
         packet.push(ColumnDefinition41::show_status_column(&String::from("max_thread"), &LONG).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("active_thread"), &LONG).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("pool_count"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("cached_count"), &LONG).await.packet().await);
         packet
     }
 }
@@ -216,7 +220,7 @@ impl TextResponse{
     pub async fn packet(&mut self, show_struct: &ShowStruct, show_state: &ShowState) -> Result<()> {
         match show_struct.command{
             ShowCommand::Connections => {
-                self.packet_column_count(6).await;
+                self.packet_column_count(7).await;
                 self.packet_list.extend(ConnectionsRowValue::packet_column_difinition().await);
             }
             ShowCommand::Questions => {
