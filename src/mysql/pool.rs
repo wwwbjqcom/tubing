@@ -559,6 +559,7 @@ impl ConnectionsPoolPlatform{
         let mut start = false;
         //存储最小连接的连接池key值，最终从这个连接池中获取连接
         let mut tmp_key = None;
+        info!("{:?}", *read_list_lock);
         for read_host_info in &*read_list_lock{
             match conn_pool_lock.get(read_host_info){
                 Some(v) => {
