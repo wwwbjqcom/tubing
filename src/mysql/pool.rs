@@ -91,10 +91,12 @@ impl PlatforNodeInfo{
             return false;
         }
         if write != self.write{
+            info!("write no");
             self.write_is_alter = true;
             self.write = write.clone();
         }
         if !self.check_read_list(&read){
+            info!("read no")
             self.read_is_alter = true;
             self.read = read.clone();
         }
@@ -245,8 +247,6 @@ impl PlatformPool{
     }
 
     async fn alter_platform_pool(&mut self, route_info: &RouteInfo, platform_node: &mut PlatforNodeInfo) -> Result<()>{
-        let a = platform_node.check(&route_info);
-        
         if platform_node.check(&route_info){
             //发生变动， 开始修改连接池
             if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
