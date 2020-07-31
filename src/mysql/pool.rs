@@ -392,7 +392,7 @@ impl ConnectionsPoolPlatform{
             if let Some(list) = &platfor_node.read{
                 new_read_list = list.clone();
             }
-            new_read_list.push(platfor_node.write.clone());
+            //new_read_list.push(platfor_node.write.clone());
             //首先进行新增判断
             let mut read_host_lock = self.read.write().await;
             'aa: for host_info in &new_read_list{
