@@ -86,21 +86,21 @@ impl PlatforNodeInfo{
         if let Some(v) = route_info.get_read_host_info(1){
             read = v;
         }
-        info!("{:?}, route_info_read:{:?}, read:{:?}", &self.write,&read, &self.read);
+        debug!("route info check: {:?}, route_info_read:{:?}, read:{:?}", &self.write,&read, &self.read);
         if write == self.write && self.check_read_list(&read){
             return false;
         }
         if write != self.write{
-            info!("write no");
+            debug!("write no");
             self.write_is_alter = true;
             self.write = write.clone();
         }
         if !self.check_read_list(&read){
-            info!("read no");
+            debug!("read no");
             self.read_is_alter = true;
             self.read = read.clone();
         }
-        info!("{:?}", self);
+        debug!("{:?}", self);
         return true;
     }
 
@@ -250,7 +250,7 @@ impl PlatformPool{
     async fn alter_platform_pool(&mut self, route_info: &RouteInfo, platform_node: &mut PlatforNodeInfo) -> Result<()>{
         if platform_node.check(&route_info){
             //发生变动， 开始修改连接池
-            info!("{:?}", &platform_node);
+            debug!("check after: {:?}", &platform_node);
             if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
                 platform_pool.alter_pool(&platform_node).await?;
                 platform_node.reset_alter();
