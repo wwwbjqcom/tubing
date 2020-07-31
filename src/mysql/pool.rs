@@ -96,7 +96,7 @@ impl PlatforNodeInfo{
             self.write = write.clone();
         }
         if !self.check_read_list(&read){
-            info!("read no")
+            info!("read no");
             self.read_is_alter = true;
             self.read = read.clone();
         }
