@@ -588,7 +588,7 @@ impl ConnectionsPoolPlatform{
                 None => {}
             }
         }
-
+        info!("{:?}", &tmp_key);
         match tmp_key{
             Some(v) => {
                 match conn_pool_lock.remove(&v){
@@ -597,7 +597,9 @@ impl ConnectionsPoolPlatform{
                         conn_pool_lock.insert(v.clone(), conn_pool);
                         return Ok(conn_info);
                     }
-                    None => {}
+                    None => {
+                        info!("abc");
+                    }
                 }
             }
             None => {}
