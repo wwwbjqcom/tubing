@@ -202,6 +202,7 @@ impl PlatformPool{
             if platform_node.mgr{
                 if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
                     let new_route_info = platform_pool.get_mgr_cluster_role_state(&platform_node.platform).await?;
+                    info!("{:?}", &new_route_info);
                     if new_route_info.write.host != "".to_string(){
                         self.alter_platform_pool(&new_route_info, platform_node).await?;
                     }
