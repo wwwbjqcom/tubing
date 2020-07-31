@@ -48,7 +48,7 @@ pub struct PlatforNodeInfo{
     pub platform: String,
     pub mgr: bool,
     pub write: String,
-    pub read: Option<Vec<String>>,      //这里仅slav节点信息，和platformpool中的read不一样
+    pub read: Option<Vec<String>>,
     pub read_is_alter: bool,
     pub write_is_alter: bool
 }

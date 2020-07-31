@@ -62,6 +62,7 @@ impl RouteInfo{
         for host_info in &self.read{
             read_host_info.push(format!("{}:{}", host_info.host, host_info.port));
         }
+        read_host_info.push(self.get_write_host_info());
         if read_host_info.len()>0{
             return Some(read_host_info);
         }else {
