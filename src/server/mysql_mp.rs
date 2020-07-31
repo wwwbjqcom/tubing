@@ -62,7 +62,7 @@ impl RouteInfo{
         for host_info in &self.read{
             read_host_info.push(format!("{}:{}", host_info.host, host_info.port));
         }
-        if db == 1{
+        if dt == 1{
             read_host_info.push(self.get_write_host_info());
             read_host_info.sort_by(|a,b|a.to_lowercase().cmp(&b.to_lowercase()));
         }
