@@ -57,12 +57,15 @@ impl RouteInfo{
     pub fn get_write_host_info(&self) -> String{
         return format!("{}:{}", self.write.host, self.write.port);
     }
-    pub fn get_read_host_info(&self) -> Option<Vec<String>>{
+    pub fn get_read_host_info(&self, dt: u8) -> Option<Vec<String>>{
         let mut read_host_info = vec![];
         for host_info in &self.read{
             read_host_info.push(format!("{}:{}", host_info.host, host_info.port));
         }
-
+        if db == 1{
+            read_host_info.push(self.get_write_host_info());
+            read_host_info.sort_by(|a,b|a.to_lowercase().cmp(&b.to_lowercase()));
+        }
         if read_host_info.len()>0{
             return Some(read_host_info);
         }else {

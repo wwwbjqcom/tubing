@@ -59,6 +59,7 @@ impl PlatforNodeInfo{
             tmp = v.clone();
         }
         tmp.push(platform.get_write_host());
+        tmp.sort_by(|a,b|a.to_lowercase().cmp(&b.to_lowercase()));
         let read = Some(tmp);
         let mut mgr = false;
         if let Some(v) = platform.mgr{
@@ -82,7 +83,7 @@ impl PlatforNodeInfo{
     /// 检查路由是否变动，如果变动则更改且返回true
     fn check(&mut self, route_info: &RouteInfo) -> bool {
         let write = route_info.get_write_host_info();
-        let read = route_info.get_read_host_info();
+        let read = route_info.get_read_host_info(1);
         debug!("{:?}, route_info_read:{:?}, read:{:?}", &self.write,&read, &self.read);
         if write == self.write && read == self.read{
             return false;

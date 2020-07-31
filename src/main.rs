@@ -48,7 +48,7 @@ impl MyConfig{
         for platform in platform_config{
             if platform.platform == route_info.cluster_name && !self.check_mgr(platform){
                 platform.write = Some(route_info.get_write_host_info());
-                platform.read = route_info.get_read_host_info();
+                platform.read = route_info.get_read_host_info(0);
             }
         }
     }
