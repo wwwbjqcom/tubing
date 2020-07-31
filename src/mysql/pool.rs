@@ -559,7 +559,6 @@ impl ConnectionsPoolPlatform{
         let mut start = false;
         //存储最小连接的连接池key值，最终从这个连接池中获取连接
         let mut tmp_key = None;
-        info!("{:?}", *read_list_lock);
         for read_host_info in &*read_list_lock{
             match conn_pool_lock.get(read_host_info){
                 Some(v) => {
@@ -567,8 +566,9 @@ impl ConnectionsPoolPlatform{
 
                     // 判断当前连接池大小, 如果小于最小连接池大小，则有可能是节点异常，排除该节点
                     let tmp_queued_count = v.queued_count.load(Ordering::Relaxed);
+                    let tmp_cached_count = v.cached_count.load(Ordering::Relaxed);
                     let tmp_min = v.min_thread_count.load(Ordering::Relaxed);
-                    if tmp_queued_count + tmp_count < tmp_min {
+                    if tmp_queued_count + tmp_count + tmp_cached_count < tmp_min {
                         continue;
                     }
 
@@ -586,12 +586,9 @@ impl ConnectionsPoolPlatform{
                     }
 //                    conn_pool_lock.insert(read_host_info.clone(), v);
                 },
-                None => {
-                    info!("12333");
-                }
+                None => {}
             }
         }
-        info!("{:?}", &tmp_key);
         match tmp_key{
             Some(v) => {
                 match conn_pool_lock.remove(&v){
@@ -600,9 +597,7 @@ impl ConnectionsPoolPlatform{
                         conn_pool_lock.insert(v.clone(), conn_pool);
                         return Ok(conn_info);
                     }
-                    None => {
-                        info!("abc");
-                    }
+                    None => {}
                 }
             }
             None => {}
