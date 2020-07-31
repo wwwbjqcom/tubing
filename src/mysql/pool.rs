@@ -1023,32 +1023,46 @@ impl ConnectionsPool{
     /// 对cached列表进行心跳检测
     pub async fn check_cached_ping(&mut self) -> Result<()> {
         if self.cached_count.load(Ordering::Relaxed) > 0 {
-            let mut pool = self.cached_queue.lock().await;
-            for _ in 0..pool.pool.len() {
-                if let Some(mut conn) = pool.pool.pop_front(){
-                    self.cached_count.fetch_sub(1, Ordering::SeqCst);
-                    self.active_count.fetch_add(1, Ordering::SeqCst);
-                    match conn.check_health().await{
-                        Ok(b) =>{
-                            if b{
-                                pool.pool.push_back(conn);
-                                self.cached_count.fetch_add(1, Ordering::SeqCst);
+            let cache_key = self.get_cached_key().await;
+            let mut cache_pool = self.cached_queue.lock().await;
+            for key in cache_key{
+                match cache_pool.remove(&key){
+                    Some(mut conn) => {
+                        self.cached_count.fetch_sub(1, Ordering::SeqCst);
+                        self.active_count.fetch_add(1, Ordering::SeqCst);
+                        match conn.check_health().await{
+                            Ok(b) =>{
+                                if b{
+                                    cache_pool.insert(key.clone(), conn);
+                                    self.cached_count.fetch_add(1, Ordering::SeqCst);
+                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                }else {
+                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                    error!("{}",String::from("check ping failed"));
+                                }
+                            }
+                            Err(e) => {
                                 self.active_count.fetch_sub(1, Ordering::SeqCst);
-                            }else {
-                                self.active_count.fetch_sub(1, Ordering::SeqCst);
-                                error!("{}",String::from("check ping failed"));
+                                error!("{}",format!("check ping error: {:?}", e.to_string()));
                             }
                         }
-                        Err(e) => {
-                            self.active_count.fetch_sub(1, Ordering::SeqCst);
-                            error!("{}",format!("check ping error: {:?}", e.to_string()));
-                        }
-                    }
+                    },
+                    None => {}
                 }
             }
-            drop(pool);
+            drop(cache_pool);
         }
         Ok(())
+    }
+
+    async fn get_cached_key(&mut self) -> Vec<String> {
+        let cache_pool = self.cached_queue.lock().await;
+        let cached_keys = cache_pool.keys();
+        let mut tmp = vec![];
+        for key in cached_keys{
+            tmp.push(key.clone());
+        }
+        tmp
     }
 
 }
