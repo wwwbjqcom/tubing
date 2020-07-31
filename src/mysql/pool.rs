@@ -408,8 +408,8 @@ impl ConnectionsPoolPlatform{
 
         //读节点变动
         if platfor_node.read_is_alter{
-            let mut new_read_list = vec![];
-            new_read_list = platfor_node.read.clone();
+            //let mut new_read_list = vec![];
+            let new_read_list = platfor_node.read.clone();
 
             //new_read_list.push(platfor_node.write.clone());
             //首先进行新增判断
