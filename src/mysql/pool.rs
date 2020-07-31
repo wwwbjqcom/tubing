@@ -461,7 +461,9 @@ impl ConnectionsPoolPlatform{
 
     /// 对mgr集群获取节点状态信息
     ///
-    /// 使用的连接会一直缓存，直到该节点宕机发生异常才会重新获取
+    /// 使用的连接会一直缓存，在连接获取时使用的最小连接算法，可能会随机到任意一个节点
+    ///
+    /// 可能会在每个节点缓存一条连接， 这样可以保证在连接使用完的最坏情况下依然能检查状态
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
         let cache_key = "mgrclusterrolestate_bbb".to_string();
         let mut conn_info = self.get_pool(&SqlStatement::Query, &cache_key).await?;
@@ -943,6 +945,8 @@ impl ConnectionsPool{
     /// 维护线程池中线程的数量， 如果低于最小值补齐
     ///
     /// 如果大于最小值，则进行空闲时间检测，空闲时间超过600s的将断开
+    ///
+    /// 不会操作cached队列
     pub async fn maintain_pool(&mut self) -> Result<()> {
         let count = self.active_count.load(Ordering::Relaxed) + self.queued_count.load(Ordering::Relaxed) + self.cached_count.load(Ordering::Relaxed);
         let min = self.min_thread_count.load(Ordering::Relaxed);
@@ -969,7 +973,6 @@ impl ConnectionsPool{
                         self.queued_count.fetch_add(1, Ordering::SeqCst);
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
                     }else {
-                        info!("aaa");
                         conn.close();
                         self.active_count.fetch_sub(1, Ordering::SeqCst);
                         tmp += 1;
@@ -986,7 +989,8 @@ impl ConnectionsPool{
 
     /// 对连接池中的连接进行心跳检查
     pub async fn check_ping(&mut self) -> Result<()> {
-        //检查空闲连接
+        self.check_cached_ping().await?;
+
         if self.queued_count.load(Ordering::Relaxed) > 0 {
             let mut pool = self.conn_queue.lock().await;
             for _ in 0..pool.pool.len() {
@@ -998,6 +1002,37 @@ impl ConnectionsPool{
                             if b{
                                 pool.pool.push_back(conn);
                                 self.queued_count.fetch_add(1, Ordering::SeqCst);
+                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                            }else {
+                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                error!("{}",String::from("check ping failed"));
+                            }
+                        }
+                        Err(e) => {
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                            error!("{}",format!("check ping error: {:?}", e.to_string()));
+                        }
+                    }
+                }
+            }
+            drop(pool);
+        }
+        Ok(())
+    }
+
+    /// 对cached列表进行心跳检测
+    pub async fn check_cached_ping(&mut self) -> Result<()> {
+        if self.cached_count.load(Ordering::Relaxed) > 0 {
+            let mut pool = self.cached_queue.lock().await;
+            for _ in 0..pool.pool.len() {
+                if let Some(mut conn) = pool.pool.pop_front(){
+                    self.cached_count.fetch_sub(1, Ordering::SeqCst);
+                    self.active_count.fetch_add(1, Ordering::SeqCst);
+                    match conn.check_health().await{
+                        Ok(b) =>{
+                            if b{
+                                pool.pool.push_back(conn);
+                                self.cached_count.fetch_add(1, Ordering::SeqCst);
                                 self.active_count.fetch_sub(1, Ordering::SeqCst);
                             }else {
                                 self.active_count.fetch_sub(1, Ordering::SeqCst);
