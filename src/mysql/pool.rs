@@ -586,7 +586,9 @@ impl ConnectionsPoolPlatform{
                     }
 //                    conn_pool_lock.insert(read_host_info.clone(), v);
                 },
-                None => {}
+                None => {
+                    info!("12333");
+                }
             }
         }
         info!("{:?}", &tmp_key);
