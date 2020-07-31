@@ -48,19 +48,18 @@ pub struct PlatforNodeInfo{
     pub platform: String,
     pub mgr: bool,
     pub write: String,
-    pub read: Option<Vec<String>>,
+    pub read: Vec<String>,
     pub read_is_alter: bool,
     pub write_is_alter: bool
 }
 impl PlatforNodeInfo{
     fn new(platform: &Platform) -> PlatforNodeInfo{
-        let mut tmp = vec![];
+        let mut read = vec![];
         if let Some(v) = &platform.read{
-            tmp = v.clone();
+            read = v.clone();
         }
-        tmp.push(platform.get_write_host());
-        tmp.sort_by(|a,b|a.to_lowercase().cmp(&b.to_lowercase()));
-        let read = Some(tmp);
+        read.push(platform.get_write_host());
+        read.sort_by(|a,b|a.to_lowercase().cmp(&b.to_lowercase()));
         let mut mgr = false;
         if let Some(v) = platform.mgr{
             mgr = v;
@@ -83,21 +82,38 @@ impl PlatforNodeInfo{
     /// 检查路由是否变动，如果变动则更改且返回true
     fn check(&mut self, route_info: &RouteInfo) -> bool {
         let write = route_info.get_write_host_info();
-        let read = route_info.get_read_host_info(1);
+        let mut read = vec![];
+        if let Some(v) = route_info.get_read_host_info(1){
+            read = v;
+        }
         debug!("{:?}, route_info_read:{:?}, read:{:?}", &self.write,&read, &self.read);
-        if write == self.write && read == self.read{
+        if write == self.write && self.check_read_list(&read){
             return false;
         }
         if write != self.write{
             self.write_is_alter = true;
             self.write = write.clone();
         }
-        if read != self.read {
+        if !self.check_read_list(&read){
             self.read_is_alter = true;
             self.read = read.clone();
         }
         debug!("{:?}", self);
         return true;
+    }
+
+    /// 检查读列表是否相等
+    fn check_read_list(&mut self, read: &Vec<String>) -> bool{
+        return if self.read.len() == read.len() {
+            for i in 0..self.read.len() {
+                if &self.read[i] != &read[i] {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -391,9 +407,8 @@ impl ConnectionsPoolPlatform{
         //读节点变动
         if platfor_node.read_is_alter{
             let mut new_read_list = vec![];
-            if let Some(list) = &platfor_node.read{
-                new_read_list = list.clone();
-            }
+            new_read_list = platfor_node.read.clone();
+
             //new_read_list.push(platfor_node.write.clone());
             //首先进行新增判断
             let mut read_host_lock = self.read.write().await;
@@ -1309,14 +1324,14 @@ impl MysqlConnectionInfo{
 
     /// 获取返回结果
     async fn unpack_text_packet(&mut self, packet: &Vec<u8>) -> Result<Vec<HashMap<String, String>>> {
-        let (packet, header) = self.__send_packet(&packet)?;
+        let (packet, _) = self.__send_packet(&packet)?;
         self.check_packet_is(&packet)?;
         let mut values_info = vec![];   //数据值
         let mut column_info = vec![];   //每个column的信息
 
         let column_count = packet[0];
         for _ in 0..column_count {
-            let (buf, header) = self.get_packet_from_stream().await?;
+            let (buf, _) = self.get_packet_from_stream().await?;
             let column = MetaColumn::new(&buf);
             column_info.push(column);
         }
