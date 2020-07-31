@@ -198,6 +198,7 @@ impl PlatformPool{
     /// 检查mgr主从变化, 这里只对mgr集群进行检测
     async fn check_route_for_mgr(&mut self) -> Result<()>{
         let mut plaform_node_info = self.platform_node_info.clone();
+        info!("{:?}", plaform_node_info);
         for platform_node in &mut plaform_node_info{
             if platform_node.mgr{
                 if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
