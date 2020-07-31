@@ -229,7 +229,8 @@ impl PlatformPool{
     }
 
     async fn alter_platform_pool(&mut self, route_info: &RouteInfo, platform_node: &mut PlatforNodeInfo) -> Result<()>{
-        info!("self.read:{:?}, route_info: {:?}, {:?}", &platform_node.read, &route_info.get_read_host_info(1), &platform_node.check(&route_info));
+        let a = platform_node.check(&route_info);
+        info!("self.read:{:?}, route_info: {:?}, {:?}", &platform_node.read, &route_info.get_read_host_info(1), &a);
         if platform_node.check(&route_info){
             //发生变动， 开始修改连接池
             if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
