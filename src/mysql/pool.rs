@@ -227,6 +227,7 @@ impl PlatformPool{
                 }
             }
         }
+        self.platform_node_info = plaform_node_info;
         Ok(())
     }
 
