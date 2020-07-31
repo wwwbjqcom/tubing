@@ -460,8 +460,14 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 对mgr集群获取节点状态信息
+    ///
+    /// 使用的连接会一直缓存，直到该节点宕机发生异常才会重新获取
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
-        let mut conn_info = self.get_pool(&SqlStatement::Query, &"".to_string()).await?;
+        let cache_key = "mgrclusterrolestate_bbb".to_string();
+        let mut conn_info = self.get_pool(&SqlStatement::Query, &cache_key).await?;
+        if &conn_info.cached == &"".to_string(){
+            conn_info.cached = cache_key;
+        }
         let sql = String::from("select member_host,member_port,member_state,member_role from performance_schema.replication_group_members;");
         let result = conn_info.execute_command(&sql).await?;
         self.return_pool(conn_info, 0).await?;
@@ -508,7 +514,7 @@ impl ConnectionsPoolPlatform{
             }
         }
 
-        mysql_conn.reset_cached().await?;
+        //mysql_conn.reset_cached().await?;
         mysql_conn.reset_conn_default()?;
 
         let mut conn_pool_lock = self.conn_pool.lock().await;
