@@ -198,12 +198,10 @@ impl PlatformPool{
     /// 检查mgr主从变化, 这里只对mgr集群进行检测
     async fn check_route_for_mgr(&mut self) -> Result<()>{
         let mut plaform_node_info = self.platform_node_info.clone();
-        info!("{:?}", plaform_node_info);
         for platform_node in &mut plaform_node_info{
             if platform_node.mgr{
                 if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
                     let new_route_info = platform_pool.get_mgr_cluster_role_state(&platform_node.platform).await?;
-                    info!("{:?}", &new_route_info);
                     if new_route_info.write.host != "".to_string(){
                         self.alter_platform_pool(&new_route_info, platform_node).await?;
                     }
@@ -1309,16 +1307,13 @@ impl MysqlConnectionInfo{
     /// 获取返回结果
     async fn unpack_text_packet(&mut self, packet: &Vec<u8>) -> Result<Vec<HashMap<String, String>>> {
         let (packet, header) = self.__send_packet(&packet)?;
-        debug!("{:?}", header);
         self.check_packet_is(&packet)?;
         let mut values_info = vec![];   //数据值
         let mut column_info = vec![];   //每个column的信息
 
         let column_count = packet[0];
-        debug!("column_count: {}", &column_count);
         for _ in 0..column_count {
             let (buf, header) = self.get_packet_from_stream().await?;
-            debug!("header: {:?}", header);
             let column = MetaColumn::new(&buf);
             column_info.push(column);
         }
@@ -1344,7 +1339,6 @@ impl MysqlConnectionInfo{
             let values = self.unpack_text_value(&buf, &column_info);
             values_info.push(values);
         }
-        debug!("{:?}", &values_info);
         return Ok(values_info);
     }
 

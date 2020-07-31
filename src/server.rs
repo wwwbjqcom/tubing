@@ -74,10 +74,10 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
 
         //创建各业务后端连接池
         let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
-
+        debug!("init_config: {:?}", &platform_pool.platform_node_info);
         let mut user_pri = AllUserPri::new(&platform_pool);
         user_pri.get_pris(&all_user_info).await?;
-        
+
         let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
         if let Some(l_port) = config.port{
             port = l_port;
