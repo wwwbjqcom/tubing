@@ -119,11 +119,12 @@ impl HandShake {
         debug!("{:?}",&auth_password);
         drop(user_info_lock);
 
-
+        let mut password = vec![];
+        let mut auth_name = "".to_string();
         //获取密码
         if self.capabilities & (CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA as u32) > 0 {
             let password_len = response.buf[offset..offset+1][0];
-            let password = response.buf[offset+1..offset+1+ password_len as usize].to_vec();
+            password = response.buf[offset+1..offset+1+ password_len as usize].to_vec();
             debug!("offset:{}, password_len:{}, {:?}",&offset, &password_len, &password);
             offset += (1 + password_len) as usize;
 
@@ -155,12 +156,30 @@ impl HandShake {
                     break;
                 }
             }
-            let auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
-            println!("{:?}", auth_name);
+            auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
+        }
+        if &password != &self.get_password_auth(&auth_name, &user_name, platform_pool).await?{
+            //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
+            return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
         }
 
-
         return Ok((self.ok_packet(status_flags).await?, db, client_flags, user_name));
+    }
+
+    async fn get_password_auth(&self, auth_name: &String, user_name: &String, platform_pool: &PlatformPool) -> Result<Vec<u8>> {
+        let user_info_lock = platform_pool.user_info.read().await;
+        let auth_password = user_info_lock.get_user_password(user_name);
+        let new_auth_password;
+        debug!("{}", &auth_password);
+        if auth_name != &"".to_string(){
+            new_auth_password = get_sha1_pass(&auth_password, auth_name, &self.auth_plugin_data.clone().into_bytes());
+        }else {
+            new_auth_password = get_sha1_pass(&auth_password, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
+        }
+
+        debug!("{:?}",&new_auth_password);
+        Ok(new_auth_password)
+
     }
 
     async fn error_packet(&self, error: String) -> Result<Vec<u8>>{
