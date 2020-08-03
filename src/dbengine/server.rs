@@ -7,7 +7,7 @@
 /// 发送handshake包要求验证，并接受到客户端回包之后进行账号密码验证
 ///
 ///
-use crate::dbengine::{CLIENT_BASIC_FLAGS, CLIENT_TRANSACTIONS, CAN_CLIENT_COMPRESS};
+use crate::dbengine::{CLIENT_BASIC_FLAGS, CLIENT_TRANSACTIONS, CAN_CLIENT_COMPRESS, CLIENT_PLUGIN_AUTH};
 use crate::dbengine::{CLIENT_PROTOCOL_41, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA, CLIENT_CONNECT_WITH_DB};
 use crate::dbengine::UTF8MB4_UNICODE_CI;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT};
@@ -126,10 +126,11 @@ impl HandShake {
             let password = response.buf[offset+1..offset+1+ password_len as usize].to_vec();
             debug!("offset:{}, password_len:{}, {:?}",&offset, &password_len, &password);
             offset += (1 + password_len) as usize;
-            if &password != &auth_password{
-                //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
-                return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
-            }
+
+            // if &password != &auth_password{
+            //     //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
+            //     return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
+            // }
         }
 
         if client_flags & CLIENT_CONNECT_WITH_DB as i32 > 0{
@@ -145,6 +146,19 @@ impl HandShake {
                 db = Some(tmp_db)
             }
         }
+
+        if client_flags & CLIENT_PLUGIN_AUTH as i32 > 0 {
+            let mut index= 0 ;
+            for (b,item )in response.buf[offset..].iter().enumerate() {
+                if item == &0x00 {
+                    index = b;
+                    break;
+                }
+            }
+            let auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
+            println!("{:?}", auth_name);
+        }
+
 
         return Ok((self.ok_packet(status_flags).await?, db, client_flags, user_name));
     }
