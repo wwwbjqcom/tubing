@@ -142,7 +142,7 @@ impl HandShake {
             if tmp_db != String::from(""){
                 db = Some(tmp_db)
             }
-            debug!("db: {}, offset:{}", &db, &offset);
+            debug!("db: {:?}, offset:{}", &db, &offset);
         }
 
         if client_flags & CLIENT_PLUGIN_AUTH as i32 > 0 {
