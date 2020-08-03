@@ -20,6 +20,7 @@ use crate::mysql::scramble::get_sha1_pass;
 use tracing::{debug, info};
 use crate::readvalue;
 use crate::mysql::pool::PlatformPool;
+use tracing::field::debug;
 
 #[derive(Debug)]
 pub struct HandShake {
@@ -118,7 +119,7 @@ impl HandShake {
         let mut password = vec![];
         let mut auth_name = "".to_string();
         //获取密码
-        if self.capabilities & (CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA as u32) <= 0 {
+        if self.capabilities & (CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA as u32) > 0 {
             let password_len = response.buf[offset..offset+1][0];
             password = response.buf[offset+1..offset+1+ password_len as usize].to_vec();
             debug!("offset:{}, password_len:{}, {:?}",&offset, &password_len, &password);
@@ -157,8 +158,8 @@ impl HandShake {
             debug!("auth_name: {}, offset:{}", &auth_name, &offset);
         }
         let my_auth_password = self.get_password_auth(&auth_name, &user_name, platform_pool).await?;
-        info!("client: {:?}", &password);
-        info!("server: {:?}", &my_auth_password);
+        debug!("client: {:?}", &password);
+        debug!("server: {:?}", &my_auth_password);
 
         if &password != &my_auth_password{
             //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
@@ -169,7 +170,7 @@ impl HandShake {
     }
 
     async fn get_password_auth(&self, auth_name: &String, user_name: &String, platform_pool: &PlatformPool) -> Result<Vec<u8>> {
-        info!("{}", auth_name);
+        debug!("{}", auth_name);
         let user_info_lock = platform_pool.user_info.read().await;
         let auth_password = user_info_lock.get_user_password(user_name);
         let new_auth_password;
