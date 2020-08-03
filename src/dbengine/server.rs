@@ -17,7 +17,7 @@ use crate::mysql::Result;
 use byteorder::{WriteBytesExt, LittleEndian};
 use crate::dbengine::client::ClientResponse;
 use crate::mysql::scramble::get_sha1_pass;
-use tracing::{debug};
+use tracing::{debug, info};
 use crate::readvalue;
 use crate::mysql::pool::PlatformPool;
 
@@ -158,6 +158,9 @@ impl HandShake {
             }
             auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
         }
+        info!("{:?}", &password);
+        info!("{:?}", &self.get_password_auth(&auth_name, &user_name, platform_pool).await?);
+
         if &password != &self.get_password_auth(&auth_name, &user_name, platform_pool).await?{
             //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
             return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
@@ -167,6 +170,7 @@ impl HandShake {
     }
 
     async fn get_password_auth(&self, auth_name: &String, user_name: &String, platform_pool: &PlatformPool) -> Result<Vec<u8>> {
+        info!("{}", auth_name);
         let user_info_lock = platform_pool.user_info.read().await;
         let auth_password = user_info_lock.get_user_password(user_name);
         let new_auth_password;
