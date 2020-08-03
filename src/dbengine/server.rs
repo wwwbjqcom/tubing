@@ -113,10 +113,6 @@ impl HandShake {
             //handler.send(&self.error_packet(String::from("wrong username")).await?).await?;
             return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags, user_name));
         }
-        let auth_password = user_info_lock.get_user_password(&user_name);
-        debug!("{}", &auth_password);
-        let auth_password = get_sha1_pass(&auth_password, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
-        debug!("{:?}",&auth_password);
         drop(user_info_lock);
 
         let mut password = vec![];
