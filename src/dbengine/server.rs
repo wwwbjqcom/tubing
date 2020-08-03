@@ -142,6 +142,7 @@ impl HandShake {
             if tmp_db != String::from(""){
                 db = Some(tmp_db)
             }
+            debug!("db: {}, offset:{}", &db, &offset);
         }
 
         if client_flags & CLIENT_PLUGIN_AUTH as i32 > 0 {
@@ -153,6 +154,7 @@ impl HandShake {
                 }
             }
             auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
+            debug!("auth_name: {}, offset:{}", &auth_name, &offset);
         }
         let my_auth_password = self.get_password_auth(&auth_name, &user_name, platform_pool).await?;
         info!("client: {:?}", &password);
