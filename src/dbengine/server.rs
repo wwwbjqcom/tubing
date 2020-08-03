@@ -158,10 +158,11 @@ impl HandShake {
             }
             auth_name = readvalue::read_string_value(&response.buf[offset..offset + index]);
         }
-        info!("{:?}", &password);
-        info!("{:?}", &self.get_password_auth(&auth_name, &user_name, platform_pool).await?);
+        let my_auth_password = self.get_password_auth(&auth_name, &user_name, platform_pool).await?;
+        info!("client: {:?}", &password);
+        info!("server: {:?}", &my_auth_password);
 
-        if &password != &self.get_password_auth(&auth_name, &user_name, platform_pool).await?{
+        if &password != &my_auth_password{
             //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
             return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
         }
