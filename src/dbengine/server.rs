@@ -45,7 +45,7 @@ impl HandShake {
             .collect();
         HandShake {
             code: 10,
-            server_version: String::from("5.5.65-MysqlBus"),
+            server_version: String::from(crate::VERSION),
             thread_id: rand::thread_rng().gen::<u32>(),
             auth_plugin_data,
             capabilities: capabilities as u32,
