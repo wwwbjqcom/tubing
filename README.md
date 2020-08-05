@@ -38,7 +38,7 @@
  2. platform: 代表该用户操作的是那个platform， 一个用户只能有一个platform且该platform必须存在于上面的platform_sublist
 
  ## 管理命令:
- 没有专用的管理端或者管理端口，直接使用mysql命令行工具(暂时只支持8.0以下版本的命令行工具)进行连接并通过set platform=admin命令设置就可以。
+ 没有专用的管理端或者管理端口，直接使用mysql命令行工具进行连接并通过set platform=admin命令设置就可以。
 
     MySQL [(none)]> set platform=admin;   
     Query OK, 0 rows affected (0.00 sec)
@@ -86,6 +86,11 @@
  5. set命令只支持设置names、autocommit、platfrom
  6. 中间件只做流量路由及连接池管理，且内部都是异步处理，如果需要kill线程，需直接在后端进行操作。
  7. 启动时会加载配置所有用户的权限信息， 业务端操作时权限由中间件完成，如果后端mysql用户权限变动需重启中间件
+## 限制条件
+ 1. set命令仅支持set names/autocommit/platform三个命令
+ 2. 仅支持单条sql语句，如果以; 分隔传入多条语句会引发不可知问题
+ 3. 连接成功后首先要执行set platform命令才能正常运作
+ 4. mgr仅支持单主模式
 
 ## 特别提醒
 该工具仅个人爱好及解决未来公司问题所开发， 现在还在初级阶段，仅供学习及测试，严禁使用于生产。
