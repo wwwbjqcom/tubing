@@ -22,7 +22,7 @@ use crate::readvalue;
 use crate::mysql::pool::PlatformPool;
 use tracing::field::debug;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HandShake {
     pub code: u8,                   //协议版本好，v10
     pub server_version: String,     //服务端版本号
@@ -45,7 +45,7 @@ impl HandShake {
             .collect();
         HandShake {
             code: 10,
-            server_version: String::from("5.7.1"),
+            server_version: String::from("5.5.65-MariaDB"),
             thread_id: rand::thread_rng().gen::<u32>(),
             auth_plugin_data,
             capabilities: capabilities as u32,
@@ -93,7 +93,7 @@ impl HandShake {
     }
 
     pub async fn auth(&self, response: &ClientResponse,
-                      status_flags: u16, platform_pool: &PlatformPool) -> Result<(Vec<u8>, Option<String>, i32, String)>{
+                      status_flags: u16, platform_pool: &PlatformPool) -> Result<(Vec<u8>, Option<String>, i32, String, bool)>{
         let client_flags = readvalue::read_i32(&response.buf);
 
         let mut offset = 32;
@@ -112,7 +112,7 @@ impl HandShake {
         let user_info_lock = platform_pool.user_info.read().await;
         if !user_info_lock.check_user_name(&user_name){
             //handler.send(&self.error_packet(String::from("wrong username")).await?).await?;
-            return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags, user_name));
+            return Ok((self.error_packet(String::from("wrong username")).await?, db, client_flags, user_name, false));
         }
         drop(user_info_lock);
 
@@ -160,13 +160,35 @@ impl HandShake {
         let my_auth_password = self.get_password_auth(&auth_name, &user_name, platform_pool).await?;
         debug!("client: {:?}", &password);
         debug!("server: {:?}", &my_auth_password);
+        if password.len() == 0{
+            //switch request
+            return Ok((self.switch_request().await, db, client_flags, user_name, true));
+        }
 
         if &password != &my_auth_password{
             //handler.send(&self.error_packet(String::from("wrong password")).await?).await?;
-            return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name));
+            return Ok((self.error_packet(String::from("wrong password")).await?, db, client_flags, user_name, false));
         }
 
-        return Ok((self.ok_packet(status_flags).await?, db, client_flags, user_name));
+        return Ok((self.ok_packet(status_flags).await?, db, client_flags, user_name, false));
+    }
+
+    pub async fn switch_auth(&self, response: &ClientResponse, platform_pool: &PlatformPool, user_name: &String, status_flags: u16) -> Result<Vec<u8>> {
+        let my_auth_password = self.get_password_auth(&self.auth_plugin_name, &user_name, platform_pool).await?;
+        let password = response.buf.to_vec();
+        if my_auth_password != password{
+            return Ok(self.error_packet(String::from("wrong password")).await?);
+        }
+        return Ok(self.ok_packet(status_flags).await?);
+    }
+
+    async fn switch_request(&self) -> Vec<u8> {
+        let mut switch: Vec<u8> = vec![];
+        switch.push(0xfe);
+        switch.extend(self.auth_plugin_name.as_bytes());
+        switch.push(0);
+        switch.extend(self.auth_plugin_data.as_bytes());
+        switch
     }
 
     async fn get_password_auth(&self, auth_name: &String, user_name: &String, platform_pool: &PlatformPool) -> Result<Vec<u8>> {

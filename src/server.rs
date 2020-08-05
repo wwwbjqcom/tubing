@@ -343,6 +343,9 @@ pub enum  ConnectionStatus {
     /// verification phase
     /// when exchanging account password agreement with the server
     Auth(HandShake),
+    /// auth switch
+    Switch(HandShake),
+
     ///
     /// authentication failed
     Failure,
@@ -493,9 +496,19 @@ impl Handler {
             debug!("{}",crate::info_now_time(String::from("check_seq")));
             match &self.status {
                 ConnectionStatus::Auth(handshake) => {
-                    let (buf, db, flags, user_name)= handshake.auth(&response,
+                    let (buf, db, flags, user_name, switch)= handshake.auth(&response,
                                                                     self.get_status_flags(),
                                                                     &self.platform_pool).await?;
+                    if switch{
+                        self.status = ConnectionStatus::Switch(handshake.clone());
+                        self.client_flags = flags;
+                        self.db = db;
+                        self.user_name = user_name;
+                        self.send(&buf).await?;
+                        self.seq += 1;
+                        continue;
+                    }
+
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                         self.client_flags = flags;
@@ -507,6 +520,17 @@ impl Handler {
                     self.send(&buf).await?;
                     self.reset_seq();
                 }
+                ConnectionStatus::Switch(handshake) => {
+                    let buf = handshake.switch_auth(&response, &self.platform_pool, &self.user_name, self.get_status_flags()).await?;
+                    self.send(&buf).await?;
+                    if &buf[0] == &0{
+                        self.status = ConnectionStatus::Connected;
+                    }else {
+                        self.status = ConnectionStatus::Failure;
+                    }
+                    self.reset_seq();
+                }
+
                 ConnectionStatus::Connected => {
                     debug!("{}",crate::info_now_time(String::from("start execute")));
                     if let Err(e) = response.exec(&mut self).await{
