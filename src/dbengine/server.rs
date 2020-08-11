@@ -143,6 +143,7 @@ impl HandShake {
             if tmp_db != String::from(""){
                 db = Some(tmp_db)
             }
+            offset += index;
             debug!("db: {:?}, offset:{}", &db, &offset);
         }
 

@@ -646,7 +646,6 @@ impl Handler {
     }
 }
 
-
 impl Drop for Handler {
     fn drop(&mut self) {
         // Add a permit back to the semaphore.
