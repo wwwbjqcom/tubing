@@ -239,13 +239,13 @@ impl TextResponse{
 
         self.packet_eof().await;
         self.packet_result_text(show_struct, show_state).await;
-        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
-            debug!("eof packet");
-            let tmp = self.eof().await;
-            self.packet_list.push(tmp);
-        }else {
+        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) >= 0 {
             debug!("ok packet");
             let tmp = self.ok().await;
+            self.packet_list.push(tmp);
+        }else {
+            debug!("eof packet");
+            let tmp = self.eof().await;
             self.packet_list.push(tmp);
         }
         Ok(())
@@ -299,7 +299,7 @@ impl TextResponse{
 
     async fn packet_eof(&mut self) {
         let packet = self.eof().await;
-        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
+        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) < 0{
             self.packet_list.push(packet);
         }
     }
