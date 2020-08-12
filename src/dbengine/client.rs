@@ -15,7 +15,7 @@ use std::borrow::{Borrow};
 use tracing::{error, debug};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
-use tracing::field::debug;
+use tracing::field::{debug, info};
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
 use crate::mysql::privileges::CheckPrivileges;
@@ -109,12 +109,15 @@ impl ClientResponse {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
                 debug!("show_state: {:?}", &show_state);
                 //self.send_ok_packet(handler).await?;
+                debug!("packet text response");
                 let mut text_response = TextResponse::new(handler.client_flags.clone());
                 if let Err(e) = text_response.packet(&show_struct, &show_state).await{
+                    info!("packet text response error: {:?},", &e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                 }else {
                     for packet in text_response.packet_list{
                         //发送数据包
+                        debug!("send text packet");
                         handler.send(&packet).await?;
                         handler.seq_add();
                     }
