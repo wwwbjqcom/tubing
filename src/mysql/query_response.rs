@@ -243,7 +243,7 @@ impl TextResponse{
 
         if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
             debug!("ok packet");
-            let tmp = self.ok().await;
+            let tmp = self.ok_eof().await;
             self.packet_list.push(tmp);
         }else {
             debug!("eof packet");
@@ -318,6 +318,16 @@ impl TextResponse{
     }
 
     async fn eof(&mut self) -> Vec<u8> {
+        let mut packet = vec![];
+        packet.push(0xfe);
+        if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
+            packet.extend(vec![0,0]);
+            packet.extend(readvalue::write_u16(SERVER_STATUS_IN_TRANS as u16));
+        }
+        packet
+    }
+
+    async fn ok_eof(&mut self) -> Vec<u8> {
         let mut packet = vec![];
         packet.push(0);
         if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
