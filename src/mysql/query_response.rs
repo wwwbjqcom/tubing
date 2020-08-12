@@ -241,18 +241,15 @@ impl TextResponse{
 
         self.packet_result_text(show_struct, show_state).await;
 
+        if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
+            debug!("ok packet");
+            let tmp = self.ok().await;
+            self.packet_list.push(tmp);
+        }
+        debug!("eof packet");
         let tmp = self.eof().await;
         self.packet_list.push(tmp);
 
-        // if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
-        //     debug!("ok packet");
-        //     let tmp = self.ok().await;
-        //     self.packet_list.push(tmp);
-        // }else {
-        //     debug!("eof packet");
-        //     let tmp = self.eof().await;
-        //     self.packet_list.push(tmp);
-        // }
         Ok(())
     }
 
