@@ -236,7 +236,7 @@ impl TextResponse{
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
             }
         }
-        info!("{}", self.client_flags & CLIENT_DEPRECATE_EOF as i32);
+        debug!("{}", self.client_flags & CLIENT_DEPRECATE_EOF as i32);
         self.packet_eof().await;
         self.packet_result_text(show_struct, show_state).await;
         if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) >= 0 {
