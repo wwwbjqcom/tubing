@@ -131,10 +131,12 @@ pub struct PlatformPool{
 impl PlatformPool{
     pub fn new(conf: &MyConfig) -> Result<(PlatformPool,AllUserInfo)>{
         let all_user_info = AllUserInfo::new(conf);
+        debug!("{:?}", &all_user_info);
         let user_info = Arc::new(RwLock::new(all_user_info.clone()));
         let mut pool = HashMap::new();
         let mut platform_node_info = vec![];
         for platform in &conf.platform{
+            debug!("create pool for {}", &platform.platform);
             let platform_pool = ConnectionsPoolPlatform::new(platform)?;
             pool.insert(platform.platform.clone(), platform_pool);
             platform_node_info.push(PlatforNodeInfo::new(platform));
@@ -353,11 +355,13 @@ impl ConnectionsPoolPlatform{
     pub fn new(platform_config: &Platform) -> Result<ConnectionsPoolPlatform> {
         let mut conn_pool = HashMap::new();
         let mut my_config = Config::new(platform_config);
+        debug!("node pool config: {:?}", &my_config);
         my_config.host_info = platform_config.get_write_host();
         let mut read_list: Vec<String> = vec![];
 
         //创建主库连接池，并放入conn_pool
         let write_config = my_config.clone();
+        debug!("write node config: {:?}", &write_config);
         let write_pool = ConnectionsPool::new(&write_config)?;
         conn_pool.insert(my_config.host_info.clone(), write_pool);
         read_list.push(my_config.host_info.clone());
@@ -367,11 +371,13 @@ impl ConnectionsPoolPlatform{
         if let Some(a) = &platform_config.read{
             for read_host in a{
                 my_config.host_info = read_host.clone();
+                debug!("read node config: {:?}", &my_config);
                 read_list.push(read_host.clone());
                 let read_pool = ConnectionsPool::new(&my_config)?;
                 conn_pool.insert(my_config.host_info.clone(), read_pool);
             }
         }
+        debug!("read node list:{:?}", &read_list);
         let read = Arc::new(RwLock::new(read_list));
 
         let is_alter = Arc::new(AtomicUsize::new(0));
@@ -756,6 +762,7 @@ pub struct ConnectionsPool {
 
 impl ConnectionsPool{
     pub fn new(conf: &Config) -> Result<ConnectionsPool>{
+        debug!("create connection pool for {}", &conf.host_info);
         let queue = ConnectionInfo::new(conf)?;
         let queued_count = Arc::new(AtomicUsize::new(queue.pool.len()));
         let conn_queue = Arc::new(Mutex::new(queue));

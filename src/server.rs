@@ -30,6 +30,7 @@ use crate::server::mysql_mp::ResponseValue;
 use crate::mysql::privileges::AllUserPri;
 
 pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
+    debug!("config: {:?}", &config);
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
     let (notify_shutdown, _) = broadcast::channel(1);
