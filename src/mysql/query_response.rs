@@ -237,9 +237,7 @@ impl TextResponse{
             }
         }
         debug!("{}", self.client_flags & CLIENT_DEPRECATE_EOF as i32);
-        // self.packet_eof().await;
-        let tmp = self.eof().await;
-        self.packet_list.push(tmp);
+        self.packet_eof().await;
 
         self.packet_result_text(show_struct, show_state).await;
 
