@@ -261,7 +261,7 @@ impl Listener {
                     .take(32)
                     .collect(),
                 user_privileges: self.user_privileges.clone(),
-                auto_commit: false,
+                auto_commit: true,
                 commited: false,
                 client_flags: 0,
                 db: Some("information_schema".to_string()),

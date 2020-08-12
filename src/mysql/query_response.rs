@@ -245,10 +245,11 @@ impl TextResponse{
             debug!("ok packet");
             let tmp = self.ok().await;
             self.packet_list.push(tmp);
+        }else {
+            debug!("eof packet");
+            let tmp = self.eof().await;
+            self.packet_list.push(tmp);
         }
-        debug!("eof packet");
-        let tmp = self.eof().await;
-        self.packet_list.push(tmp);
 
         Ok(())
     }
@@ -318,7 +319,7 @@ impl TextResponse{
 
     async fn eof(&mut self) -> Vec<u8> {
         let mut packet = vec![];
-        packet.push(0xfe);
+        packet.push(0);
         if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
             packet.extend(vec![0,0]);
             packet.extend(readvalue::write_u16(SERVER_STATUS_IN_TRANS as u16));
