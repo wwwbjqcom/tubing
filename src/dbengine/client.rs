@@ -379,11 +379,11 @@ impl ClientResponse {
         }
         let mut eof_num = 0;
         'b: loop {
-            // if eof_num > 1{
-            //     break 'b;
-            // }
+            if eof_num > 1{
+                break 'b;
+            }
             let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-            info!("response:  {:?}, {:?}", &header, &buf);
+            debug!("response:  {:?}, {:?}", &header, &buf);
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 break 'b;
