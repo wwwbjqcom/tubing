@@ -161,6 +161,7 @@ struct ConnectionsRowValue{
     active_thread: String,
     pool_count: String,
     cached_count: String,
+    auth: bool,
 }
 impl ConnectionsRowValue{
     async fn new(platform: &String, host_state: &HostPoolState) -> ConnectionsRowValue{
@@ -172,6 +173,7 @@ impl ConnectionsRowValue{
             active_thread: format!("{}",host_state.active_thread.clone()),
             pool_count: format!("{}",host_state.thread_count.clone()),
             cached_count: format!("{}",host_state.cached_count.clone()),
+            auth: false
         }
     }
 
@@ -184,6 +186,7 @@ impl ConnectionsRowValue{
         packet.extend(packet_one_column_value(self.active_thread.clone()).await);
         packet.extend(packet_one_column_value(self.pool_count.clone()).await);
         packet.extend(packet_one_column_value(self.cached_count.clone()).await);
+        packet.extend(packet_one_column_value(self.auth.clone().to_string()).await);
         packet
     }
 
@@ -196,6 +199,7 @@ impl ConnectionsRowValue{
         packet.push(ColumnDefinition41::show_status_column(&String::from("active_thread"), &LONG).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("pool_count"), &LONG).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("cached_count"), &LONG).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("auth"), &VAR_STRING).await.packet().await);
         packet
     }
 }
@@ -221,7 +225,7 @@ impl TextResponse{
     pub async fn packet(&mut self, show_struct: &ShowStruct, show_state: &ShowState) -> Result<()> {
         match show_struct.command{
             ShowCommand::Connections => {
-                self.packet_column_count(7).await;
+                self.packet_column_count(8).await;
                 self.packet_list.extend(ConnectionsRowValue::packet_column_difinition().await);
             }
             ShowCommand::Questions => {
@@ -327,17 +331,17 @@ impl TextResponse{
         packet
     }
 
-    async fn ok(&mut self) -> Vec<u8> {
-        let mut packet = vec![];
-        packet.push(0); //packet type
-        packet.push(0); //affected_rows
-        packet.push(0); //last_insert_id
-        if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
-            packet.extend(readvalue::write_u16(SERVER_STATUS_IN_TRANS as u16));
-            packet.extend(vec![0,0]);    //warnings
-        }
-        packet
-    }
+    // async fn ok(&mut self) -> Vec<u8> {
+    //     let mut packet = vec![];
+    //     packet.push(0); //packet type
+    //     packet.push(0); //affected_rows
+    //     packet.push(0); //last_insert_id
+    //     if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
+    //         packet.extend(readvalue::write_u16(SERVER_STATUS_IN_TRANS as u16));
+    //         packet.extend(vec![0,0]);    //warnings
+    //     }
+    //     packet
+    // }
 }
 
 //pub async fn test(show_state: &ShowState, show_struct: &ShowStruct, client_flags: &i32) -> Result<Vec<Vec<u8>>>{

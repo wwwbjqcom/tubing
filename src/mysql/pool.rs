@@ -38,6 +38,57 @@ use crate::dbengine::admin;
 use crate::mysql::privileges::MetaColumn;
 
 
+// #[derive(Debug)]
+// pub struct PlatformAuth{
+//     platform: String,
+//     auth: Arc<AtomicBool>
+// }
+// impl PlatformAuth{
+//     fn new(platform: &Platform) -> PlatformAuth{
+//         PlatformAuth{
+//             platform: platform.platform.clone(),
+//             auth: Arc::new(AtomicBool::new(platform.auth.clone()))
+//         }
+//     }
+// }
+//
+// #[derive(Debug)]
+// pub struct AllPlatformAuth{
+//     all_platform: Arc<HashMap<String, PlatformAuth>>,
+//     config: MyConfig
+// }
+//
+// impl AllPlatformAuth{
+//     pub fn new(conf: &MyConfig) -> AllPlatformAuth{
+//         let mut all_platform = HashMap::new();
+//         for platform in &conf.platform{
+//             let platform_auth = PlatformAuth::new(platform);
+//             all_plaform.insert(platform.platform.clone(), platform_auth);
+//         }
+//         AllPlatformAuth{ all_platform: Arc::new(all_platform), config: conf.clone() }
+//     }
+//
+//     pub async fn check_auth(&self, client_platform: &String) -> bool{
+//         if let Some(platform_name) = self.config.get_pool_platform(client_platform){
+//             if let Some(platform_auth) = self.all_platform.get(&platform_name){
+//                 if platform_auth.auth.load(Ordering::Relaxed){
+//                     return true
+//                 }
+//             }
+//         }
+//         return false;
+//     }
+//
+//     pub async fn alter_auth(&self, platform: &String, auth: bool){
+//         if let Some(platform_auth) = self.all_platform.get(&platform_name){
+//             if platform_auth.auth.store(auth){
+//                 return true
+//             }
+//         }
+//     }
+// }
+
+
 enum HealthType{
     Ping,
     Maintain
@@ -472,7 +523,7 @@ impl ConnectionsPoolPlatform{
     /// 可能会在每个节点缓存一条连接， 这样可以保证在连接使用完的最坏情况下依然能检查状态
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
         let cache_key = "mgrclusterrolestate_bbb".to_string();
-        let mut conn_info = self.get_pool(&SqlStatement::Query, &cache_key).await?;
+        let (mut conn_info, _) = self.get_pool(&SqlStatement::Query, &cache_key).await?;
         if &conn_info.cached == &"".to_string(){
             conn_info.cached = cache_key;
         }
@@ -492,7 +543,7 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
-    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String) -> Result<MysqlConnectionInfo> {
+    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
         match sql_type{
             SqlStatement::AlterTable |
             SqlStatement::Create |
@@ -512,15 +563,7 @@ impl ConnectionsPoolPlatform{
 
     /// 归还连接到对应节点的连接池中
     pub async fn return_pool(&mut self, mut mysql_conn: MysqlConnectionInfo, seq: u8) -> Result<()>{
-        // 如果有事务存在则回滚， 回滚失败会结束该连接
-        if mysql_conn.is_transaction{
-            mysql_conn.is_transaction = false;
-            if let Err(e) = mysql_conn.rollback_no_commit(seq){
-                info!("{:?}", e.to_string());
-                mysql_conn.close();
-                return Ok(())
-            }
-        }
+        mysql_conn.check_rollback(seq).await?;
 
         //mysql_conn.reset_cached().await?;
         mysql_conn.reset_conn_default()?;
@@ -538,15 +581,15 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 获取主节点连接
-    async fn get_write_conn(&mut self, key: &String) -> Result<MysqlConnectionInfo>{
+    async fn get_write_conn(&mut self, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let write_host_lock = self.write.read().await;
         for write_host_info in &*write_host_lock{
             match conn_pool_lock.remove(write_host_info){
                 Some(mut conn_pool) => {
                     let conn_info = conn_pool.get_pool(key).await?;
-                    conn_pool_lock.insert(write_host_info.clone(), conn_pool);
-                    return Ok(conn_info);
+                    conn_pool_lock.insert(write_host_info.clone(), conn_pool.clone());
+                    return Ok((conn_info, conn_pool));
                 }
                 None => {}
             }
@@ -557,7 +600,7 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 通过最少连接数获取连接
-    async fn get_read_conn(&mut self, key: &String) -> Result<MysqlConnectionInfo>{
+    async fn get_read_conn(&mut self, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
 
@@ -600,8 +643,8 @@ impl ConnectionsPoolPlatform{
                 match conn_pool_lock.remove(&v){
                     Some(mut conn_pool) => {
                         let conn_info = conn_pool.get_pool(key).await?;
-                        conn_pool_lock.insert(v.clone(), conn_pool);
-                        return Ok(conn_info);
+                        conn_pool_lock.insert(v.clone(), conn_pool.clone());
+                        return Ok((conn_info, conn_pool));
                     }
                     None => {}
                 }
@@ -1073,6 +1116,12 @@ impl ConnectionsPool{
         tmp
     }
 
+    pub async fn auth_save(&self, sql: &String) {
+        if self.auth.load(Ordering::Relaxed){
+            info!("{:?}",sql);
+        }
+    }
+
 }
 
 #[derive(Debug)]
@@ -1166,10 +1215,10 @@ impl MysqlConnectionInfo{
 //        Ok(())
 //    }
 
-    pub async fn reset_cached(&mut self) -> Result<()>{
-        self.cached = "".to_string();
-        Ok(())
-    }
+    // pub async fn reset_cached(&mut self) -> Result<()>{
+    //     self.cached = "".to_string();
+    //     Ok(())
+    // }
 
     /// send packet and return response packet
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
@@ -1466,6 +1515,20 @@ impl MysqlConnectionInfo{
         }
 
         return values_info;
+    }
+
+
+    pub async fn check_rollback(&mut self, seq: u8) -> Result<()> {
+        // 如果有事务存在则回滚， 回滚失败会结束该连接
+        if self.is_transaction{
+            self.is_transaction = false;
+            if let Err(e) = self.rollback_no_commit(seq){
+                info!("{:?}", e.to_string());
+                self.close();
+                return Ok(())
+            }
+        }
+        return Ok(())
     }
 }
 

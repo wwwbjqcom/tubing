@@ -17,10 +17,9 @@ use crate::mysql::Result;
 use byteorder::{WriteBytesExt, LittleEndian};
 use crate::dbengine::client::ClientResponse;
 use crate::mysql::scramble::get_sha1_pass;
-use tracing::{debug, info};
+use tracing::{debug};
 use crate::readvalue;
 use crate::mysql::pool::PlatformPool;
-use tracing::field::debug;
 
 #[derive(Debug, Clone)]
 pub struct HandShake {

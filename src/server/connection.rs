@@ -11,6 +11,7 @@ use tokio::net::TcpStream;
 use byteorder::{WriteBytesExt, LittleEndian};
 use tracing::{debug};
 
+
 /// Send and receive `Frame` values from a remote peer.
 ///
 /// When implementing networking protocols, a message on that protocol is
@@ -34,7 +35,7 @@ pub(crate) struct Connection {
     // currently requires you to empty its buffer before you can ask it to
     // retrieve more data from the underlying stream, so we have to manually
     // implement buffering. This should be fixed in Tokio v0.3.
-    buffer: BytesMut,
+    buffer: BytesMut
 }
 
 impl Connection {
@@ -44,7 +45,7 @@ impl Connection {
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
-            buffer: BytesMut::with_capacity(60 * 1024 * 1024),
+            buffer: BytesMut::with_capacity(60 * 1024 * 1024)
         }
     }
 

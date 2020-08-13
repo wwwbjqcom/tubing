@@ -207,6 +207,7 @@ impl ClientResponse {
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
                 handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a, handler.seq.clone()).await?;
+                handler.per_conn_info.check_auth_save(&sql).await;
             }
         }
 

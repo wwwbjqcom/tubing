@@ -1,4 +1,4 @@
-use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPoolPlatform};
+use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPoolPlatform, ConnectionsPool};
 use std::time::Duration;
 use crate::mysql::Result;
 use tokio::time::delay_for;
@@ -9,6 +9,7 @@ use crate::MyError;
 #[derive(Debug)]
 pub struct PerMysqlConn{
     pub conn_info: Option<MysqlConnectionInfo>,
+    pub conn_pool: Option<ConnectionsPool>,
     pub conn_state: bool,
     pub cur_db: String,
     pub cur_autocommit: bool
@@ -16,7 +17,7 @@ pub struct PerMysqlConn{
 
 impl PerMysqlConn {
     pub fn new() -> PerMysqlConn {
-        PerMysqlConn{ conn_info: None, conn_state: false, cur_db: "information_schema".to_string(), cur_autocommit: false }
+        PerMysqlConn{ conn_info: None, conn_pool: None, conn_state: false, cur_db: "information_schema".to_string(), cur_autocommit: false }
     }
 
     /// 检查连接空闲状态， 空闲超过指定时间且无事务操作则归还连接到连接池
@@ -49,9 +50,10 @@ impl PerMysqlConn {
                     self.check_default_db_and_autocommit(db, auto_commit).await?;
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
-                    let new_conn = conn.try_clone()?;
-                    pool.return_pool(new_conn, seq).await?;
-                    self.conn_state = false;
+                    // let new_conn = conn.try_clone()?;
+                    self.return_connection(seq).await?;
+                    // pool.return_pool(new_conn, seq).await?;
+                    // self.conn_state = false;
                     self.check_get(pool, key, db, auto_commit, sql_type).await?;
                 }
             }
@@ -59,14 +61,21 @@ impl PerMysqlConn {
         Ok(())
     }
 
-
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>, auto_commit: &bool, sql_type: &SqlStatement) -> Result<()>{
-        let conn = pool.get_pool(sql_type,key).await?;
+        let (conn, conn_pool) = pool.get_pool(sql_type,key).await?;
         //let conn = pool.get_pool(key).await?;
         self.conn_info = Some(conn);
+        self.conn_pool = Some(conn_pool);
         self.set_default_info(db, auto_commit).await?;
         self.conn_state = true;
         Ok(())
+    }
+
+    /// 判断是否开启审计，开启则打印sql
+    pub async fn check_auth_save(&mut self, sql: &String) {
+        if let Some(conn_pool) = &self.conn_pool{
+            conn_pool.auth_save(sql).await;
+        }
     }
 
     /// 检查是否存在未提交事务
@@ -141,12 +150,31 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    pub async fn return_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()> {
+    // pub async fn return_connection(&mut self, pool: &mut ConnectionsPoolPlatform, seq: u8) -> Result<()> {
+    //     if let Some(conn) = &mut self.conn_info{
+    //         let new_conn = conn.try_clone()?;
+    //         if let Some(conn_pool) = &mut self.conn_pool{
+    //             conn_pool.return_pool();
+    //         }
+    //         pool.return_pool(new_conn, seq).await?;
+    //         self.conn_info = None;
+    //         self.conn_state = false;
+    //     }
+    //     Ok(())
+    // }
+
+    pub async fn return_connection(&mut self, seq: u8) -> Result<()> {
         if let Some(conn) = &mut self.conn_info{
-            let new_conn = conn.try_clone()?;
-            pool.return_pool(new_conn, seq).await?;
+            let mut new_conn = conn.try_clone()?;
+            // 如果有事务存在则回滚， 回滚失败会结束该连接
+            new_conn.check_rollback(seq).await?;
+
+            if let Some(conn_pool) = &mut self.conn_pool{
+                conn_pool.return_pool(new_conn).await?;
+            }
             self.conn_info = None;
             self.conn_state = false;
+            self.conn_pool = None;
         }
         Ok(())
     }
@@ -155,6 +183,7 @@ impl PerMysqlConn {
     pub async fn reset_connection(&mut self) -> Result<()>{
         self.conn_info = None;
         self.conn_state = false;
+        self.conn_pool = None;
         Ok(())
     }
 
