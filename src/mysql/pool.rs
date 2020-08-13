@@ -848,7 +848,6 @@ impl ConnectionsPool{
                 self.max_thread_count.store(value.clone(), Ordering::Relaxed);
             }
             admin::SetVariables::Auth(value) => {
-                info!("{}", value);
                 if value == &0{
                     self.auth.store(false, Ordering::Relaxed);
                 }else {
@@ -953,6 +952,7 @@ impl ConnectionsPool{
 
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
+        info!("{:?}", self.auth.load(Ordering::Relaxed));
         admin::HostPoolState{
             host_info: host_info.clone(),
             com_select: self.com_select.load(Ordering::Relaxed),

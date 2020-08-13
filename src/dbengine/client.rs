@@ -97,7 +97,6 @@ impl ClientResponse {
     pub async fn admin(&self, sql: &String, handler: &mut Handler) -> Result<()> {
         let admin_sql = AdminSql::Null;
         let admin_sql = admin_sql.parse_sql(sql).await?;
-        info!("{:?}", admin_sql);
         match admin_sql{
             AdminSql::Set(set_struct) => {
                 if let Err(e) = handler.platform_pool.alter_pool_thread(&set_struct).await {
