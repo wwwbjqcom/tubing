@@ -97,7 +97,6 @@ impl SetStruct{
         if sql_vec.len() < 3{
             self.return_error(String::from("unsupported syntax")).await?;
         }
-        info!("{:?}", &sql_vec);
         match sql_vec[1].as_ref(){
             "min_thread" => {
                 self.parse_value(sql_vec, SetVariables::MinThread(0)).await?;

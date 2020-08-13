@@ -853,7 +853,6 @@ impl ConnectionsPool{
                 }else {
                     self.auth.store(true, Ordering::Relaxed);
                 }
-                info!("{:?}", self.auth.load(Ordering::Relaxed));
             }
 
             _ => {
@@ -952,7 +951,6 @@ impl ConnectionsPool{
 
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
-        info!("{:?}", self.auth.load(Ordering::Relaxed));
         admin::HostPoolState{
             host_info: host_info.clone(),
             com_select: self.com_select.load(Ordering::Relaxed),

@@ -173,7 +173,7 @@ impl ConnectionsRowValue{
             active_thread: format!("{}",host_state.active_thread.clone()),
             pool_count: format!("{}",host_state.thread_count.clone()),
             cached_count: format!("{}",host_state.cached_count.clone()),
-            auth: false
+            auth: host_state.auth.clone()
         }
     }
 
