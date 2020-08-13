@@ -848,11 +848,13 @@ impl ConnectionsPool{
                 self.max_thread_count.store(value.clone(), Ordering::Relaxed);
             }
             admin::SetVariables::Auth(value) => {
+                info!("{}", value);
                 if value == &0{
                     self.auth.store(false, Ordering::Relaxed);
                 }else {
                     self.auth.store(true, Ordering::Relaxed);
                 }
+                info!("{:?}", self.auth.load(Ordering::Relaxed));
             }
 
             _ => {
