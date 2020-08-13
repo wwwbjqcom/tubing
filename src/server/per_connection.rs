@@ -72,9 +72,9 @@ impl PerMysqlConn {
     }
 
     /// 判断是否开启审计，开启则打印sql
-    pub async fn check_auth_save(&mut self, sql: &String) {
+    pub async fn check_auth_save(&mut self, sql: &String, host: &String) {
         if let Some(conn_pool) = &self.conn_pool{
-            conn_pool.auth_save(sql).await;
+            conn_pool.auth_save(sql, host).await;
         }
     }
 

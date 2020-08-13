@@ -1116,9 +1116,9 @@ impl ConnectionsPool{
         tmp
     }
 
-    pub async fn auth_save(&self, sql: &String) {
+    pub async fn auth_save(&self, sql: &String, host: &String) {
         if self.auth.load(Ordering::Relaxed){
-            info!("{:?}",sql);
+            info!("{:?} -> {:?}",host, sql);
         }
     }
 
