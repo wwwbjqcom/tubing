@@ -7,7 +7,7 @@ use crate::mysql::Result;
 use crate::MyError;
 use tracing::{debug, info};
 
-
+#[derive(Debug)]
 pub enum ShowCommand{
     Status,
     Connections,
@@ -15,6 +15,7 @@ pub enum ShowCommand{
     Null
 }
 
+#[derive(Debug)]
 pub struct ShowStruct{
     pub command: ShowCommand,
     pub platform: Option<String>
@@ -58,6 +59,7 @@ impl ShowStruct{
 
 }
 
+#[derive(Debug)]
 pub enum SetVariables{
     MaxThread(usize),
     MinThread(usize),
@@ -83,6 +85,7 @@ impl SetVariables{
     }
 }
 
+#[derive(Debug)]
 pub struct SetStruct{
     pub set_variables: SetVariables,
     pub platform: Option<String>,
@@ -167,6 +170,7 @@ impl SetStruct{
 
 }
 
+#[derive(Debug)]
 pub enum AdminSql{
     Show(ShowStruct),
     Set(SetStruct),
