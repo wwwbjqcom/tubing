@@ -3,10 +3,11 @@
 @datetime: 2020/5/30
 */
 use tracing::{debug};
+use std::cmp::PartialEq;
 
 
 /// 解析sql类型
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SqlStatement {
     SetVariable(String, String),
     Query,              //select、with
@@ -63,7 +64,28 @@ impl SqlStatement{
         let mut list = vec![];
         for (index, i) in sql_vec.iter().enumerate(){
             if i == "from" || i == "join" || i == "use" {
-                list.push(sql_vec[index+1].clone());
+                if !sql_vec[index+1].starts_with("(") {
+                    let tmp = sql_vec[index+1].clone();
+                    let mut b = tmp.chars();
+                    let mut aa = String::from("");
+                    'a: loop {
+                        if let Some(c) = b.next(){
+                            if c.to_string() == ")" {
+                                list.push(aa.clone());
+                                break 'a;
+                            }else if c.to_string() != ","{
+                                aa.push(c);
+                            }else {
+                                list.push(aa.clone());
+                                aa = String::from("");
+                            }
+                        }else {
+                            list.push(aa.clone());
+                            break 'a;
+                        }
+                    }
+                    //list.push(sql_vec[index+1].clone().replace(")", ""));
+                }
             }
         }
         list
@@ -106,5 +128,63 @@ impl SqlStatement{
             return SqlStatement::SetVariable(sql_vec[1].clone(), sql_vec[2].to_string());
         }
 
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::server::sql_parser::SqlStatement;
+
+    #[test]
+    fn test_parse_sql() {
+        let sql = String::from("select username from user_info order by created limit 1");
+        let (a, b) = SqlStatement::Default.parser(&sql);
+        assert_eq!(SqlStatement::Query,a);
+        println!("{:?}", &a);
+        println!("{:?}", &b);
+    }
+
+    #[test]
+    fn test_parse_sql_set_names() {
+        let sql = String::from("set names utf8mb4");
+        let (a, b) = SqlStatement::Default.parser(&sql);
+        println!("tables_info: {:?}", &b);
+        match a{
+            SqlStatement::SetVariable(c, d) => {
+                println!("set: {} = {}", &c, &d);
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_parse_sql_set_autocommit() {
+        let sql = String::from("set autocommit=1");
+        let (a, b) = SqlStatement::Default.parser(&sql);
+        println!("tables_info: {:?}", &b);
+        match a{
+            SqlStatement::SetVariable(c, d) => {
+                println!("set: {} = {}", &c, &d);
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_parse_join() {
+        let sql = String::from("select a.*,b.id from test a join db1.test b on a.id = b.id where a.id = 10");
+        let (a, b) = SqlStatement::Default.parser(&sql);
+        assert_eq!(SqlStatement::Query,a);
+        println!("{:?}", &a);
+        println!("{:?}", &b);
+    }
+
+    #[test]
+    fn test_parse_sub() {
+        let sql = String::from("select * from (select * from a,b)c");
+        let (a, b) = SqlStatement::Default.parser(&sql);
+        assert_eq!(SqlStatement::Query,a);
+        println!("{:?}", &a);
+        println!("{:?}", &b);
     }
 }

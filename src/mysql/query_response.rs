@@ -330,52 +330,6 @@ impl TextResponse{
         }
         packet
     }
-
-    // async fn ok(&mut self) -> Vec<u8> {
-    //     let mut packet = vec![];
-    //     packet.push(0); //packet type
-    //     packet.push(0); //affected_rows
-    //     packet.push(0); //last_insert_id
-    //     if (self.client_flags & CLIENT_PROTOCOL_41 as i32) > 0{
-    //         packet.extend(readvalue::write_u16(SERVER_STATUS_IN_TRANS as u16));
-    //         packet.extend(vec![0,0]);    //warnings
-    //     }
-    //     packet
-    // }
 }
 
-//pub async fn test(show_state: &ShowState, show_struct: &ShowStruct, client_flags: &i32) -> Result<Vec<Vec<u8>>>{
-//    let mut all_packet = vec![];
-//    let mut packet = vec![];
-//
-//    if (client_flags & CLIENT_OPTIONAL_RESULTSET_METADATA) > 0{
-//        packet.push(RESULTSET_METADATA_FULL);
-//    }
-//    for platform_value in show_state.platform_state{
-//        match show_struct.command{
-//            ShowCommand::Questions => {
-//                let column_count = 6 as u8;
-//                packet.push(column_count);
-//                all_packet.push(packet)
-//            }
-//            ShowCommand::Connections => {
-//                let column_count = 7 as u8;
-//                packet.push(column_count);
-//                all_packet.push(packet)
-//            }
-//            ShowCommand::Status => {
-//                //以字符串形式返回
-//                let column_count = 1 as u8;
-//                packet.push(column_count);
-//                all_packet.push(packet);
-//                let show_column = ColumnDefinition41::show_status_column().await;
-//            }
-//            _ => {
-//                let err = String::from("unsupported syntax");
-//                return Err(Box::new(MyError(err.into())));
-//            }
-//        }
-//    }
-//
-//    Ok(all_packet)
-//}
+

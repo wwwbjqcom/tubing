@@ -395,7 +395,6 @@ impl ClientResponse {
                 }
                 self.query_response(handler, &buf, &mut header, &eof_num, is_eof).await?;
             }
-
         }
         Ok(())
     }
@@ -506,55 +505,6 @@ impl ClientResponse {
         Ok(())
     }
 
-//    /// 判断并初始化默认库，只针对查询/show语句
-//    async fn set_conn_db_for_query(&self, handler: &mut Handler) -> Result<()>{
-//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-//            if conn.cached != String::from(""){
-//                return Ok(())
-//            }
-//            if let Some(db) = &handler.db{
-//                if db != &String::from("information_schema"){
-//                    self.__set_default_db(db.clone(), handler).await?;
-//                }
-//            }
-//            return Ok(())
-//        }
-//        return Err(Box::new(MyError(String::from("lost connection").into())));
-//    }
-
-//    /// 初始化连接状态
-//    async fn set_conn_db_and_autocommit(&self, handler: &mut Handler) -> Result<()>{
-//        if self.check_is_cached(handler)? {
-//            return Ok(());
-//        }
-//        let mut packet = vec![];
-//        packet.push(3 as u8);
-//        let my_db = handler.db.clone();
-//        if let Some(db) = &my_db{
-//            if handler.auto_commit{
-//                self.__set_autocommit(1, handler).await?;
-//            }
-//            if db != &String::from("information_schema"){
-//                self.__set_default_db(db.clone(), handler).await?;
-//            }
-//        }else {
-//            if handler.auto_commit{
-//                self.__set_autocommit(1, handler).await?;
-//            }
-//        }
-//
-//        Ok(())
-//    }
-//
-//    fn check_is_cached(&self, handler: &mut Handler) -> Result<bool> {
-//        if let Some(conn) = &mut handler.per_conn_info.conn_info{
-//            if conn.cached != String::from("") {
-//                return Ok(true);
-//            }
-//            return Ok(false);
-//        }
-//        return Err(Box::new(MyError(String::from("lost connection").into())));
-//    }
 
     async fn __set_default_db(&self, db: String, handler: &mut Handler) -> Result<()> {
         let mut packet = vec![];
@@ -586,20 +536,6 @@ impl ClientResponse {
         return Err(Box::new(MyError(String::from("lost connection").into())));
     }
 
-//    /// 恢复连接为初始化状态
-//    fn reset_conn_db_and_autocommit(&self, handler: &mut Handler, conn: &mut MysqlConnectionInfo) -> Result<()>{
-//        //如果当前连接为自动提交则初始化设置，默认是不自动提交
-//        if handler.auto_commit{
-//            self.__set_autocommit(0, handler)?;
-//        }
-//        //如果当前连接设置的db不为information_schema才初始化db信息
-//        if let Some(db) = &handler.db{
-//            if db != &String::from("information_schema"){
-//                self.__set_default_db(&String::from("information_schema"), conn)?;
-//            }
-//        }
-//        Ok(())
-//    }
 
     /// 检查是否为use db语句
     ///
@@ -627,30 +563,8 @@ impl ClientResponse {
             self.send_ok_packet(handler).await?;
         }
         return Ok(())
-//        }
-//        Ok(false)
     }
 
-//    /// 检查是否为set 语句
-//    ///
-//    /// 因为不需要发送到后端，直接返回OK
-//    async fn check_is_set_names(&self,  sql: &String) -> Result<bool> {
-//        if sql.to_lowercase().starts_with("set"){
-//            let sql = sql.to_lowercase();
-//            let sql_ver = sql.split(" ");
-//            let sql_ver = sql_ver.collect::<Vec<&str>>();
-//            let mut tmp: Vec<String> = vec![];
-//            for i in &sql_ver{
-//                if &i.to_string() != &"".to_string(){
-//                    tmp.push(i.to_string().clone())
-//                }
-//            }
-//            if tmp[1].to_string().to_lowercase() == "names".to_string(){
-//                return Ok(true);
-//            }
-//        }
-//        return Ok(false)
-//    }
 
 
     /// 发送ok packet
