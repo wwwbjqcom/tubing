@@ -437,7 +437,7 @@ impl ClientResponse {
 
     fn check_p(&self, buf: &Vec<u8>, eof_num: i32, header: &PacketHeader) -> (bool, i32) {
         if buf[0] == 0x00{
-            if header.payload < 9{
+            if header.payload < 9 && header.payload > 7{
                 return (true, eof_num + 1);
             }
         }else if buf[0] == 0xfe {
