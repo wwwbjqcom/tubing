@@ -68,9 +68,9 @@ mgr=true
 auth=false
 
 
-#[[user_info]]
-#user="root"
-##前端连接使用的密码,可以随意填写
-#password="root"
-##对应platform模块中的platform_sublist
-#platform="126_3306"
+[[user_info]]
+user="test1"
+#前端连接使用的密码,可以随意填写
+password="test1"
+#对应platform模块中的platform_sublist
+platform="126_3306"
