@@ -1222,6 +1222,7 @@ impl MysqlConnectionInfo{
 
     pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
         self.conn.write_all(packet)?;
+        Ok(())
     }
 
     pub async fn response_for_larger_packet(&mut self) -> Result<(Vec<u8>, PacketHeader)>{

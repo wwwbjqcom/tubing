@@ -42,12 +42,14 @@ impl ClientResponse {
                 larger: vec![]
             })
         }
-        let mut one_pakcet = read_buf(packet)?;
-        while 1{
+        let mut one_packet = read_buf(packet)?;
+        let mut payload = one_packet.payload.clone();
+        loop{
             if payload != 0xffffff{
                 break;
             }
             let tmp = read_buf(packet)?;
+            payload = tmp.payload.clone();
             one_pakcet.larger.push(tmp);
         }
 
