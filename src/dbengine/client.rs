@@ -54,7 +54,7 @@ impl ClientResponse {
         }
 
 
-        Ok(one_pakcet)
+        Ok(one_packet)
     }
 
     /// 解析客户端发送的请求类型，并处理请求
