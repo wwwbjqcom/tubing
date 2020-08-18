@@ -490,7 +490,7 @@ impl ClientResponse {
             conn.send_packet_only(&packet).await?;
 
             for res in &self.larger{
-                let packet = self.packet_my_value();
+                let packet = res.packet_my_value();
                 conn.send_packet_only(&packet).await?;
             }
             let (buf, header) = conn.response_for_larger_packet().await?;
