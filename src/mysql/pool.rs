@@ -1129,7 +1129,7 @@ pub struct MysqlConnectionInfo {
     pub conn: TcpStream,
     pub cached: String,             //记录使用该连接的线程hash，用于不自动提交的update/insert/delete
     pub last_time: usize,          //记录该mysql连接最后执行命令的时间，用于计算空闲时间，如果没有设置缓存标签在达到200ms空闲时将放回连接池
-    pub is_transaction: bool,        //记录是否还有事务存在
+    pub is_transaction: bool,        //记录是否还有事务或者锁存在
     pub is_write: bool,            //是否为写入连接
     pub host_info: String
 }

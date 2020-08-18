@@ -252,44 +252,32 @@ impl ClientResponse {
                     self.send_error_packet(handler, &error).await?;
                 }
             }
-            SqlStatement::Query => {
+            SqlStatement::Query |
+            SqlStatement::Show => {
                 self.exec_query(handler).await?;
             }
-            SqlStatement::Commit => {
+
+            SqlStatement::Commit |
+            SqlStatement::Rollback |
+            SqlStatement::UNLock => {
                 self.send_one_packet(handler).await?;
                 self.reset_is_transaction(handler).await?;
             }
-            SqlStatement::Insert => {
-                self.send_one_packet(handler).await?;
-                self.check_is_no_autocommit(handler).await?;
-            }
-            SqlStatement::Delete => {
-                self.send_one_packet(handler).await?;
-                self.check_is_no_autocommit(handler).await?;
-            }
+            SqlStatement::Insert |
+            SqlStatement::Delete |
             SqlStatement::Update => {
                 self.send_one_packet(handler).await?;
                 self.check_is_no_autocommit(handler).await?;
             }
-            SqlStatement::Rollback => {
-                self.send_one_packet(handler).await?;
-                self.reset_is_transaction(handler).await?;
-            }
-            SqlStatement::StartTransaction  => {
+            SqlStatement::StartTransaction |
+            SqlStatement::Lock => {
                 self.send_one_packet(handler).await?;
                 self.set_is_transaction(handler).await?;
             }
-            SqlStatement::AlterTable => {
-                self.no_traction(handler).await?;
-            }
-            SqlStatement::Create => {
-                self.no_traction(handler).await?;
-            }
+            SqlStatement::AlterTable |
+            SqlStatement::Create |
             SqlStatement::Drop => {
                 self.no_traction(handler).await?;
-            }
-            SqlStatement::Show => {
-                self.exec_query(handler).await?;
             }
             SqlStatement::Default => {
                 let error = String::from("Unsupported syntax");

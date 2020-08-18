@@ -22,6 +22,8 @@ pub enum SqlStatement {
     Drop,
     Show,
     ChangeDatabase,             //use db
+    Lock,
+    UNLock,
     Default
 }
 impl SqlStatement{
@@ -54,6 +56,8 @@ impl SqlStatement{
             "drop" => SqlStatement::Drop,
             "show" => SqlStatement::Show,
             "use" => SqlStatement::ChangeDatabase,
+            "lock" => SqlStatement::Lock,
+            "unlock" => SqlStatement::UNLock,
             _ => SqlStatement::Default
         };
         return (stamen_type, tbl_info)
@@ -137,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_parse_sql() {
-        let sql = String::from("select username from user_info order by created limit 1");
+        let sql = String::from("select username from a order by b limit 1");
         let (a, b) = SqlStatement::Default.parser(&sql);
         assert_eq!(SqlStatement::Query,a);
         println!("{:?}", &a);
