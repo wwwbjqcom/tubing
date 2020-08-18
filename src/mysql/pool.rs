@@ -1220,6 +1220,15 @@ impl MysqlConnectionInfo{
     //     Ok(())
     // }
 
+    pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
+        self.conn.write_all(packet)?;
+    }
+
+    pub async fn response_for_larger_packet(&mut self) -> Result<(Vec<u8>, PacketHeader)>{
+        let (buf, header) = self.get_packet_from_stream().await?;
+        Ok((buf, header))
+    }
+
     /// send packet and return response packet
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         debug!("{}",crate::info_now_time(String::from("write all to mysql conn")));

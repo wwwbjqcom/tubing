@@ -45,7 +45,7 @@ impl Connection {
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
-            buffer: BytesMut::with_capacity(60 * 1024 * 1024)
+            buffer: BytesMut::with_capacity(64 * 1024 * 1024)
         }
     }
 

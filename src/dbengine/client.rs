@@ -24,20 +24,35 @@ use crate::mysql::privileges::CheckPrivileges;
 pub struct ClientResponse {
     pub payload: u32,
     pub seq: u8,
-    pub buf: Vec<u8>
+    pub buf: Vec<u8>,
+    pub larger: Vec<ClientResponse>         //超出16m部分
 }
 
 impl ClientResponse {
     pub async fn new(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse> {
-        let payload = packet.read_u24::<LittleEndian>()?;
-        let seq = packet.read_u8()?;
-        let mut buf = vec![0 as u8; payload as usize];
-        packet.read_exact(&mut buf)?;
-        Ok(ClientResponse{
-            payload,
-            seq,
-            buf
-        })
+        fn read_buf(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse>{
+            let payload = packet.read_u24::<LittleEndian>()?;
+            let seq = packet.read_u8()?;
+            let mut buf = vec![0 as u8; payload as usize];
+            packet.read_exact(&mut buf)?;
+            Ok(ClientResponse{
+                payload,
+                seq,
+                buf,
+                larger: vec![]
+            })
+        }
+        let mut one_pakcet = read_buf(packet)?;
+        while 1{
+            if payload != 0xffffff{
+                break;
+            }
+            let tmp = read_buf(packet)?;
+            one_pakcet.larger.push(tmp);
+        }
+
+
+        Ok(one_pakcet)
     }
 
     /// 解析客户端发送的请求类型，并处理请求
@@ -263,7 +278,14 @@ impl ClientResponse {
                 self.send_one_packet(handler).await?;
                 self.reset_is_transaction(handler).await?;
             }
-            SqlStatement::Insert |
+            SqlStatement::Insert => {
+                if self.larger.len() > 0{
+                    self.send_larger_packet(handler).await?;
+                }else {
+                    self.send_one_packet(handler).await?;
+                }
+                self.check_is_no_autocommit(handler).await?;
+            }
             SqlStatement::Delete |
             SqlStatement::Update => {
                 self.send_one_packet(handler).await?;
@@ -454,6 +476,22 @@ impl ClientResponse {
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             let packet = self.packet_my_value();
             let (buf, header) = conn.send_packet(&packet).await?;
+            self.send_mysql_response_packet(handler, &buf, &header).await?;
+            //self.check_eof(handler, conn).await?;
+        }
+        Ok(())
+    }
+
+    async fn send_larger_packet(&self, handler: &mut Handler) -> Result<()>{
+        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+            let packet = self.packet_my_value();
+            conn.send_packet_only(&packet).await?;
+
+            for res in &self.larger{
+                let packet = self.packet_my_value();
+                conn.send_packet_only(&packet).await?;
+            }
+            let (buf, header) = conn.response_for_larger_packet().await?;
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             //self.check_eof(handler, conn).await?;
         }
