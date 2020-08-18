@@ -42,7 +42,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
         .max_threads(100)
         .enable_all()
         .thread_name("my-custom-name")
-        .thread_stack_size(3 * 1024 * 1024)
+        .thread_stack_size(16 * 1024 * 1024)
         .build()
         .unwrap();
 

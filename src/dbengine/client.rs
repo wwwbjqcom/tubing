@@ -279,6 +279,9 @@ impl ClientResponse {
             SqlStatement::Drop => {
                 self.no_traction(handler).await?;
             }
+            SqlStatement::Comment => {
+                self.send_ok_packet(handler).await?;
+            }
             SqlStatement::Default => {
                 let error = String::from("Unsupported syntax");
                 error!("{}",&error);

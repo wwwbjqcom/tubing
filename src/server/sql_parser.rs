@@ -24,6 +24,7 @@ pub enum SqlStatement {
     ChangeDatabase,             //use db
     Lock,
     UNLock,
+    Comment,
     Default
 }
 impl SqlStatement{
@@ -58,7 +59,13 @@ impl SqlStatement{
             "use" => SqlStatement::ChangeDatabase,
             "lock" => SqlStatement::Lock,
             "unlock" => SqlStatement::UNLock,
-            _ => SqlStatement::Default
+            _ => {
+                if sql_vec[0].to_string().starts_with("/*!"){
+                    SqlStatement::Comment
+                }else {
+                    SqlStatement::Default
+                }
+            }
         };
         return (stamen_type, tbl_info)
     }
