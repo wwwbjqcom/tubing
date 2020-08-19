@@ -489,8 +489,8 @@ impl Handler {
                 Some(response) => response,
                 None => break,
             };
-            debug!("{:?}", &response.payload);
-            debug!("{}",crate::info_now_time(String::from("start")));
+            debug!("response packet payload: {:?}", &response.payload);
+            debug!("{}....",crate::info_now_time(String::from("start")));
             if !self.check_seq(&response.seq){
                 break;
             }

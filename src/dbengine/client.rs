@@ -32,12 +32,15 @@ pub struct ClientResponse {
 impl ClientResponse {
     pub async fn new(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse> {
 
+        /// 从buffer中解析packet header部分并读取payload
+        ///
+        /// 这里判断buffer剩余部分时候满足payload大小，如果小于payload则返回空
         fn read_buf(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse>{
             let packet_len = packet.remaining();
             let payload = packet.read_u24::<LittleEndian>()?;
             let seq = packet.read_u8()?;
             let mut buf = vec![0 as u8; payload as usize];
-            debug!("read one packet: payload: {}, seq: {} , cursor_len: {}", &payload, &seq, &packet_len);
+            debug!("read_buf one packet: payload: {}, seq: {} , cursor_len: {}", &payload, &seq, &packet_len);
             return if payload <= (packet_len - 4) as u32 {
                 packet.read_exact(&mut buf)?;
                 Ok(ClientResponse{
