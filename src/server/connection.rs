@@ -100,6 +100,7 @@ impl Connection {
     }
 
     fn check_data(&self, src: &mut Cursor<&[u8]>) -> Result<bool> {
+        debug!("cursor:{}  read_bytes:{}", &src.remaining(), &self.read_bytes);
         if !src.has_remaining() && src.remaining() < self.read_bytes {
             //return Err(Box::new(MyError(String::from("no data").into())));
             return Ok(false)
