@@ -79,7 +79,9 @@ impl Connection {
             }
 
             debug!("{}",crate::info_now_time(String::from("get response from client")));
-            if 0 == self.stream.read_buf(&mut self.buffer).await? {
+            let read_num = self.stream.read_buf(&mut self.buffer).await?;
+            debug!("read value({} bytes) from stream", &read_num);
+            if 0 == read_num {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
                 // there is, this means that the peer closed the socket while
