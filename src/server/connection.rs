@@ -80,7 +80,7 @@ impl Connection {
 
             debug!("{}",crate::info_now_time(String::from("get response from client")));
             let read_num = self.stream.read_buf(&mut self.buffer).await?;
-            debug!("read value({} bytes) from stream", &read_num);
+            debug!("read value({} bytes) from stream， buf position: {}", &read_num, buf.position());
             if 0 == read_num {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
