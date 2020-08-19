@@ -35,7 +35,9 @@ pub(crate) struct Connection {
     // currently requires you to empty its buffer before you can ask it to
     // retrieve more data from the underlying stream, so we have to manually
     // implement buffering. This should be fixed in Tokio v0.3.
-    buffer: BytesMut
+    buffer: BytesMut,
+
+    read_bytes: usize,
 }
 
 impl Connection {
@@ -45,7 +47,8 @@ impl Connection {
         Connection {
             stream: BufStream::new(socket),
             // Default to a 64MB read buffer. For the use case of mysql server max packet,
-            buffer: BytesMut::with_capacity(64 * 1024 * 1024)
+            buffer: BytesMut::with_capacity(64 * 1024 * 1024),
+            read_bytes: 0
         }
     }
 
@@ -79,9 +82,9 @@ impl Connection {
             }
 
             debug!("{}",crate::info_now_time(String::from("get response from client")));
-            let read_num = self.stream.read_buf(&mut self.buffer).await?;
-            debug!("read value({} bytes) from stream， buf position: {}", &read_num, buf.position());
-            if 0 == read_num {
+            self.read_bytes = self.stream.read_buf(&mut self.buffer).await?;
+            debug!("read value({} bytes) from stream", &self.read_bytes);
+            if 0 == self.read_bytes {
                 // The remote closed the connection. For this to be a clean
                 // shutdown, there should be no data in the read buffer. If
                 // there is, this means that the peer closed the socket while
@@ -97,7 +100,7 @@ impl Connection {
     }
 
     fn check_data(&self, src: &mut Cursor<&[u8]>) -> Result<bool> {
-        if !src.has_remaining() {
+        if !src.has_remaining() && src.remaining() < self.read_bytes {
             //return Err(Box::new(MyError(String::from("no data").into())));
             return Ok(false)
         }
