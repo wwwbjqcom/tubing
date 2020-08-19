@@ -19,6 +19,7 @@ use tracing::field::{debug};
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
 use crate::mysql::privileges::CheckPrivileges;
+use bytes::Buf;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -30,12 +31,16 @@ pub struct ClientResponse {
 
 impl ClientResponse {
     pub async fn new(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse> {
+
         fn read_buf(packet: &mut Cursor<&[u8]>) -> Result<ClientResponse>{
+            let packet_len = packet.remaining();
             let payload = packet.read_u24::<LittleEndian>()?;
             let seq = packet.read_u8()?;
             let mut buf = vec![0 as u8; payload as usize];
             debug!("read one packet: payload: {}, seq: {}", &payload, &seq);
-            packet.read_exact(&mut buf)?;
+            if payload < (packet_len - 4) as u32 {
+                packet.read_exact(&mut buf)?;
+            }
             Ok(ClientResponse{
                 payload,
                 seq,
@@ -43,6 +48,7 @@ impl ClientResponse {
                 larger: vec![]
             })
         }
+
         let mut one_packet = read_buf(packet)?;
         let mut payload = one_packet.payload.clone();
         loop{
