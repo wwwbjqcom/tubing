@@ -34,6 +34,7 @@ impl ClientResponse {
             let payload = packet.read_u24::<LittleEndian>()?;
             let seq = packet.read_u8()?;
             let mut buf = vec![0 as u8; payload as usize];
+            debug!("read one packet: payload: {}, seq: {}", &payload, &seq);
             packet.read_exact(&mut buf)?;
             Ok(ClientResponse{
                 payload,
