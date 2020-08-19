@@ -38,6 +38,7 @@ impl ClientResponse {
             let seq = packet.read_u8()?;
             let mut buf = vec![0 as u8; payload as usize];
             debug!("read one packet: payload: {}, seq: {}", &payload, &seq);
+            debug!("packet_len:{}", &packet_len);
             if payload < (packet_len - 4) as u32 {
                 packet.read_exact(&mut buf)?;
             }
