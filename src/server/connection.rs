@@ -56,7 +56,7 @@ impl Connection {
             if self.check_data(&mut buf)? {
                 debug!("{}",crate::info_now_time(String::from("get response from client start")));
                 let response = client::ClientResponse::new(&mut buf).await?;
-                debug!("read response success. payload: {?}, larger_len: {}....", &response.payload, &response.larger.len());
+                debug!("read response success. payload: {:?}, larger_len: {}....", &response.payload, &response.larger.len());
                 if response.payload > 0{
                     // The `client::ClientResponse::new` function will have advanced the cursor until
                     // the end of the packet. Since the cursor had position set
