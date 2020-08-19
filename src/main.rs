@@ -110,8 +110,9 @@ impl Platform{
 
 pub fn info_now_time(t: String) -> String {
     let dt = Local::now();
-    let now_time = dt.timestamp_millis() as usize;
-    let a = format!("{} end_time: {}", t, now_time);
+    //let now_time = dt.timestamp_millis() as usize;
+    // let a = format!("{} end_time: {}", t, now_time);
+    let a = format!("{}", t);
     return a;
 }
 
