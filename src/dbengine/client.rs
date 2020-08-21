@@ -182,18 +182,18 @@ impl ClientResponse {
     }
 
     async fn check_change_db_privileges(&self,  handler: &mut Handler, database: &String) -> Result<bool>{
-        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, vec![format!("{}",database)]).await{
+        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![format!("{}",database)]).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false);
         }
         return Ok(true);
     }
 
-    async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: Vec<String>) -> Result<()>{
+    async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<String>) -> Result<()>{
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
         }
-        let check_privileges = CheckPrivileges::new(&handler.db, tbl_info, sql_type, &handler.user_name, &handler.host);
+        let check_privileges = CheckPrivileges::new(&handler.db, tbl_info.clone(), sql_type, &handler.user_name, &handler.host);
         check_privileges.check_user_privileges(&handler.user_privileges).await?;
         //handler.user_privileges.check_privileges(&check_privileges).await?;
         Ok(())
@@ -213,7 +213,7 @@ impl ClientResponse {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let sql_parser = SqlStatement::Default;
         let (a, tbl_info_list) = sql_parser.parser(&sql);
-        if let Err(e) = self.check_user_privileges(handler,  &a, tbl_info_list).await{
+        if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(())
         }
@@ -316,9 +316,12 @@ impl ClientResponse {
                 self.set_is_transaction(handler).await?;
             }
             SqlStatement::AlterTable |
-            SqlStatement::Create |
+            SqlStatement::Create => {
+                self.no_traction(handler).await?;
+            }
             SqlStatement::Drop => {
                 self.no_traction(handler).await?;
+                self.check_drop_database(&sql, handler, &tbl_info_list).await;
             }
             SqlStatement::Comment => {
                 self.send_ok_packet(handler).await?;
@@ -333,6 +336,16 @@ impl ClientResponse {
 
         debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
+    }
+
+    async fn check_drop_database(&self, sql: &String, handler: &mut Handler, tbl_info: &Vec<String>) {
+        if sql.to_lowercase().contains("database"){
+            if let Some(db) = &handler.db{
+                if db == &tbl_info[0]{
+                    handler.db = Some(String::from("information_schema"));
+                }
+            }
+        }
     }
 
     /// 用于语句执行之前进行判断有没有设置platform

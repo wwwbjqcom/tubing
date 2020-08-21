@@ -32,7 +32,7 @@ impl SqlStatement{
         debug!("{}",crate::info_now_time(String::from("start parser sql")));
         debug!("{}",format!("parser sql: {}", sql));
         let sql_vec = self.split_sql(sql);
-        let tbl_info = self.get_sql_tb_info(&sql_vec);
+        let mut tbl_info = self.get_sql_tb_info(&sql_vec);
         let stamen_type = match sql_vec[0].as_ref(){
             "desc" => SqlStatement::Query,
             "select" => SqlStatement::Query,
@@ -54,7 +54,10 @@ impl SqlStatement{
             }
             "alter" => SqlStatement::AlterTable,
             "create" => SqlStatement::Create,
-            "drop" => SqlStatement::Drop,
+            "drop" => {
+                tbl_info = self.get_drop_tbl_info(&sql_vec);
+                SqlStatement::Drop
+            }
             "show" => SqlStatement::Show,
             "use" => SqlStatement::ChangeDatabase,
             "lock" => SqlStatement::Lock,
@@ -87,16 +90,26 @@ impl SqlStatement{
                             }else if c.to_string() != ","{
                                 aa.push(c);
                             }else {
-                                list.push(aa.clone());
+                                list.push(aa.clone().replace(";", ""));
                                 aa = String::from("");
                             }
                         }else {
-                            list.push(aa.clone());
+                            list.push(aa.clone().replace(";", ""));
                             break 'a;
                         }
                     }
                     //list.push(sql_vec[index+1].clone().replace(")", ""));
                 }
+            }
+        }
+        list
+    }
+
+    fn get_drop_tbl_info(&self, sql_vec: &Vec<String>) -> Vec<String>{
+        let mut list = vec![];
+        for (index, i) in sql_vec.iter().enumerate(){
+            if i == "database" || i == "table" {
+                list.push(sql_vec[index+1].clone().replace(";", ""));
             }
         }
         list
@@ -192,9 +205,17 @@ mod tests {
 
     #[test]
     fn test_parse_sub() {
-        let sql = String::from("select * from (select * from a,b)c");
+        let sql = String::from("select * from (select * from a,b)c;");
         let (a, b) = SqlStatement::Default.parser(&sql);
         assert_eq!(SqlStatement::Query,a);
+        println!("{:?}", &a);
+        println!("{:?}", &b);
+    }
+
+    #[test]
+    fn test_drop() {
+        let sql = String::from("drop table abc;");
+        let (a, b) = SqlStatement::Default.parser(&sql);
         println!("{:?}", &a);
         println!("{:?}", &b);
     }
