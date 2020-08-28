@@ -370,6 +370,14 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::Show;
                 push_tbl_list(table_name, &mut tbl_list)?;
             }
+            Statement::ShowCreate{table_name} => {
+                sql_type = SqlStatement::Show;
+                push_tbl_list(table_name, &mut tbl_list)?;
+            }
+            Statement::Desc { table_name } => {
+                sql_type = SqlStatement::Show;
+                push_tbl_list(table_name, &mut tbl_list)?;
+            }
             Statement::CreateTable { name, columns, constraints, with_options,
                 if_not_exists, external, file_format, location,
                 query, without_rowid } => {
