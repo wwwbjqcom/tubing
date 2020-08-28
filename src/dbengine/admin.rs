@@ -240,18 +240,24 @@ impl SetStruct{
     async fn parse_value(&mut self,set_type: SetVariables, selection: &Option<Expr>, value: &SetVariableValue) -> Result<()>{
         // let value: usize = sql_vec[2].parse()?;
         self.set_variables = set_type.set_value(value).await;
+        let mut vv = String::from("");
         if let Some(s) = selection{
             match s{
                 Expr::BinaryOp { left, op, right } => {
                     match op{
-                        BinaryOperator::And =>{}
+                        BinaryOperator::Eq => {
+                            self.do_ident(left, &mut vv, String::from("l"))?;
+                            self.do_ident(right, &mut vv, String::from("r"))?;
+                        }
+                        BinaryOperator::And =>{
+                            self.do_expr(left).await?;
+                            self.do_expr(right).await?;
+                        }
                         _ => {
                             let err = String::from("unsupported syntax");
                             return Err(Box::new(MyError(err.into())));
                         }
                     }
-                    self.do_expr(left).await?;
-                    self.do_expr(right).await?;
                 }
                 _ => {
                     let err = String::from("unsupported syntax");
