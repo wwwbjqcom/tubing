@@ -301,7 +301,7 @@ impl AdminSql{
                     Ok(AdminSql::Set(set_struct))
                 }
                 _ => {
-                    Err(Box::new(MyError(String::from("the admin module only supports set auth/pool and show status/questions/connections").into())))
+                    Err(Box::new(MyError(String::from("the admin module only supports set auth/pool where .. and show status/questions/connections").into())))
                 }
             }
         }
