@@ -51,14 +51,14 @@ impl ShowStruct{
                     self.platform = Some(format!("{}",i).replace("\"",""));
                 }else if a == String::from("l") {
                     if i.value != String::from("platform"){
-                        let err = String::from("unsupported syntax");
+                        let err = format!("the show command only supports platform as a condition :{}", i);
                         return Err(Box::new(MyError(err.into())));
                     }
                 }
 
             }
             _ => {
-                let err = String::from("unsupported syntax");
+                let err = format!("unsupported syntax {}", ide);
                 return Err(Box::new(MyError(err.into())));
             }
         }
@@ -93,17 +93,7 @@ impl ShowStruct{
         }else {
             self.platform = None
         }
-        // if sql_vec.len() < 2{
-        //     let err = String::from("unsupported syntax");
-        //     return Err(Box::new(MyError(err.into())));
-        // }else if sql_vec.len() == 2{
-        //     self.platform = None;
-        // }else if &sql_vec[2] == &String::from("where") && &sql_vec[3] == &String::from("platform"){
-        //     self.platform = Some(sql_vec[4].clone());
-        // }else {
-        //     let err = String::from("unsupported syntax");
-        //     return Err(Box::new(MyError(err.into())));
-        // }
+
         Ok(())
     }
 
@@ -254,13 +244,13 @@ impl SetStruct{
                             self.do_expr(right).await?;
                         }
                         _ => {
-                            let err = String::from("unsupported syntax");
+                            let err = format!("unsupported syntax {}", op);
                             return Err(Box::new(MyError(err.into())));
                         }
                     }
                 }
                 _ => {
-                    let err = String::from("unsupported syntax");
+                    let err = String::from("the set command must provide conditions");
                     return Err(Box::new(MyError(err.into())));
                 }
             }
@@ -275,48 +265,6 @@ impl SetStruct{
             }
         }
 
-        // if sql_vec.len() > 3{
-        //     if &sql_vec[3] == &String::from("where"){
-        //         match sql_vec[4].as_ref(){
-        //             "platform" => {
-        //                 self.platform = Some(sql_vec[5].clone());
-        //             }
-        //             "host_info" => {
-        //                 self.host_info = Some(sql_vec[5].clone());
-        //             }
-        //             _ => {
-        //                 self.return_error(String::from("unsupported syntax")).await?;
-        //             }
-        //         }
-        //     }
-        //
-        //     if sql_vec.len() == 9 {
-        //         if &sql_vec[6] == &String::from("and") {
-        //             match sql_vec[7].as_ref(){
-        //                 "paltform" => {
-        //                     if let Some(_) = self.platform{
-        //                         self.return_error(String::from("unsupported syntax")).await?;
-        //                     }
-        //                     self.platform = Some(sql_vec[8].clone());
-        //                 }
-        //                 "host_info" => {
-        //                     if let Some(_) = self.host_info {
-        //                         self.return_error(String::from("unsupported syntax")).await?;
-        //                     }
-        //                     if let None = self.platform {
-        //                         self.return_error(String::from("unsupported syntax")).await?;
-        //                     }
-        //                     self.host_info = Some(sql_vec[8].clone());
-        //                 }
-        //                 _ => {
-        //                     self.return_error(String::from("unsupported syntax")).await?;
-        //                 }
-        //             }
-        //         }
-        //     }else if sql_vec.len() > 6 {
-        //         self.return_error(String::from("unsupported syntax")).await?;
-        //     }
-        // }
         Ok(())
     }
 
@@ -358,43 +306,9 @@ impl AdminSql{
             }
         }
         return Err(Box::new(MyError(String::from("unsupported syntax").into())));
-        // let sql_vec = self.split_sql(sql).await;
-        // match sql_vec[0].as_ref(){
-        //     "show" => {
-        //         let mut show_struct = ShowStruct{ command: ShowCommand::Null, platform: None };
-        //         show_struct.parse(&sql_vec).await?;
-        //         return Ok(AdminSql::Show(show_struct));
-        //     }
-        //     "update" => {
-        //         let mut set_struct = SetStruct{
-        //             set_variables: SetVariables::Null,
-        //             platform: None,
-        //             host_info: None
-        //         };
-        //         set_struct.parse(&sql_vec).await?;
-        //         return Ok(AdminSql::Set(set_struct));
-        //     }
-        //     _ => {
-        //         return Err(Box::new(MyError(String::from("unsupported syntax").into())));
-        //     }
-        // }
+
     }
-    //
-    // async fn split_sql(&self, sql: &String) -> Vec<String> {
-    //     let sql = sql.to_lowercase().replace("=", " ").replace("\"","");
-    //     let sql_ver = sql.split(" ");
-    //     let sql_ver = sql_ver.collect::<Vec<&str>>();
-    //     let mut tmp: Vec<String> = vec![];
-    //     for i in &sql_ver{
-    //         if &i.to_string() != &"".to_string()
-    //             && &i.to_string() != &"\t".to_string()
-    //             && &i.to_string() != &"\n".to_string()
-    //             && &i.to_string() != &"\r".to_string(){
-    //             tmp.push(i.to_string().clone())
-    //         }
-    //     }
-    //     return tmp;
-    // }
+
 }
 
 #[derive(Debug)]
