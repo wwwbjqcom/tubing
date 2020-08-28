@@ -301,7 +301,7 @@ impl AdminSql{
                     Ok(AdminSql::Set(set_struct))
                 }
                 _ => {
-                    Err(Box::new(MyError(String::from("unsupported syntax").into())))
+                    Err(Box::new(MyError(String::from("the admin module only supports set auth/pool and show status/questions/connections").into())))
                 }
             }
         }
