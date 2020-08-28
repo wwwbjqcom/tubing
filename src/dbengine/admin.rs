@@ -71,7 +71,7 @@ impl ShowStruct{
                 match op{
                     BinaryOperator::Eq => {}
                     _ => {
-                        let err = String::from("unsupported syntax");
+                        let err = format!("the show command only supports platform as a condition :{} {} {}", left, op, right);
                         return Err(Box::new(MyError(err.into())));
                     }
                 }
@@ -80,7 +80,7 @@ impl ShowStruct{
                 self.do_ident(right, String::from("r"))?;
             }
             _ => {
-                let err = String::from("unsupported syntax");
+                let err = format!("unsupported syntax {}", selection);
                 return Err(Box::new(MyError(err.into())));
             }
         }
