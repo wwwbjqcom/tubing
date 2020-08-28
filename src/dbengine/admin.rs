@@ -48,7 +48,7 @@ impl ShowStruct{
         match ide{
             Expr::Identifier(i) => {
                 if a == String::from("r"){
-                    self.platform = Some(format!("{}",i));
+                    self.platform = Some(format!("{}",i).replace("\"",""));
                 }else if a == String::from("l") {
                     if i.value != String::from("platform"){
                         let err = String::from("unsupported syntax");
@@ -190,9 +190,9 @@ impl SetStruct{
             Expr::Identifier(i) => {
                 if aa == String::from("r"){
                     if vv == &String::from("platform"){
-                        self.platform = Some(format!("{}",i));
+                        self.platform = Some(format!("{}",i).replace("\"",""));
                     }else if vv == &String::from("host_info") {
-                        self.host_info = Some(format!("{}",i));
+                        self.host_info = Some(format!("{}",i).replace("\"",""));
                     }
                 }else if aa == String::from("l") {
                     if i.value == String::from("platform"){
