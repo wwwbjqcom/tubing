@@ -32,3 +32,7 @@ num_cpus="1.13.0"
 
 [MysqlBus.release]
 debug= true
+
+
+[dependencies.sqlparser]
+git = "https://github.com/wwwbjqcom/mysql-sqlparse-rs.git"

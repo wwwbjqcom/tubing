@@ -18,8 +18,11 @@ use crate::server::sql_parser::SqlStatement;
 use tracing::field::{debug};
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
-use crate::mysql::privileges::CheckPrivileges;
+use crate::mysql::privileges::{CheckPrivileges, TableInfo};
 use bytes::Buf;
+use sqlparser::dialect::MySqlDialect;
+use sqlparser::parser::*;
+use sqlparser::ast::Statement;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -128,9 +131,9 @@ impl ClientResponse {
     /// set max_thread/min_thread=1 where platform=aa and host_info=aa: 可以修改对应节点连接池大小
     /// 但最大值必须大雨等于最小值, 如果不带任何条件则是修改所有， 如果带条件，platform为必须,
     /// 不能只有host_info, 但可以只有platform，这样是修改对应platform的所有节点
-    pub async fn admin(&self, sql: &String, handler: &mut Handler) -> Result<()> {
+    pub async fn admin(&self, sql: &String, handler: &mut Handler, ast: &Vec<Statement>) -> Result<()> {
         let admin_sql = AdminSql::Null;
-        let admin_sql = admin_sql.parse_sql(sql).await?;
+        let admin_sql = admin_sql.parse_sql(ast).await?;
         match admin_sql{
             AdminSql::Set(set_struct) => {
                 if let Err(e) = handler.platform_pool.alter_pool_thread(&set_struct).await {
@@ -163,7 +166,7 @@ impl ClientResponse {
         Ok(())
     }
 
-    /// 检测platform是否为admin, 如果为admin且当前语句不是set platfrom则充值platfrom并返回false
+    /// 检测platform是否为admin, 如果为admin且当前语句不是set platfrom则重置platfrom并返回false
     pub async fn check_is_admin_paltform(&self, handler: &mut Handler, sql_type: &SqlStatement) -> bool{
         if let Some(platform) = &handler.platform{
             if platform == &"admin".to_string(){
@@ -182,14 +185,14 @@ impl ClientResponse {
     }
 
     async fn check_change_db_privileges(&self,  handler: &mut Handler, database: &String) -> Result<bool>{
-        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![format!("{}",database)]).await{
+        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![TableInfo{ database: None, table: None }]).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false);
         }
         return Ok(true);
     }
 
-    async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<String>) -> Result<()>{
+    async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<TableInfo>) -> Result<()>{
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
         }
@@ -211,15 +214,19 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        let sql_parser = SqlStatement::Default;
-        let (a, tbl_info_list) = sql_parser.parser(&sql);
+        let dialect = MySqlDialect {};
+        let sql_ast = Parser::parse_sql(&dialect, &sql).unwrap();
+        let (tbl_info_list, a) = crate::server::sql_parser::do_table_info(&sql_ast)?;
+
+        // let sql_parser = SqlStatement::Default;
+        // let (a, _) = sql_parser.parser(&sql);
         if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(())
         }
 
         if self.check_is_admin_paltform(handler, &a).await{
-            self.admin(&sql, handler).await?;
+            self.admin(&sql, handler, &sql_ast).await?;
             return Ok(())
         }
 
@@ -338,11 +345,16 @@ impl ClientResponse {
         Ok(())
     }
 
-    async fn check_drop_database(&self, sql: &String, handler: &mut Handler, tbl_info: &Vec<String>) {
+    /// 当执行drop database之后执行检查
+    ///
+    /// 如果删除的是当前数据库，则恢复为information_schema
+    async fn check_drop_database(&self, sql: &String, handler: &mut Handler, tbl_info: &Vec<TableInfo>) {
         if sql.to_lowercase().contains("database"){
             if let Some(db) = &handler.db{
-                if db == &tbl_info[0]{
-                    handler.db = Some(String::from("information_schema"));
+                if let Some(d) = &tbl_info[0].database{
+                    if db == d {
+                        handler.db = Some(String::from("information_schema"));
+                    }
                 }
             }
         }

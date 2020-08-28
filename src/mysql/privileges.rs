@@ -421,17 +421,17 @@ impl UserPri{
 
     fn get_error_string(&self, tbl_info: &TableInfo, check_struct: &CheckPrivileges) -> String{
         let err;
-        if let Some(db) = &tbl_info.db{
+        if let Some(db) = &tbl_info.database{
             match check_struct.sql_type {
                 SqlStatement::ChangeDatabase => {
                     err = format!("Access denied for user '{}'@'{}' to database '{}'", &check_struct.user_name, &check_struct.host, db);
                 }
                 _ => {
-                    err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, db, &tbl_info.table);
+                    err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, db, &tbl_info.get_table_name());
                 }
             }
         }else {
-            err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_db, &tbl_info.table);
+            err = format!("Access denied for user '{}'@'{}' to table '{}.{}'", &check_struct.user_name, &check_struct.host, &check_struct.cur_db, &tbl_info.get_table_name());
         }
         return err;
     }
@@ -451,7 +451,7 @@ impl UserPri{
     async fn check_db_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
         if let Some(db_pri_all) = &self.db_pri{
             for db_pri in db_pri_all{
-                if let Some(tbl_db) = &tbl_info.db {
+                if let Some(tbl_db) = &tbl_info.database {
                     if tbl_db == &db_pri.db && check_host(&check_struct.host, &db_pri.host){
                         return db_pri.check_sql_type(&check_struct.sql_type);
                     }
@@ -592,9 +592,26 @@ impl AllUserPri{
 
 #[derive(Clone, Debug)]
 pub struct TableInfo{
-    pub db: Option<String>,
-    pub table: String
+    pub database: Option<String>,
+    pub table: Option<String>
 }
+
+impl TableInfo{
+    // pub fn get_database_name(&self) -> String{
+    //     if let Some(db) = &self.database{
+    //         return db.clone();
+    //     }
+    //     return "".to_string();
+    // }
+
+    pub fn get_table_name(&self) -> String{
+        if let Some(tb) = &self.table{
+            return tb.clone();
+        }
+        return "".to_string();
+    }
+}
+
 /// 检查权限所需的结构体
 #[derive(Clone, Debug)]
 pub struct CheckPrivileges{
@@ -605,7 +622,7 @@ pub struct CheckPrivileges{
     pub host: String                            //当前连接愿IP
 }
 impl CheckPrivileges{
-    pub fn new(cur_db: &Option<String>, sql_table_info: Vec<String>, sql_type: &SqlStatement, user_name: &String, host: &String) -> CheckPrivileges{
+    pub fn new(cur_db: &Option<String>, sql_table_info: Vec<TableInfo>, sql_type: &SqlStatement, user_name: &String, host: &String) -> CheckPrivileges{
         let mut my_cur_db;
         if let Some(db) = cur_db{
             my_cur_db = db.clone();
@@ -613,28 +630,18 @@ impl CheckPrivileges{
             my_cur_db = "".to_string();
         }
 
-        let mut cur_sql_table_info = vec![];
         match sql_type{
             SqlStatement::ChangeDatabase => {
-                cur_sql_table_info.push(TableInfo{db: Some(sql_table_info[0].clone()), table: "".to_string()});
-                my_cur_db = sql_table_info[0].clone();
-            }
-            _ => {
-                for i in sql_table_info{
-                    let one_vec = i.split(".");
-                    let one_vec = one_vec.collect::<Vec<&str>>();
-                    if one_vec.len() > 1{
-                        cur_sql_table_info.push(TableInfo{db: Some(one_vec[0].to_string().clone()), table: one_vec[1].to_string().clone()});
-                    }else {
-                        cur_sql_table_info.push(TableInfo{db: None, table: one_vec[0].to_string().clone()});
-                    }
+                if let Some(db) = &sql_table_info[0].database{
+                    my_cur_db= db.clone();
                 }
             }
+            _ => {}
         }
 
         CheckPrivileges{
             cur_db: my_cur_db,
-            cur_sql_table_info,
+            cur_sql_table_info: sql_table_info,
             sql_type: sql_type.clone(),
             user_name: user_name.clone(),
             host: host.clone()
@@ -658,12 +665,16 @@ impl CheckPrivileges{
     }
 
     fn check_cur_sql_table_info(&self, db: &String, table: &String, tbl_info: &TableInfo) -> bool{
-        if let Some(my_db) = &tbl_info.db{
+        if let Some(my_db) = &tbl_info.database{
             if my_db == db {
-                // table为空表示为use 语句
-                if &tbl_info.table == &"".to_string(){
+                // table为空表示为use、create、drop 语句
+                if let Some(t) = &tbl_info.table{
+                    if table == t{
+                        return true;
+                    }
+                }else {
                     match self.sql_type {
-                        SqlStatement::ChangeDatabase => {
+                        SqlStatement::ChangeDatabase | SqlStatement::Create | SqlStatement::Drop => {
                             return true;
                         }
                         _ => {
@@ -671,14 +682,13 @@ impl CheckPrivileges{
                         }
                     }
                 }
-                if table == &tbl_info.table{
-                    return true;
-                }
             }
         }else {
             if &self.cur_db == db{
-                if table == &tbl_info.table{
-                    return true;
+                if let Some(t) = &tbl_info.table{
+                    if table == t{
+                        return true;
+                    }
                 }
             }
         }
@@ -686,7 +696,7 @@ impl CheckPrivileges{
     }
 
     async fn check_information_schema(&self, tbl_info: &TableInfo) -> bool{
-        return if let Some(db) = &tbl_info.db {
+        return if let Some(db) = &tbl_info.database {
             if db == &String::from("information_schema") {
                 true
             } else {
