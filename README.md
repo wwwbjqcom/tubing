@@ -62,7 +62,7 @@
     +----------+-------------------+------------+------------+---------------+------------+
     2 rows in set (0.00 sec)
 
- 查询状态目前只支持show connections/questions/status三个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' and host_info='' 添加条件或者只添加platfrom的条件查询。
+ 查询状态目前只支持show connections/questions/status三个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' 添加条件查询。
 
 
     MySQL [(none)]> set min_thread=1 where platform="test001" and host_info="192.168.1.80:3306";
@@ -76,7 +76,7 @@
     | test001 | 192.168.1.81:3306 |         10 |        100 |             0 |         10 |
     +----------+-------------------+------------+------------+---------------+------------+
     2 rows in set (0.00 sec)
-可以通过set命令修改连接池大小情况以及开关日志记录(set auth=1/0 whre ....)， sql记录可供临时开启排查问题作用，不建议一直使用， 由于sql语句需要写入文件，所有比较损耗性能，set命令如果不带任何条件就会把所有的连接池更新， 这个需要注意 
+可以通过set命令修改连接池大小情况以及开关日志记录(set auth=1/0 whre ....)， sql记录可供临时开启排查问题作用，不建议一直使用， 由于sql语句需要写入文件，所有比较损耗性能，set命令必须带where条件，防止误操作 
 
 ## 内部原理：  
 ![enter image description here](https://i.niupic.com/images/2020/07/28/8sMM.png)
