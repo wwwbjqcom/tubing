@@ -26,6 +26,7 @@ impl CheckSqlType for User{
             SqlStatement::Drop => self.drop.clone(),
             SqlStatement::AlterTable => self.alter.clone(),
             SqlStatement::ChangeDatabase => self.check_show_type(),
+            SqlStatement::Show => self.select.clone(),
             _ => {
                 false
             }
@@ -44,6 +45,7 @@ impl CheckSqlType for DBPri{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool{
         return match sql_type {
             SqlStatement::Query => self.select.clone(),
+            SqlStatement::Show => self.select.clone(),
             SqlStatement::Delete => self.delete.clone(),
             SqlStatement::Insert => self.insert.clone(),
             SqlStatement::Update => self.update.clone(),
@@ -68,6 +70,7 @@ impl CheckSqlType for TablePri{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool{
         return match sql_type {
             SqlStatement::Query => self.select.clone(),
+            SqlStatement::Show => self.select.clone(),
             SqlStatement::Delete => self.delete.clone(),
             SqlStatement::Insert => self.insert.clone(),
             SqlStatement::Update => self.update.clone(),
