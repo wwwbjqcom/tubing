@@ -315,7 +315,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
             }
             Statement::Explain { analyze, format_type, body } => {
                 sql_type = SqlStatement::Query;
-                match &body{
+                match body{
                     ExplainStmt::Stmt(a) => {
                         let (a, _) = do_table_info(&vec![*a.clone()])?;
                         tbl_list.extend(a);

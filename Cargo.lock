@@ -1376,7 +1376,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.5.2-alpha.0"
-source = "git+https://github.com/wwwbjqcom/mysql-sqlparse-rs.git#f0f5c7ce7f8db015c7b7808303f1aa2250c96d77"
+source = "git+https://github.com/wwwbjqcom/mysql-sqlparse-rs.git#6a9bc25697c6cf1001a98ec6f5baa33d743afacd"
 dependencies = [
  "log",
 ]
