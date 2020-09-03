@@ -215,7 +215,7 @@ impl ClientResponse {
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let dialect = MySqlDialect {};
-        let sql_ast = Parser::parse_sql(&dialect, &sql).unwrap();
+        let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         let (tbl_info_list, a) = crate::server::sql_parser::do_table_info(&sql_ast)?;
 
         // let sql_parser = SqlStatement::Default;

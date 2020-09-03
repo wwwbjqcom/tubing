@@ -6,7 +6,7 @@ use tracing::{debug};
 use std::cmp::PartialEq;
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::*;
-use sqlparser::ast::{Statement, ObjectType, ObjectName, Expr, SetExpr, TableFactor, TableWithJoins};
+use sqlparser::ast::{Statement, ObjectType, ObjectName, Expr, SetExpr, TableFactor, TableWithJoins, ExplainStmt};
 use crate::mysql::Result;
 use crate::MyError;
 use crate::mysql::privileges::TableInfo;
@@ -309,6 +309,16 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                         if let Some(v) = &s.selection{
                             do_expr(v, &mut tbl_list)?;
                         }
+                    }
+                    _ => {}
+                }
+            }
+            Statement::Explain { analyze, format_type, body } => {
+                sql_type = SqlStatement::Query;
+                match body{
+                    ExplainStmt::Stmt(a) => {
+                        let (a, _) = do_table_info(&vec![*a.clone()])?;
+                        tbl_list.extend(a);
                     }
                     _ => {}
                 }
