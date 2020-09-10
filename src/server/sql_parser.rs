@@ -389,8 +389,9 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 push_tbl_list(table_name, &mut tbl_list)?;
             }
             Statement::CreateTable { name, columns, constraints, with_options,
-                if_not_exists, external, file_format, location,
-                query, without_rowid } => {
+                table_options, if_not_exists, external, file_format, location,
+                query, without_rowid
+            } => {
                 sql_type = SqlStatement::Create;
                 push_tbl_list(name, &mut tbl_list)?;
                 if let Some(q) = query{
