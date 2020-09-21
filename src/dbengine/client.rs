@@ -216,7 +216,7 @@ impl ClientResponse {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let dialect = MySqlDialect {};
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
-        let (tbl_info_list, a) = crate::server::sql_parser::do_table_info(&sql_ast)?;
+        let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
 
         // let sql_parser = SqlStatement::Default;
         // let (a, _) = sql_parser.parser(&sql);
@@ -247,7 +247,8 @@ impl ClientResponse {
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key, &handler.db, &handler.auto_commit, &a, handler.seq.clone()).await?;
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment).await?;
                 handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
             }
         }

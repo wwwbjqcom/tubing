@@ -174,9 +174,10 @@ impl TableInfo{
 }
 
 
-pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStatement)>{
+pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStatement, Option<String>)>{
     let mut tbl_list = vec![];
     let mut sql_type = SqlStatement::Default;
+    let mut select_comment = None;
 
     fn push_tbl_list(obj: &ObjectName, tbl_list: &mut Vec<TableInfo>) -> Result<()>{
         if let Some(v) = TableInfo::new(obj){
@@ -240,15 +241,15 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 do_expr(n, tbl)?;
             }
             Expr::InSubquery { expr, subquery, negated } => {
-                let (a, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
+                let (a, _, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
                 tbl.extend(a);
             }
             Expr::Subquery(q) => {
-                let (a,_) = do_table_info(&vec![Statement::Query(q.clone())])?;
+                let (a, _, _) = do_table_info(&vec![Statement::Query(q.clone())])?;
                 tbl.extend(a);
             }
             Expr::Exists(e) => {
-                let (a,_) = do_table_info(&vec![Statement::Query(e.clone())])?;
+                let (a, _, _) = do_table_info(&vec![Statement::Query(e.clone())])?;
                 tbl.extend(a);
             }
             _ => {}
@@ -266,10 +267,13 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::Query;
                 match &a.body{
                     SetExpr::Query(q) => {
-                        let (a, _) = do_table_info(&vec![Statement::Query(q.clone())])?;
+                        let (a, _, _) = do_table_info(&vec![Statement::Query(q.clone())])?;
                         tbl_list.extend(a);
                     }
                     SetExpr::Select(s) => {
+                        if let Some(a) = &s.comment{
+                            select_comment = Some(a.clone().to_string());
+                        }
                         fn do_withjoin(w: &TableWithJoins, tbl: &mut Vec<TableInfo>) -> Result<()>{
                             get_relation(&w.relation, tbl)?;
                             for j in &w.joins{
@@ -291,7 +295,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
 
                                 }
                                 TableFactor::Derived { lateral, subquery, alias } => {
-                                    let (a, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
+                                    let (a, _, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
                                     tbl.extend(a);
                                 }
                                 TableFactor::NestedJoin(w) => {
@@ -317,7 +321,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::Query;
                 match body{
                     ExplainStmt::Stmt(a) => {
-                        let (a, _) = do_table_info(&vec![*a.clone()])?;
+                        let (a, _, _) = do_table_info(&vec![*a.clone()])?;
                         tbl_list.extend(a);
                     }
                     _ => {}
@@ -373,7 +377,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
             Statement::Insert { table_name, columns, source } => {
                 sql_type = SqlStatement::Insert;
                 push_tbl_list(table_name, &mut tbl_list)?;
-                let (a, _) = do_table_info(&vec![Statement::Query(source.clone())])?;
+                let (a, _, _) = do_table_info(&vec![Statement::Query(source.clone())])?;
                 tbl_list.extend(a);
             }
             Statement::ShowColumns { extended, full, table_name, filter } => {
@@ -395,7 +399,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::Create;
                 push_tbl_list(name, &mut tbl_list)?;
                 if let Some(q) = query{
-                    let (a, _) = do_table_info(&vec![Statement::Query(q.clone())])?;
+                    let (a, _, _) = do_table_info(&vec![Statement::Query(q.clone())])?;
                     tbl_list.extend(a);
                 }
 
@@ -429,7 +433,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
             _ => {}
         }
     }
-    Ok((tbl_list, sql_type))
+    Ok((tbl_list, sql_type, select_comment))
 }
 
 

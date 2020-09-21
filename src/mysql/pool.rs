@@ -523,7 +523,7 @@ impl ConnectionsPoolPlatform{
     /// 可能会在每个节点缓存一条连接， 这样可以保证在连接使用完的最坏情况下依然能检查状态
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
         let cache_key = "mgrclusterrolestate_bbb".to_string();
-        let (mut conn_info, _) = self.get_pool(&SqlStatement::Query, &cache_key).await?;
+        let (mut conn_info, _) = self.get_pool(&SqlStatement::Query, &cache_key, &None).await?;
         if &conn_info.cached == &"".to_string(){
             conn_info.cached = cache_key;
         }
@@ -543,18 +543,28 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
-    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
-        match sql_type{
+    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String, select_comment: &Option<String>) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
+        return match sql_type {
             SqlStatement::AlterTable |
             SqlStatement::Create |
             SqlStatement::Update |
             SqlStatement::Insert |
             SqlStatement::Drop |
             SqlStatement::Delete |
-            SqlStatement::StartTransaction => {return Ok(self.get_write_conn(key).await?);}
+            SqlStatement::StartTransaction => {
+                Ok(self.get_write_conn(key).await?)
+            }
             _ => {
-                //获取读连接
-                return Ok(self.get_read_conn(key).await?)
+                if let Some(comment) = select_comment {
+                    if comment.to_lowercase() == String::from("force_master") {
+                        Ok(self.get_write_conn(key).await?)
+                    } else {
+                        Ok(self.get_read_conn(key).await?)
+                    }
+                } else {
+                    //获取读连接
+                    Ok(self.get_read_conn(key).await?)
+                }
             }
         }
 //        let error = "no available connection".to_string();
@@ -663,7 +673,7 @@ impl ConnectionsPoolPlatform{
     /// 如果现在是需要执行update则需要获取写节点的连接
     ///
     /// 返回true表示可以执行该sql语句，如果为false则需要重新获取连接
-    pub async fn conn_type_check(&mut self, host_info: &String, sql_type: &SqlStatement) -> Result<bool> {
+    pub async fn conn_type_check(&mut self, host_info: &String, sql_type: &SqlStatement, select_comment: &Option<String>) -> Result<bool> {
         let read_list_lock = self.read.read().await;
         let write_list_lock = self.write.read().await;
         //判断是否为写节点的连接，如果为写节点的连接可以执行任何操作
@@ -678,7 +688,7 @@ impl ConnectionsPoolPlatform{
         //如果不存在则表示该连接节点宕机则需要重新获取
         for read_host_info in &*read_list_lock{
             if read_host_info == host_info{
-                match sql_type{
+                return match sql_type {
                     SqlStatement::AlterTable |
                     SqlStatement::StartTransaction |
                     SqlStatement::Delete |
@@ -686,9 +696,16 @@ impl ConnectionsPoolPlatform{
                     SqlStatement::Insert |
                     SqlStatement::Update |
                     SqlStatement::Create => {
-                        return Ok(false)
+                        Ok(false)
                     }
-                    _ => {return Ok(true);}
+                    _ => {
+                        if let Some(v) = select_comment {
+                            if v.to_lowercase() == String::from("force_master") {
+                                return Ok(false);
+                            }
+                        }
+                        Ok(true)
+                    }
                 }
             }
         }

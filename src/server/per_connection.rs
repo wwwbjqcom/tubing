@@ -40,13 +40,15 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>, auto_commit: &bool, sql_type: &SqlStatement,seq: u8) -> Result<()> {
+    pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
+                       db: &Option<String>, auto_commit: &bool,
+                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>) -> Result<()> {
         if !self.conn_state{
-            self.check_get(pool, key, db, auto_commit, sql_type).await?;
+            self.check_get(pool, key, db, auto_commit, sql_type, &select_comment).await?;
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
-                if pool.conn_type_check(&conn.host_info, sql_type).await?{
+                if pool.conn_type_check(&conn.host_info, sql_type, &select_comment).await?{
                     self.check_default_db_and_autocommit(db, auto_commit).await?;
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
@@ -54,15 +56,16 @@ impl PerMysqlConn {
                     self.return_connection(seq).await?;
                     // pool.return_pool(new_conn, seq).await?;
                     // self.conn_state = false;
-                    self.check_get(pool, key, db, auto_commit, sql_type).await?;
+                    self.check_get(pool, key, db, auto_commit, sql_type, &select_comment).await?;
                 }
             }
         }
         Ok(())
     }
 
-    async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>, auto_commit: &bool, sql_type: &SqlStatement) -> Result<()>{
-        let (conn, conn_pool) = pool.get_pool(sql_type,key).await?;
+    async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
+                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>) -> Result<()>{
+        let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment).await?;
         //let conn = pool.get_pool(key).await?;
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);

@@ -517,7 +517,7 @@ impl AllUserPri{
             }
             let mut one_user_pri = UserPri::new(&user);
             if let Some(mut platform_pool_on) = self.platform_pool.get_platform_pool(&user_info.platform).await{
-                let (mut mysql_conn, _) =platform_pool_on.get_pool(&SqlStatement::Query, &"".to_string()).await?;
+                let (mut mysql_conn, _) =platform_pool_on.get_pool(&SqlStatement::Query, &"".to_string(), &None).await?;
                 self.get_user_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 self.get_db_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 self.get_table_pri(&mut mysql_conn, &mut one_user_pri).await?;
