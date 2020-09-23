@@ -62,7 +62,7 @@
     +----------+-------------------+------------+------------+---------------+------------+
     2 rows in set (0.00 sec)
 
- 查询状态目前只支持show connections/questions/status/fuse三个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' 添加条件查询。
+ 查询状态目前只支持show connections/questions/status/fuse四个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' 添加条件查询。
 
 
     MySQL [(none)]> set min_thread=1 where platform="test001" and host_info="192.168.1.80:3306";
