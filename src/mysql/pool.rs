@@ -927,7 +927,7 @@ impl ConnectionsPool{
             match platform_conn_count_lock.remove(platform) {
                 Some(v) => {
                     debug!("check fuse status: platform {} count {}", platform, v);
-                    if (v / self.max_thread_count.load(Ordering::Relaxed)) * 100 > 80 {
+                    if (v as f64 / self.max_thread_count.load(Ordering::Relaxed) as f64) * 100 as f64 > 80 as f64 {
                         platform_conn_count_lock.insert(platform.clone(), v);
                         Ok(true)
                     } else {
