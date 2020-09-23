@@ -35,8 +35,8 @@
 
 #### user_info(配置用户信息，多个则配置多个)
 
- 1. user/password: 客户端连接使用的账号密码，该账号密码必须存在于后端mysql， 会对该用户进行权限判断
- 2. platform: 代表该用户操作的是那个platform， 一个用户只能有一个platform且该platform必须存在于上面的platform_sublist
+ - user/password: 客户端连接使用的账号密码，该账号密码必须存在于后端mysql， 会对该用户进行权限判断
+ - platform: 代表该用户操作的是那个platform， 一个用户只能有一个platform且该platform必须存在于上面的platform_sublist
 
  ## 管理命令:
  没有专用的管理端或者管理端口，直接使用mysql命令行工具进行连接并通过set platform=admin命令设置就可以。
@@ -62,7 +62,7 @@
     +----------+-------------------+------------+------------+---------------+------------+
     2 rows in set (0.00 sec)
 
- 查询状态目前只支持show connections/questions/status三个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' 添加条件查询。
+ 查询状态目前只支持show connections/questions/status/fuse三个操作，可以看到连接池使用情况以及qps，都可以通过命令where platform='' 添加条件查询。
 
 
     MySQL [(none)]> set min_thread=1 where platform="test001" and host_info="192.168.1.80:3306";
@@ -76,7 +76,12 @@
     | test001 | 192.168.1.81:3306 |         10 |        100 |             0 |         10 |
     +----------+-------------------+------------+------------+---------------+------------+
     2 rows in set (0.00 sec)
-可以通过set命令修改连接池大小情况以及开关日志记录(set auth=1/0 whre ....)， sql记录可供临时开启排查问题作用，不建议一直使用， 由于sql语句需要写入文件，所有比较损耗性能，set命令必须带where条件，防止误操作 
+可以通过set命令修改连接池大小情况以及开关日志记录(set auth=1/0 whre ....)， sql记录可供临时开启排查问题作用，不建议一直使用， 由于sql语句需要写入文件，所有比较损耗性能，set命令必须带where条件，防止误操作, set 命令支持：
+
+ - set min_thread  修改连接池最小值
+ - set max_thread 修改连接池最大值
+ - set aut 打开/关闭sql审计
+ - set fuse 打开/关闭限流功能，如果打开则限制单个platform最多只能获取连接池中80%的连接，只限于sublist中的paltform名称， 业务db集群的paltform不受限制。
 
 ## 内部原理：  
 ![enter image description here](https://i.niupic.com/images/2020/07/28/8sMM.png)
