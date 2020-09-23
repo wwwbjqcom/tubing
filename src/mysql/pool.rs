@@ -600,9 +600,17 @@ impl ConnectionsPoolPlatform{
         for write_host_info in &*write_host_lock{
             match conn_pool_lock.remove(write_host_info){
                 Some(mut conn_pool) => {
-                    let conn_info = conn_pool.get_pool(key, platform, is_sublist).await?;
+                    let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                     conn_pool_lock.insert(write_host_info.clone(), conn_pool.clone());
-                    return Ok((conn_info, conn_pool));
+                    match conn_info_result{
+                        Ok(conn_info) => {
+                            return Ok((conn_info, conn_pool));
+                        }
+                        Err(e) => {
+                            return Err(Box::new(MyError(e.to_string().into())));
+                        }
+                    }
+
                 }
                 None => {}
             }
@@ -655,9 +663,16 @@ impl ConnectionsPoolPlatform{
             Some(v) => {
                 match conn_pool_lock.remove(&v){
                     Some(mut conn_pool) => {
-                        let conn_info = conn_pool.get_pool(key, platform, is_sublist).await?;
+                        let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                         conn_pool_lock.insert(v.clone(), conn_pool.clone());
-                        return Ok((conn_info, conn_pool));
+                        return match conn_info_result {
+                            Ok(conn_info) => {
+                                Ok((conn_info, conn_pool))
+                            }
+                            Err(e) => {
+                                Err(Box::new(MyError(e.to_string().into())))
+                            }
+                        }
                     }
                     None => {}
                 }
