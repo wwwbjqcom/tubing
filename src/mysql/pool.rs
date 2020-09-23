@@ -915,7 +915,7 @@ impl ConnectionsPool{
     ///
     /// 没有开启、或者开启没有达到阈值则增加记录
     async fn check_fuse(&mut self, platform: &String, is_sublist: bool) -> Result<bool>{
-        debug!("check_fuse: platform {}, is_sublist: {}, is fuse:{}", platform, is_sublist, &self.fuse);
+        debug!("check_fuse: platform {}, is_sublist: {}, is fuse:{}", platform, is_sublist, &self.fuse.load(Ordering::Relaxed));
         if !is_sublist {
             return Ok(false)
         }
