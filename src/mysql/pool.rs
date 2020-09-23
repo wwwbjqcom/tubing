@@ -900,13 +900,13 @@ impl ConnectionsPool{
     ///
     /// 没有开启、或者开启没有达到阈值则增加记录
     async fn check_fuse(&mut self, platform: &String, is_sublist: bool) -> Result<bool>{
+        if !is_sublist {
+            return Ok(false)
+        }
         return if !self.fuse.load(Ordering::Relaxed) {
             self.alter_platform_conn_count(platform).await?;
             Ok(false)
         } else {
-            if !is_sublist {
-                return Ok(false)
-            }
             let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
             match platform_conn_count_lock.remove(platform) {
                 Some(v) => {
@@ -945,7 +945,9 @@ impl ConnectionsPool{
         let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
         match platform_conn_count_lock.remove(platform) {
             Some(v) => {
-                platform_conn_count_lock.insert(platform.clone(), v - 1);
+                if v > 0{
+                    platform_conn_count_lock.insert(platform.clone(), v - 1);
+                }
                 Ok(())
             },
             None => {
