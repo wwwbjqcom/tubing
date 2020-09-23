@@ -180,7 +180,7 @@ impl SetStruct{
                 self.parse_value(SetVariables::Fuse(0), selection, value).await?;
             }
             _ => {
-                let err = String::from("only support set min_thread/max_thread/auth");
+                let err = String::from("only support set min_thread/max_thread/auth/fuse");
                 self.return_error(err).await?;
             }
         }
@@ -313,7 +313,7 @@ impl AdminSql{
                     Ok(AdminSql::Set(set_struct))
                 }
                 _ => {
-                    Err(Box::new(MyError(String::from("the admin module only supports set auth/pool where .. and show status/questions/connections").into())))
+                    Err(Box::new(MyError(String::from("the admin module only supports set auth/pool/fuse where .. and show status/questions/connections/fuse").into())))
                 }
             }
         }
