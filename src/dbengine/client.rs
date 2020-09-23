@@ -91,7 +91,8 @@ impl ClientResponse {
                 if let Err(e) = self.parse_query_packet(handler).await{
                     error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
-                    handler.per_conn_info.reset_connection().await?;
+                    handler.per_conn_info.return_connection(0).await?;
+                    //handler.per_conn_info.reset_connection().await?;
                     //return Err(Box::new(MyError(e.to_string().into())));
                 };
             }
