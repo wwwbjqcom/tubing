@@ -915,6 +915,7 @@ impl ConnectionsPool{
     ///
     /// 没有开启、或者开启没有达到阈值则增加记录
     async fn check_fuse(&mut self, platform: &String, is_sublist: bool) -> Result<bool>{
+        debug!("check_fuse: platform {}, is_sublist: {}, is fuse:{}", platform, is_sublist, &self.fuse);
         if !is_sublist {
             return Ok(false)
         }
@@ -925,6 +926,7 @@ impl ConnectionsPool{
             let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
             match platform_conn_count_lock.remove(platform) {
                 Some(v) => {
+                    debug!("check fuse status: platform {} count {}", platform, v);
                     if (v / self.max_thread_count.load(Ordering::Relaxed)) * 100 > 80 {
                         platform_conn_count_lock.insert(platform.clone(), v);
                         Ok(true)
@@ -942,6 +944,7 @@ impl ConnectionsPool{
     }
 
     async fn alter_platform_conn_count(&mut self, platform: &String) -> Result<()>{
+        debug!("add fuse status: platform {}", platform);
         let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
         match platform_conn_count_lock.remove(platform) {
             Some(v) => {
