@@ -275,7 +275,7 @@ impl TextResponse{
             }
             ShowCommand::Fuse => {
                 self.packet_column_count(4).await;
-                self.packet_list.extend(StatusRowValue::packet_column_definitions().await);
+                self.packet_list.extend(FuseRowValue::packet_column_definitions().await);
             }
             _ => {
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
