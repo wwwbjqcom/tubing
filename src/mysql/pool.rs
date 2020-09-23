@@ -203,15 +203,15 @@ impl PlatformPool{
         )
     }
 
-    /// 获取对应业务库总连接池
-    pub async fn get_platform_pool(&mut self, platform: &String) -> Option<ConnectionsPoolPlatform>{
-        if let  Some(client_platform) = self.config.get_pool_platform(platform){
+    /// 获取对应业务库总连接池、当前platform是否为子业务
+    pub async fn get_platform_pool(&mut self, platform: &String) -> (Option<ConnectionsPoolPlatform>, bool){
+        if let  (Some(client_platform), is_sub) = self.config.get_pool_platform(platform){
             let platform_pool_lock = self.platform_pool.lock().await;
             if let Some(on_platform_pool) = platform_pool_lock.get(&client_platform){
-                return Some(on_platform_pool.clone())
+                return (Some(on_platform_pool.clone()), is_sub)
             }
         }
-        return None
+        return (None, false)
     }
 
     /// 当连接执行set platform时, 通过保存的用户信息进行判断权限
@@ -272,7 +272,7 @@ impl PlatformPool{
         let mut plaform_node_info = self.platform_node_info.clone();
         for platform_node in &mut plaform_node_info{
             if platform_node.mgr{
-                if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
+                if let (Some(mut platform_pool), _) = self.get_platform_pool(&platform_node.platform).await{
                     let new_route_info = platform_pool.get_mgr_cluster_role_state(&platform_node.platform).await?;
                     if new_route_info.write.host != "".to_string(){
                         self.alter_platform_pool(&new_route_info, platform_node).await?;
@@ -304,7 +304,7 @@ impl PlatformPool{
         if platform_node.check(&route_info){
             //发生变动， 开始修改连接池
             debug!("check after: {:?}", &platform_node);
-            if let Some(mut platform_pool) = self.get_platform_pool(&platform_node.platform).await{
+            if let (Some(mut platform_pool), _) = self.get_platform_pool(&platform_node.platform).await{
                 platform_pool.alter_pool(&platform_node).await?;
                 platform_node.reset_alter();
             }
@@ -316,7 +316,7 @@ impl PlatformPool{
     async fn check_health_for_type(&mut self, check_type: HealthType) -> Result<()> {
         let platform_list = self.get_platform_list().await;
         for platform in platform_list{
-            if let Some(mut platform_pool) = self.get_platform_pool(&platform).await{
+            if let (Some(mut platform_pool), _) = self.get_platform_pool(&platform).await{
                 platform_pool.check_health_for_type(&check_type).await?;
             }
         }
@@ -335,7 +335,7 @@ impl PlatformPool{
     /// 修改连接池最小/最大值
     pub async fn alter_pool_thread(&mut self, set_struct: &admin::SetStruct) -> Result<()> {
         if let Some(platform) = &set_struct.platform{
-            if let Some(mut platform_pool) = self.get_platform_pool(platform).await{
+            if let (Some(mut platform_pool), _) = self.get_platform_pool(platform).await{
                 if let Some(host_info) = &set_struct.host_info{
                     // 获取某一个节点连接池进行操作
                     platform_pool.alter_set_value(host_info, set_struct).await?;
@@ -376,7 +376,7 @@ impl PlatformPool{
 
     /// 获取某一个platform下的连接池状态信息
     async fn get_state(&mut self, platform: &String) -> Result<admin::PoolState>{
-        if let Some(mut platform_pool) = self.get_platform_pool(platform).await{
+        if let (Some(mut platform_pool), _) = self.get_platform_pool(platform).await{
             return Ok(platform_pool.get_pool_state(platform).await?)
         }
         return Err(Box::new(MyError(format!("there is no connection pool for platfrom: {}", platform).into())));
@@ -523,13 +523,14 @@ impl ConnectionsPoolPlatform{
     /// 可能会在每个节点缓存一条连接， 这样可以保证在连接使用完的最坏情况下依然能检查状态
     async fn get_mgr_cluster_role_state(&mut self, platform: &String) -> Result<RouteInfo>{
         let cache_key = "mgrclusterrolestate_bbb".to_string();
-        let (mut conn_info, _) = self.get_pool(&SqlStatement::Query, &cache_key, &None).await?;
+        let (mut conn_info, mut conn_pool) = self.get_pool(&SqlStatement::Query, &cache_key, &None, platform, false).await?;
         if &conn_info.cached == &"".to_string(){
             conn_info.cached = cache_key;
         }
         let sql = String::from("select member_host,member_port,member_state,member_role from performance_schema.replication_group_members;");
         let result = conn_info.execute_command(&sql).await?;
-        self.return_pool(conn_info, 0).await?;
+        conn_pool.return_pool(conn_info, platform).await?;
+        // self.return_pool(conn_info, 0, platform).await?;
         Ok(RouteInfo::new_mgr_route(&result, platform))
     }
 
@@ -543,7 +544,9 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
-    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String, select_comment: &Option<String>) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
+    pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String,
+                          select_comment: &Option<String>,
+                          platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
         return match sql_type {
             SqlStatement::AlterTable |
             SqlStatement::Create |
@@ -552,18 +555,18 @@ impl ConnectionsPoolPlatform{
             SqlStatement::Drop |
             SqlStatement::Delete |
             SqlStatement::StartTransaction => {
-                Ok(self.get_write_conn(key).await?)
+                Ok(self.get_write_conn(key, platform, is_sublist).await?)
             }
             _ => {
                 if let Some(comment) = select_comment {
                     if comment.to_lowercase() == String::from("force_master") {
-                        Ok(self.get_write_conn(key).await?)
+                        Ok(self.get_write_conn(key, platform, is_sublist).await?)
                     } else {
-                        Ok(self.get_read_conn(key).await?)
+                        Ok(self.get_read_conn(key, platform, is_sublist).await?)
                     }
                 } else {
                     //获取读连接
-                    Ok(self.get_read_conn(key).await?)
+                    Ok(self.get_read_conn(key, platform, is_sublist).await?)
                 }
             }
         }
@@ -571,33 +574,33 @@ impl ConnectionsPoolPlatform{
 //        return Err(Box::new(MyError(error.into())));
     }
 
-    /// 归还连接到对应节点的连接池中
-    pub async fn return_pool(&mut self, mut mysql_conn: MysqlConnectionInfo, seq: u8) -> Result<()>{
-        mysql_conn.check_rollback(seq).await?;
-
-        //mysql_conn.reset_cached().await?;
-        mysql_conn.reset_conn_default()?;
-
-        let mut conn_pool_lock = self.conn_pool.lock().await;
-        let host_info = mysql_conn.host_info.clone();
-        match conn_pool_lock.remove(&host_info){
-            Some(mut conn_pool) => {
-                conn_pool.return_pool(mysql_conn).await?;
-                conn_pool_lock.insert(host_info, conn_pool);
-            }
-            None => {}
-        }
-        return Ok(());
-    }
+    // /// 归还连接到对应节点的连接池中
+    // pub async fn return_pool(&mut self, mut mysql_conn: MysqlConnectionInfo, seq: u8, platform: &String) -> Result<()>{
+    //     mysql_conn.check_rollback(seq).await?;
+    //
+    //     //mysql_conn.reset_cached().await?;
+    //     mysql_conn.reset_conn_default()?;
+    //
+    //     let mut conn_pool_lock = self.conn_pool.lock().await;
+    //     let host_info = mysql_conn.host_info.clone();
+    //     match conn_pool_lock.remove(&host_info){
+    //         Some(mut conn_pool) => {
+    //             conn_pool.return_pool(mysql_conn, platform).await?;
+    //             conn_pool_lock.insert(host_info, conn_pool);
+    //         }
+    //         None => {}
+    //     }
+    //     return Ok(());
+    // }
 
     /// 获取主节点连接
-    async fn get_write_conn(&mut self, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
+    async fn get_write_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let write_host_lock = self.write.read().await;
         for write_host_info in &*write_host_lock{
             match conn_pool_lock.remove(write_host_info){
                 Some(mut conn_pool) => {
-                    let conn_info = conn_pool.get_pool(key).await?;
+                    let conn_info = conn_pool.get_pool(key, platform, is_sublist).await?;
                     conn_pool_lock.insert(write_host_info.clone(), conn_pool.clone());
                     return Ok((conn_info, conn_pool));
                 }
@@ -610,7 +613,7 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 通过最少连接数获取连接
-    async fn get_read_conn(&mut self, key: &String) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
+    async fn get_read_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
 
@@ -652,7 +655,7 @@ impl ConnectionsPoolPlatform{
             Some(v) => {
                 match conn_pool_lock.remove(&v){
                     Some(mut conn_pool) => {
-                        let conn_info = conn_pool.get_pool(key).await?;
+                        let conn_info = conn_pool.get_pool(key, platform, is_sublist).await?;
                         conn_pool_lock.insert(v.clone(), conn_pool.clone());
                         return Ok((conn_info, conn_pool));
                     }
@@ -800,6 +803,9 @@ impl ConnectionsPoolPlatform{
 /// 如果事务完成会放回conn_queue队列中。
 ///
 /// queued_count 加 cached_count 加 active_count 是当前连接池中所有的连接数
+/// 
+/// fush: 是否开启单个platform熔断功能， 即单个platform使用的连接超过总连接池80%则不再分配连接，
+/// 根据platform_conn_count记录的分配数据进行判断
 #[derive(Debug, Clone)]
 pub struct ConnectionsPool {
     conn_queue: Arc<Mutex<ConnectionInfo>>,                 //所有连接队列
@@ -817,7 +823,9 @@ pub struct ConnectionsPool {
     node_role: Arc<AtomicBool>,                                  //主从角色判断，true为主，flase为从
     node_state: Arc<AtomicBool>,                                 //节点状态，如果为flase表示宕机
     host_info: Arc<Mutex<String>>,                                //记录节点信息
-    auth: Arc<AtomicBool>
+    auth: Arc<AtomicBool>,                                       //是否打开sql审计功能
+    fuse: Arc<AtomicBool>,                                       //是否开启熔断自我保护功能, 单个子platform连接占用率超过80%就不会再分配连接
+    platform_conn_count: Arc<Mutex<HashMap<String, usize>>>,     //记录所有子platform连接分配数
 }
 
 impl ConnectionsPool{
@@ -842,7 +850,9 @@ impl ConnectionsPool{
             node_role: Arc::new(AtomicBool::new(true)),
             node_state: Arc::new(AtomicBool::new(true)),
             host_info: Arc::new(Mutex::new(conf.host_info.clone())),
-            auth: Arc::new(AtomicBool::new(false))
+            auth: Arc::new(AtomicBool::new(false)),
+            fuse: Arc::new(AtomicBool::new(false)),
+            platform_conn_count: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -871,13 +881,77 @@ impl ConnectionsPool{
                     self.auth.store(true, Ordering::Relaxed);
                 }
             }
-
+            admin::SetVariables::Fuse(value) => {
+                if value == &0{
+                    self.fuse.store(false, Ordering::Relaxed);
+                }else {
+                    self.fuse.store(true, Ordering::Relaxed);
+                }
+            }
             _ => {
                 let err = "only support set min_thread/max_thread/auth".to_string();
                 return Err(Box::new(MyError(err.into())));
             }
         }
         Ok(())
+    }
+
+    /// 检查是否开启熔断机制，如果开启则判断该paltform请求的连接数是否已达到80%, 超过限制则返回true
+    ///
+    /// 没有开启、或者开启没有达到阈值则增加记录
+    async fn check_fuse(&mut self, platform: &String, is_sublist: bool) -> Result<bool>{
+        return if !self.fuse.load(Ordering::Relaxed) {
+            self.alter_platform_conn_count(platform).await?;
+            Ok(false)
+        } else {
+            if !is_sublist {
+                return Ok(false)
+            }
+            let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
+            match platform_conn_count_lock.remove(platform) {
+                Some(v) => {
+                    if (v / self.max_thread_count.load(Ordering::Relaxed)) * 100 > 80 {
+                        platform_conn_count_lock.insert(platform.clone(), v);
+                        Ok(true)
+                    } else {
+                        platform_conn_count_lock.insert(platform.clone(), v + 1);
+                        Ok(false)
+                    }
+                },
+                None => {
+                    platform_conn_count_lock.insert(platform.clone(), 1);
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    async fn alter_platform_conn_count(&mut self, platform: &String) -> Result<()>{
+        let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
+        match platform_conn_count_lock.remove(platform) {
+            Some(v) => {
+                platform_conn_count_lock.insert(platform.clone(), v + 1);
+                Ok(())
+            },
+            None => {
+                platform_conn_count_lock.insert(platform.clone(), 1);
+                Ok(())
+            }
+        }
+    }
+
+    /// 归还连接时对记录减法
+    async fn return_platform_conn_count(&mut self, platform: &String) -> Result<()>{
+        let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
+        match platform_conn_count_lock.remove(platform) {
+            Some(v) => {
+                platform_conn_count_lock.insert(platform.clone(), v - 1);
+                Ok(())
+            },
+            None => {
+                Ok(())
+            }
+        }
     }
 
     /// 从空闲队列中获取连接
@@ -891,7 +965,7 @@ impl ConnectionsPool{
     /// 如果没有： 创建连接并获取
     ///
     /// 如果已达到最大： 等待1秒，如果超过1秒没获取到则返回错误
-    pub async fn get_pool(&mut self, key: &String) -> Result<MysqlConnectionInfo> {
+    pub async fn get_pool(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<MysqlConnectionInfo> {
         let std_duration = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         let start_time = Duration::from(std_duration);
         let wait_time = Duration::from_millis(1000);    //等待时间1s
@@ -900,6 +974,11 @@ impl ConnectionsPool{
                 return Ok(conn);
             }
             None => {
+                //检查熔断机制
+                if self.check_fuse(platform, is_sublist).await?{
+                    error!("{} connection access has reached the upper limit set by the system", platform);
+                    return Err(Box::new(MyError(format!("{} connection access has reached the upper limit set by the system", platform).into())));
+                }
                 let mut pool = self.conn_queue.lock().await;
                 loop {
                     //从队列中获取，如果队列为空，则判断是否已达到最大，再进行判断获取
@@ -922,6 +1001,7 @@ impl ConnectionsPool{
                             //已达到最大连接数则等待指定时间,看能否获取到
                             let now_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
                             pool  = if now_time - start_time > wait_time {
+                                self.return_platform_conn_count(platform).await?;
                                 return Err(Box::new(MyError(String::from("get connection timeout").into())));
                             } else {
                                 delay_for(Duration::from_millis(50)).await;
@@ -937,8 +1017,9 @@ impl ConnectionsPool{
 
 
     /// 操作完成归还连接到连接池中
-    pub async fn return_pool(&mut self, mut conn: MysqlConnectionInfo) -> Result<()> {
+    pub async fn return_pool(&mut self, mut conn: MysqlConnectionInfo, platform: &String) -> Result<()> {
         if conn.cached == String::from(""){
+            self.return_platform_conn_count(platform).await?;
             //let &(ref pool, ref condvar) = &*self.conn_queue;
             let mut pool = self.conn_queue.lock().await;
             match conn.check_health().await{
@@ -968,6 +1049,7 @@ impl ConnectionsPool{
 
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
+        let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
         admin::HostPoolState{
             host_info: host_info.clone(),
             com_select: self.com_select.load(Ordering::Relaxed),
@@ -979,7 +1061,9 @@ impl ConnectionsPool{
             thread_count: self.queued_count.load(Ordering::Relaxed),
             cached_count: self.cached_count.load(Ordering::Relaxed),
             active_thread: self.active_count.load(Ordering::Relaxed),
-            auth: self.auth.load(Ordering::Relaxed)
+            auth: self.auth.load(Ordering::Relaxed),
+            fuse: self.fuse.load(Ordering::Relaxed),
+            platform_conn_count: platform_conn_count_lock.clone()
         }
     }
 

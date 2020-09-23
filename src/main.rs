@@ -70,18 +70,21 @@ impl MyConfig{
         return false;
     }
 
-    pub fn get_pool_platform(&self, client_platform_name: &String) -> Option<String> {
+    /// 获取连接池platform名称， 同时返回客户端设置的是子platform还是主platform
+    ///
+    /// 子paltform返回false， 用于判断
+    pub fn get_pool_platform(&self, client_platform_name: &String) -> (Option<String>, bool) {
         for platform_info in &self.platform{
             if &platform_info.platform == client_platform_name{
-                return Some(platform_info.platform.clone());
+                return (Some(platform_info.platform.clone()), false);
             }
             for client_platform in &platform_info.platform_sublist{
                 if client_platform == client_platform_name{
-                    return Some(platform_info.platform.clone());
+                    return (Some(platform_info.platform.clone()), true);
                 }
             }
         }
-        return None
+        return (None, false)
     }
 }
 

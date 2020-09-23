@@ -7,12 +7,14 @@ use crate::mysql::Result;
 use crate::MyError;
 use tracing::{debug, info};
 use sqlparser::ast::{Statement, Expr, BinaryOperator, SetVariableValue, Value, Ident};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum ShowCommand{
     Status,
     Connections,
     Questions,
+    Fuse,
     Null
 }
 
@@ -34,6 +36,9 @@ impl ShowStruct{
             }
             "questions" => {
                 self.command = ShowCommand::Questions;
+            }
+            "fuse" => {
+                self.command = ShowCommand::Fuse;
             }
             _ => {
                 let err = String::from("only support show status/connections/questions");
@@ -104,6 +109,7 @@ pub enum SetVariables{
     MaxThread(usize),
     MinThread(usize),
     Auth(u8),
+    Fuse(u8),
     Null
 }
 impl SetVariables{
@@ -141,6 +147,9 @@ impl SetVariables{
             SetVariables::Auth(_) => {
                 SetVariables::Auth(parse_value as u8)
             }
+            SetVariables::Fuse(_) => {
+                SetVariables::Fuse(parse_value as u8)
+            }
             _ => {
                 SetVariables::Null
             }
@@ -166,6 +175,9 @@ impl SetStruct{
             }
             "auth" => {
                 self.parse_value(SetVariables::Auth(0), selection, value).await?;
+            }
+            "fuse" => {
+                self.parse_value(SetVariables::Fuse(0), selection, value).await?;
             }
             _ => {
                 let err = String::from("only support set min_thread/max_thread/auth");
@@ -323,7 +335,9 @@ pub struct HostPoolState{
     pub thread_count: usize,
     pub active_thread: usize,
     pub cached_count: usize,
-    pub auth: bool
+    pub auth: bool,
+    pub fuse: bool,
+    pub platform_conn_count: HashMap<String, usize>,
 }
 
 #[derive(Debug)]

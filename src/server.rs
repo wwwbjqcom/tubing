@@ -477,7 +477,7 @@ impl Handler {
                     // This will result in the task terminating.
                     break;
                 }
-                _ = self.per_conn_info.health(&mut self.platform_pool_on) => {
+                _ = self.per_conn_info.health() => {
                     continue;
                 }
             };
@@ -604,9 +604,13 @@ impl Handler {
     }
 
     /// 当用户设置platform时，如果权限检查通过则获取对应业务组的总连接池
+    ///
+    /// 并设置per_conn中paltform_is_sublist，记录当前设置的platfrom是否为子业务
     pub async fn get_platform_conn_on(&mut self, platform: &String) -> Result<bool> {
-        if let Some(pool)  = self.platform_pool.get_platform_pool(platform).await{
+        if let (Some(pool), platform_is_sub)  = self.platform_pool.get_platform_pool(platform).await{
             self.platform_pool_on = pool;
+            self.per_conn_info.platform_is_sublist = platform_is_sub;
+            self.per_conn_info.platform = platform.clone();
             return Ok(true)
         }
         return Ok(false)

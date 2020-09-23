@@ -10,6 +10,7 @@ use crate::dbengine::{LONG, VAR_STRING, CLIENT_DEPRECATE_EOF, SERVER_STATUS_IN_T
 use crate::mysql::Result;
 use crate::{MyError,readvalue};
 use tracing::{debug};
+use std::collections::HashMap;
 
 pub struct ColumnDefinition41{
     pub catalog: String,
@@ -101,6 +102,42 @@ impl StatusRowValue{
         packet.push(ColumnDefinition41::show_status_column(&String::from("write"), &VAR_STRING).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("read"), &VAR_STRING).await.packet().await);
         packet.push(ColumnDefinition41::show_status_column(&String::from("questions"), &LONG).await.packet().await);
+        packet
+    }
+}
+
+
+struct FuseRowValue{
+    platform: String,
+    host_info: String,
+    fuse: bool,
+    platform_conn_count: HashMap<String, usize>,
+}
+impl FuseRowValue{
+    async fn new(platform: &String, host_state: &HostPoolState) -> FuseRowValue{
+        FuseRowValue{
+            platform: platform.clone(),
+            host_info: host_state.host_info.clone(),
+            fuse: host_state.fuse.clone(),
+            platform_conn_count: host_state.platform_conn_count.clone()
+        }
+    }
+
+    async fn packet(&self) -> Vec<u8> {
+        let mut packet = vec![];
+        packet.extend(packet_one_column_value(self.platform.clone()).await);
+        packet.extend(packet_one_column_value(self.host_info.clone()).await);
+        packet.extend(packet_one_column_value(self.fuse.clone().to_string()).await);
+        packet.extend(packet_one_column_value(format!("{:?}", self.platform_conn_count.clone())).await);
+        packet
+    }
+
+    async fn packet_column_definitions() -> Vec<Vec<u8>> {
+        let mut packet = vec![];
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("host_info"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("fuse"), &VAR_STRING).await.packet().await);
+        packet.push(ColumnDefinition41::show_status_column(&String::from("platform_conn_count"), &LONG).await.packet().await);
         packet
     }
 }
@@ -236,6 +273,10 @@ impl TextResponse{
                 self.packet_column_count(4).await;
                 self.packet_list.extend(StatusRowValue::packet_column_definitions().await);
             }
+            ShowCommand::Fuse => {
+                self.packet_column_count(4).await;
+                self.packet_list.extend(StatusRowValue::packet_column_definitions().await);
+            }
             _ => {
                 return Err(Box::new(MyError(String::from("unsupported syntax").into())));
             }
@@ -275,6 +316,10 @@ impl TextResponse{
                             }
                             ShowCommand::Connections => {
                                 let c_value = ConnectionsRowValue::new(&pool_state.platform, &one_pool_state).await;
+                                self.packet_list.push(c_value.packet().await);
+                            }
+                            ShowCommand::Fuse => {
+                                let c_value = FuseRowValue::new(&pool_state.platform, &one_pool_state).await;
                                 self.packet_list.push(c_value.packet().await);
                             }
                             _ => {}

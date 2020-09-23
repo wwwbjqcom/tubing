@@ -516,12 +516,15 @@ impl AllUserPri{
                 continue;
             }
             let mut one_user_pri = UserPri::new(&user);
-            if let Some(mut platform_pool_on) = self.platform_pool.get_platform_pool(&user_info.platform).await{
-                let (mut mysql_conn, _) =platform_pool_on.get_pool(&SqlStatement::Query, &"".to_string(), &None).await?;
+            if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&user_info.platform).await{
+                let (mut mysql_conn, mut mysql_conn_pool) =platform_pool_on.get_pool(&SqlStatement::Query,
+                                                                   &"".to_string(), &None,
+                                                                   &user_info.platform, false).await?;
                 self.get_user_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 self.get_db_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 self.get_table_pri(&mut mysql_conn, &mut one_user_pri).await?;
-                platform_pool_on.return_pool(mysql_conn, 0).await?;
+                mysql_conn_pool.return_pool(mysql_conn, &user_info.platform).await?;
+                // platform_pool_on.return_pool(mysql_conn, 0, &user_info.platform).await?;
                 self.all_pri.push(one_user_pri);
             }
         }

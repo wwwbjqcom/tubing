@@ -12,22 +12,29 @@ pub struct PerMysqlConn{
     pub conn_pool: Option<ConnectionsPool>,
     pub conn_state: bool,
     pub cur_db: String,
-    pub cur_autocommit: bool
+    pub cur_autocommit: bool,
+    pub platform_is_sublist: bool,
+    pub platform: String,
 }
 
 impl PerMysqlConn {
     pub fn new() -> PerMysqlConn {
-        PerMysqlConn{ conn_info: None, conn_pool: None, conn_state: false, cur_db: "information_schema".to_string(), cur_autocommit: false }
+        PerMysqlConn{ conn_info: None, conn_pool: None, conn_state: false,
+            cur_db: "information_schema".to_string(), cur_autocommit: false,
+            platform_is_sublist: false, platform: "".to_string() }
     }
 
     /// 检查连接空闲状态， 空闲超过指定时间且无事务操作则归还连接到连接池
-    pub async fn health(&mut self, pool: &mut ConnectionsPoolPlatform) -> Result<()> {
+    pub async fn health(&mut self) -> Result<()> {
         loop {
             if let Some(conn) = &mut self.conn_info{
                 if conn.check_cacke_sleep(){
                     conn.reset_conn_default()?;
                     let new_conn = conn.try_clone()?;
-                    pool.return_pool(new_conn, 0).await?;
+                    if let Some(conn_pool) = &mut self.conn_pool{
+                        conn_pool.return_pool(new_conn, &self.platform).await?;
+                    }
+                    // pool.return_pool(new_conn, 0, &self.platform).await?;
                     self.conn_info = None;
                     self.conn_state = false;
                     self.cur_db = "information_schema".to_string();
@@ -42,9 +49,9 @@ impl PerMysqlConn {
 
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
                        db: &Option<String>, auto_commit: &bool,
-                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>) -> Result<()> {
+                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<()> {
         if !self.conn_state{
-            self.check_get(pool, key, db, auto_commit, sql_type, &select_comment).await?;
+            self.check_get(pool, key, db, auto_commit, sql_type, &select_comment,platform).await?;
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
@@ -56,7 +63,7 @@ impl PerMysqlConn {
                     self.return_connection(seq).await?;
                     // pool.return_pool(new_conn, seq).await?;
                     // self.conn_state = false;
-                    self.check_get(pool, key, db, auto_commit, sql_type, &select_comment).await?;
+                    self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?;
                 }
             }
         }
@@ -64,8 +71,9 @@ impl PerMysqlConn {
     }
 
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
-                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>) -> Result<()>{
-        let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment).await?;
+                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<()>{
+        let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment,
+                                              platform, self.platform_is_sublist.clone()).await?;
         //let conn = pool.get_pool(key).await?;
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
@@ -173,7 +181,7 @@ impl PerMysqlConn {
             new_conn.check_rollback(seq).await?;
 
             if let Some(conn_pool) = &mut self.conn_pool{
-                conn_pool.return_pool(new_conn).await?;
+                conn_pool.return_pool(new_conn, &self.platform).await?;
             }
             self.conn_info = None;
             self.conn_state = false;
