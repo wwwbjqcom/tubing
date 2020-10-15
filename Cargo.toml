@@ -1,5 +1,5 @@
 [package]
-name = "mysql_bus"
+name = "tubing"
 version = "0.1.0"
 authors = ["manito <wwwbjqcom@126.com>"]
 edition = "2018"
