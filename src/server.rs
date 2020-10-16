@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
+use tokio::signal::unix::{signal, SignalKind};
 use tracing::{debug, error, info, instrument};
 use num_cpus;
 use crate::{MyConfig, mysql};
@@ -28,6 +29,16 @@ use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS};
 use tokio::runtime::Builder;
 use crate::server::mysql_mp::ResponseValue;
 use crate::mysql::privileges::AllUserPri;
+
+async fn unix_signal() -> Result<()> {
+    let mut stream = signal(SignalKind::terminate())?;
+    loop {
+        stream.recv().await;
+        info!("got signal HUP");
+        break;
+    }
+    Ok(())
+}
 
 pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
     debug!("config: {:?}", &config);
@@ -96,7 +107,7 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
             platform_pool,
             user_privileges: user_pri,
             listener,
-            limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
+            //limit_connections: Arc::new(Semaphore::new(crate::MAX_CONNECTIONS)),
             notify_shutdown,
             shutdown_complete_tx,
             shutdown_complete_rx,
@@ -122,8 +133,12 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
 
             }
 
-            _ = shutdown => {
-                // The shutdown signal has been received.
+            // _ = shutdown => {
+            //     // The shutdown signal has been received.
+            //     info!("shutting down");
+            // }
+
+            _ = unix_signal() => {
                 info!("shutting down");
             }
         }
@@ -134,10 +149,13 @@ pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
         let Listener {
             mut shutdown_complete_rx,
             shutdown_complete_tx,
+            notify_shutdown,
             ..
         } = server;
 
-
+        if let Err(e) = notify_shutdown.send(()){
+            info!("{:?}",e);
+        }
         drop(shutdown_complete_tx);
         // Wait for all active connections to finish processing. As the `Sender`
         // handle held by the listener has been dropped above, the only remaining
@@ -185,7 +203,7 @@ struct Listener {
     ///
     /// When handlers complete processing a connection, the permit is returned
     /// to the semaphore.
-    limit_connections: Arc<Semaphore>,
+    /// limit_connections: Arc<Semaphore>,
 
     /// Broadcasts a shutdown signal to all active connections.
     ///
@@ -243,7 +261,7 @@ impl Listener {
             // "forget" the permit, which drops the permit value **without**
             // incrementing the semaphore's permits. Then, in the handler task
             // we manually add a new permit when processing completes.
-            self.limit_connections.acquire().await.forget();
+            // self.limit_connections.acquire().await.forget();
 
             // Accept a new socket. This will attempt to perform error handling.
             // The `accept` method internally attempts to recover errors, so an
@@ -278,7 +296,7 @@ impl Listener {
                 // The connection state needs a handle to the max connections
                 // semaphore. When the handler is done processing the
                 // connection, a permit is added back to the semaphore.
-                limit_connections: self.limit_connections.clone(),
+                // limit_connections: self.limit_connections.clone(),
 
                 // Receive shutdown notifcations.
                 shutdown: shutdown::Shutdown::new(self.notify_shutdown.subscribe()),
@@ -408,12 +426,12 @@ pub struct Handler {
     /// the byte level protocol parsing details encapsulated in `Connection`.
     connection: Connection,
 
-    /// Max connection semaphore.
-    ///
-    /// When the handler is dropped, a permit is returned to this semaphore. If
-    /// the listener is waiting for connections to close, it will be notified of
-    /// the newly available permit and resume accepting connections.
-    limit_connections: Arc<Semaphore>,
+    // /// Max connection semaphore.
+    // ///
+    // /// When the handler is dropped, a permit is returned to this semaphore. If
+    // /// the listener is waiting for connections to close, it will be notified of
+    // /// the newly available permit and resume accepting connections.
+    // limit_connections: Arc<Semaphore>,
 
     /// Listen for shutdown notifications.
     ///
@@ -651,19 +669,19 @@ impl Handler {
     }
 }
 
-impl Drop for Handler {
-    fn drop(&mut self) {
-        // Add a permit back to the semaphore.
-        //
-        // Doing so unblocks the listener if the max number of
-        // connections has been reached.
-        //
-        // This is done in a `Drop` implementation in order to guaranatee that
-        // the permit is added even if the task handling the connection panics.
-        // If `add_permit` was called at the end of the `run` function and some
-        // bug causes a panic. The permit would never be returned to the
-        // semaphore.
-        self.limit_connections.add_permits(1);
-    }
-}
+// impl Drop for Handler {
+//     fn drop(&mut self) {
+//         // Add a permit back to the semaphore.
+//         //
+//         // Doing so unblocks the listener if the max number of
+//         // connections has been reached.
+//         //
+//         // This is done in a `Drop` implementation in order to guaranatee that
+//         // the permit is added even if the task handling the connection panics.
+//         // If `add_permit` was called at the end of the `run` function and some
+//         // bug causes a panic. The permit would never be returned to the
+//         // semaphore.
+//         self.limit_connections.add_permits(1);
+//     }
+// }
 

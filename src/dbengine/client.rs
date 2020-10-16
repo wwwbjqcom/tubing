@@ -218,7 +218,6 @@ impl ClientResponse {
         let dialect = MySqlDialect {};
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
-
         // let sql_parser = SqlStatement::Default;
         // let (a, _) = sql_parser.parser(&sql);
         if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
