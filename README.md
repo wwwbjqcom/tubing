@@ -1,5 +1,5 @@
 
-# MysqlBus  
+# Tubing  
   
 集中式代理后端数据库的小型读写分离中间件， 功能比较少，只有读写分离以及连接池功能。
 
@@ -16,7 +16,7 @@
   
 ## 获取方式：  
   
-获取源码进行编译运行 RUST_LOG=debug ./MysqlBus --defaults-file test.toml 日志方式可以选择info或者debug，退出则使用kill pid的方式，程序会平滑关闭
+获取源码进行编译运行 RUST_LOG=debug ./tubing --defaults-file test.toml 日志方式可以选择info或者debug，退出则使用kill pid的方式，程序会平滑关闭
   
 ## 部分配置： 
  配置文件为标准的toml格式， 可参考test.toml，全局配置为基本信息
