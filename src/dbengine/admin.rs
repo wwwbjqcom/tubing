@@ -41,7 +41,7 @@ impl ShowStruct{
                 self.command = ShowCommand::Fuse;
             }
             _ => {
-                let err = String::from("only support show status/connections/questions");
+                let err = String::from("only support show status/connections/questions/fuse");
                 return Err(Box::new(MyError(err.into())));
             }
         }

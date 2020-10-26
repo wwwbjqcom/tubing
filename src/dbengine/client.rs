@@ -7,7 +7,7 @@ use std::io::{Cursor, Read};
 use crate::{ readvalue};
 use crate::mysql::Result;
 use byteorder::{ReadBytesExt, LittleEndian};
-use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF};
+use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF,other_response};
 use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
@@ -238,6 +238,9 @@ impl ClientResponse {
 
         //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
         if !self.check_is_set_platform(&a, handler).await?{
+            if self.check_other_query(&a, &sql, handler).await?{
+                return Ok(());
+            }
             let error = format!("please set up a business platform first");
             error!("{}", &error);
             self.send_error_packet(handler, &error).await?;
@@ -344,6 +347,39 @@ impl ClientResponse {
 
         debug!("{}",crate::info_now_time(String::from("send ok")));
         Ok(())
+    }
+
+    /// 用于对未设置platform之前的部分语句做响应
+    ///
+    /// 主要适应部分框架在未设置变量之前执行部分状态检查
+    async fn check_other_query(&self, sql_type: &SqlStatement, sql: &String, handler: &mut Handler) -> Result<bool>{
+        match sql_type{
+            SqlStatement::Query => {
+                if sql.to_lowercase().contains("max_allowed_packet") {
+                    let mut text_response = other_response::TextResponse::new(handler.client_flags.clone());
+                    if let Err(e) = text_response.packet().await{
+                        info!("packet text response error: {:?},", &e.to_string());
+                        self.send_error_packet(handler, &e.to_string()).await?;
+                    }else {
+                        for packet in text_response.packet_list{
+                            //发送数据包
+                            debug!("send text packet");
+                            handler.send(&packet).await?;
+                            handler.seq_add();
+                        }
+                        handler.reset_seq();
+                    }
+                }
+                else {
+                    return Ok(false);
+                }
+            }
+            _ => {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 
     /// 当执行drop database之后执行检查

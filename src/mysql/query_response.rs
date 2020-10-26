@@ -30,7 +30,7 @@ pub struct ColumnDefinition41{
 
 impl ColumnDefinition41{
 
-    async fn show_status_column(column_name: &String, column_type: &u8) -> ColumnDefinition41{
+    pub async fn show_status_column(column_name: &String, column_type: &u8) -> ColumnDefinition41{
         let mut my_column_length = 255 as u32;
         if column_type == &8{
             my_column_length = 10;
@@ -51,7 +51,7 @@ impl ColumnDefinition41{
         }
     }
 
-    async fn packet(&self) -> Vec<u8> {
+    pub async fn packet(&self) -> Vec<u8> {
         let mut packet = vec![];
         packet.extend(packet_one_column_value(self.catalog.clone()).await);
         packet.extend(packet_one_column_value(self.schema.clone()).await);
@@ -241,7 +241,7 @@ impl ConnectionsRowValue{
     }
 }
 
-async fn packet_one_column_value(value: String) -> Vec<u8>{
+pub async fn packet_one_column_value(value: String) -> Vec<u8>{
     let mut on_value = vec![];
     on_value.push(value.len() as u8);
     on_value.extend(value.as_bytes());

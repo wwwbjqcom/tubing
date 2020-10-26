@@ -3,7 +3,6 @@ mod server;
 mod mysql;
 mod readvalue;
 use structopt::StructOpt;
-use tokio::signal;
 use std::fmt;
 use chrono::prelude::*;
 use chrono;
@@ -202,7 +201,7 @@ fn main() -> mysql::Result<()> {
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
-    server::run(my_config, signal::ctrl_c())
+    server::run(my_config)
 }
 
 

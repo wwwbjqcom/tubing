@@ -40,7 +40,7 @@ async fn unix_signal() -> Result<()> {
     Ok(())
 }
 
-pub fn run(mut config: MyConfig, shutdown: impl Future) -> Result<()> {
+pub fn run(mut config: MyConfig) -> Result<()> {
     debug!("config: {:?}", &config);
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
