@@ -104,6 +104,8 @@ impl PacketType{
         }else if num == &0x02 {
             PacketType::ComInitDb
         }else {
+            use tracing::{debug};
+            debug!("packet type number: {}", num);
             PacketType::Null
         }
     }
