@@ -201,7 +201,25 @@ impl ClientResponse {
             return Ok(())
         }
         debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
-        self.send_one_packet(handler).await?;
+        //self.send_one_packet(handler).await?;
+        let packet = self.packet_my_value();
+        debug!("{}",crate::info_now_time(String::from("start send pakcet to mysql")));
+        let (buf, header) = self.send_packet(handler, &packet).await?;
+        debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
+        self.send_mysql_response_packet(handler, &buf, &header).await?;
+        if buf[0] == 0xfe{
+            return Ok(());
+        }else if buf[0] == 0x00 {
+            // COM_STMT_PREPARE_OK  eof结束
+            loop {
+                let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+                self.send_mysql_response_packet(handler, &buf, &header).await?;
+                if buf[0] == 0xff{
+                    break;
+                }
+            }
+        }
+
         self.set_is_cached(handler).await?;
         Ok(())
     }
