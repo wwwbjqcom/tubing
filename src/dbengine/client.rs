@@ -213,8 +213,11 @@ impl ClientResponse {
             // COM_STMT_PREPARE_OK  eof结束
             loop {
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+                info!("response code:{}", buf[0]);
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
                 if buf[0] == 0xff{
+                    break;
+                }else if buf[0] == 0x00 && header.payload <9 {
                     break;
                 }
             }
