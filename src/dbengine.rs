@@ -82,6 +82,14 @@ pub const UTF8MB4_UNICODE_CI: usize = 224;
 //pub const UTF8MB4_0900_AS_CI: usize = 305;
 //pub const UTF8MB4_BIN: usize = 46;
 
+pub enum PreparePacketType{
+    ComStmtPrepare,
+    ComStmtExecute,
+    ComStmtClose,
+    ComStmtReset,
+    ComStmtSendLongData,
+}
+
 /// packet 类型
 pub enum PacketType {
     ComQuery,
@@ -89,6 +97,7 @@ pub enum PacketType {
     ComPing,
     ComProcessKill,
     ComInitDb,
+    ComPrepare(PreparePacketType),
     Null
 }
 impl PacketType{
@@ -103,9 +112,19 @@ impl PacketType{
             PacketType::ComProcessKill
         }else if num == &0x02 {
             PacketType::ComInitDb
+        }else if num == &0x16 {
+            PacketType::ComPrepare(PreparePacketType::ComStmtPrepare)
+        }else if num == &0x17 {
+            PacketType::ComPrepare(PreparePacketType::ComStmtExecute)
+        }else if num == &0x19 {
+            PacketType::ComPrepare(PreparePacketType::ComStmtClose)
+        }else if num == &0x1a {
+            PacketType::ComPrepare(PreparePacketType::ComStmtReset)
+        }else if num == &0x18 {
+            PacketType::ComPrepare(PreparePacketType::ComStmtSendLongData)
         }else {
-            use tracing::{info};
-            info!("packet type number: {}", num);
+            use tracing::{debug};
+            debug!("packet type number: {}", num);
             PacketType::Null
         }
     }

@@ -7,7 +7,7 @@ use std::io::{Cursor, Read};
 use crate::{ readvalue};
 use crate::mysql::Result;
 use byteorder::{ReadBytesExt, LittleEndian};
-use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF,other_response};
+use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, other_response, PreparePacketType};
 use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
@@ -91,6 +91,7 @@ impl ClientResponse {
                 if let Err(e) = self.parse_query_packet(handler).await{
                     error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
+                    self.reset_is_transaction(handler).await?;
                     handler.per_conn_info.return_connection(0).await?;
                     //handler.per_conn_info.reset_connection().await?;
                     //return Err(Box::new(MyError(e.to_string().into())));
@@ -105,12 +106,112 @@ impl ClientResponse {
                 handler.db = Some(db);
                 self.send_ok_packet(handler).await?;
             }
+            PacketType::ComPrepare(v) => {
+                if let Err(e) = self.exec_prepare_main(handler, &v).await{
+                    error!("{}",&e.to_string());
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                    self.reset_is_cached(handler).await?;
+                    self.reset_is_transaction(handler).await?;
+                    handler.per_conn_info.return_connection(0).await?;
+                }
+            }
             _ => {
                 let err = String::from("Invalid packet type, only supports com_query/com_quit");
                 self.send_error_packet(handler, &err).await?;
             }
         }
         Ok(())
+    }
+
+    async fn exec_prepare_main(&self, handler: &mut Handler, packet_type: &PreparePacketType) -> Result<()> {
+        match packet_type{
+            PreparePacketType::ComStmtPrepare => {
+                self.exec_prepare(handler).await?;
+            }PreparePacketType::ComStmtSendLongData => {
+                self.exec_prepare_send_data(handler).await?;
+            }PreparePacketType::ComStmtClose => {
+                self.exec_prepare_close(handler).await?;
+            }PreparePacketType::ComStmtExecute => {
+                self.exec_prepare_execute(handler).await?;
+            }PreparePacketType::ComStmtReset => {
+                self.exec_prepare_reset(handler).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// 处理prepare execute包
+    ///
+    /// execute返回ok、error、result三种packet
+    async fn exec_prepare_execute(&self,handler: &mut Handler) -> Result<()> {
+        debug!("{}",crate::info_now_time(String::from("execute prepare sql")));
+        if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
+            return Ok(())
+        }
+
+        debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
+        let packet = self.packet_my_value();
+        debug!("{}",crate::info_now_time(String::from("start send pakcet to mysql")));
+        let (buf, header) = self.send_packet(handler, &packet).await?;
+        debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
+        self.send_mysql_response_packet(handler, &buf, &header).await?;
+        if buf[0] == 0x00 || buf[0] == 0xfe{
+            return Ok(());
+        }
+
+        // result packet  eof结束
+        loop {
+            let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+            self.send_mysql_response_packet(handler, &buf, &header).await?;
+            if buf[0] == 0xff{
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn exec_prepare_close(&self, handler: &mut Handler) -> Result<()> {
+        debug!("{}",crate::info_now_time(String::from("execute prepare close")));
+        if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
+            return Ok(())
+        }
+        self.send_no_response_packet(handler).await?;
+        self.reset_is_cached(handler).await?;
+        Ok(())
+    }
+
+    /// prepare 语句发送数据
+    async fn exec_prepare_send_data(&self,handler: &mut Handler) -> Result<()> {
+        debug!("{}",crate::info_now_time(String::from("execute prepare send data")));
+        if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
+            return Ok(())
+        }
+        self.send_no_response_packet(handler).await?;
+        return Ok(())
+    }
+
+    /// 处理prepare类操作
+    async fn exec_prepare(&self, handler: &mut Handler) -> Result<()> {
+        let sql = readvalue::read_string_value(&self.buf[1..]);
+        debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
+        let (a, tbl_info) = SqlStatement::Default.parser(&sql);
+        if !self.check_all_status(handler, &a, &tbl_info, &sql, None).await?{
+            return Ok(())
+        }
+        debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
+        self.send_one_packet(handler).await?;
+        self.set_is_cached(handler).await?;
+        Ok(())
+    }
+
+    async fn exec_prepare_reset(&self, handler: &mut Handler) -> Result<()> {
+        debug!("{}",crate::info_now_time(String::from("execute prepare reset")));
+        if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
+            return Ok(())
+        }
+        self.send_one_packet(handler).await?;
+        return Ok(())
     }
 
     /// 管理命令操作，并返回数据、成功、失败等数据包
@@ -203,6 +304,69 @@ impl ClientResponse {
         Ok(())
     }
 
+    /// 这里只对platform检查和获取连接
+    ///
+    /// 如果都通过则返回true继续进行下一步
+    async fn check_platform_and_conn(&self, handler: &mut Handler, a: &SqlStatement) -> Result<bool> {
+        //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
+        if !self.check_is_set_platform(&a, handler).await?{
+            let error = format!("please set up a business platform first");
+            error!("{}", &error);
+            self.send_error_packet(handler, &error).await?;
+            return Ok(false)
+        }
+
+        //已经设置了platform则进行连接检查及获取
+        if let Some(platform) = &handler.platform{
+            if platform != &"admin".to_string(){
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), None, platform).await?;
+            } else {
+                return Ok(false)
+            }
+        }
+        return Ok(true)
+    }
+
+    /// 检查用户权限以及platform设置和连接获取
+    ///
+    /// 返回false代表不往下继续， 返回true则继续
+    async fn check_all_status(&self, handler: &mut Handler, a: &SqlStatement, tbl_info_list: &Vec<TableInfo>, sql: &String, select_comment: Option<String>) -> Result<bool> {
+        if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
+            self.send_error_packet(handler, &e.to_string()).await?;
+            return Ok(false)
+        }
+
+
+        debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
+        debug!("{}",format!("{:?}: {}", a, &sql));
+
+        debug!("{}",crate::info_now_time(String::from("start check pool info")));
+
+        //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
+        if !self.check_is_set_platform(&a, handler).await?{
+            if self.check_other_query(&a, &sql, handler).await?{
+                return Ok(false);
+            }
+            let error = format!("please set up a business platform first");
+            error!("{}", &error);
+            self.send_error_packet(handler, &error).await?;
+            return Ok(false)
+        }
+
+        //已经设置了platform则进行连接检查及获取
+        if let Some(platform) = &handler.platform{
+            if platform != &"admin".to_string(){
+                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
+                handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
+            } else {
+                return Ok(false)
+            }
+        }
+        return Ok(true)
+    }
+
     /// 处理com_query packet
     ///
     /// 解析处sql语句
@@ -220,40 +384,44 @@ impl ClientResponse {
         let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
         // let sql_parser = SqlStatement::Default;
         // let (a, _) = sql_parser.parser(&sql);
-        if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
-            self.send_error_packet(handler, &e.to_string()).await?;
-            return Ok(())
-        }
-
+        // if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
+        //     self.send_error_packet(handler, &e.to_string()).await?;
+        //     return Ok(())
+        // }
+        //
         if self.check_is_admin_paltform(handler, &a).await{
             self.admin(&sql, handler, &sql_ast).await?;
             return Ok(())
         }
+        //
+        // //info!("{}",&sql);
+        // debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
+        // debug!("{}",format!("{:?}: {}", a, &sql));
+        //
+        // debug!("{}",crate::info_now_time(String::from("start check pool info")));
+        //
+        // //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
+        // if !self.check_is_set_platform(&a, handler).await?{
+        //     if self.check_other_query(&a, &sql, handler).await?{
+        //         return Ok(());
+        //     }
+        //     let error = format!("please set up a business platform first");
+        //     error!("{}", &error);
+        //     self.send_error_packet(handler, &error).await?;
+        //     return Ok(())
+        // }
+        //
+        // //已经设置了platform则进行连接检查及获取
+        // if let Some(platform) = &handler.platform{
+        //     if platform != &"admin".to_string(){
+        //         handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+        //                                     &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
+        //         handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
+        //     }
+        // }
 
-        //info!("{}",&sql);
-        debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
-        debug!("{}",format!("{:?}: {}", a, &sql));
-
-        debug!("{}",crate::info_now_time(String::from("start check pool info")));
-
-        //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
-        if !self.check_is_set_platform(&a, handler).await?{
-            if self.check_other_query(&a, &sql, handler).await?{
-                return Ok(());
-            }
-            let error = format!("please set up a business platform first");
-            error!("{}", &error);
-            self.send_error_packet(handler, &error).await?;
+        if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
             return Ok(())
-        }
-
-        //已经设置了platform则进行连接检查及获取
-        if let Some(platform) = &handler.platform{
-            if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
-                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
-                handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
-            }
         }
 
         //进行ops操作
@@ -342,6 +510,7 @@ impl ClientResponse {
                 error!("{}",&error);
                 self.send_error_packet(handler, &error).await?;
             }
+            SqlStatement::Prepare => {return Ok(())}
         }
         handler.stream_flush().await?;
 
@@ -426,6 +595,19 @@ impl ClientResponse {
         return Err(Box::new(MyError(String::from("lost connection").into())));
     }
 
+    async fn set_is_cached(&self, handler: &mut Handler) -> Result<()> {
+        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
+            return Ok(conn_info.set_cached(&handler.hand_key).await?);
+        }
+        return Err(Box::new(MyError(String::from("lost connection").into())));
+    }
+
+    async fn reset_is_cached(&self, handler: &mut Handler) -> Result<()> {
+        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
+            return Ok(conn_info.reset_cached().await?);
+        }
+        return Err(Box::new(MyError(String::from("lost connection").into())));
+    }
 //    async fn set_cached(&self, handler: &mut Handler) -> Result<()>{
 //        let hand_key = handler.hand_key.clone();
 //        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
@@ -559,6 +741,15 @@ impl ClientResponse {
             let (buf, header) = conn.send_packet(&packet).await?;
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             //self.check_eof(handler, conn).await?;
+        }
+        Ok(())
+    }
+
+    /// 发送没有回复内容的数据包
+    async fn send_no_response_packet(&self, handler: &mut Handler) -> Result<()>{
+        if let Some(conn) = &mut handler.per_conn_info.conn_info{
+            let packet = self.packet_my_value();
+            conn.send_packet_only(&packet).await?;
         }
         Ok(())
     }

@@ -557,6 +557,11 @@ impl ConnectionsPoolPlatform{
             SqlStatement::StartTransaction => {
                 Ok(self.get_write_conn(key, platform, is_sublist).await?)
             }
+            SqlStatement::Prepare => {
+                // prepare类型仅当以及prepare之后执行操作，所以这里通过get_read_conn获取
+                // 因为get_read_conn会首先从所有节点连接池中获取cached连接
+                Ok(self.get_read_conn(key, platform, is_sublist).await?)
+            }
             _ => {
                 if let Some(comment) = select_comment {
                     if comment.to_lowercase() == String::from("force_master") {
@@ -593,6 +598,24 @@ impl ConnectionsPoolPlatform{
     //     return Ok(());
     // }
 
+    /// 获取缓存的连接
+    async fn get_cached_conn(&mut self, key: &String) -> Result<(Option<MysqlConnectionInfo>, Option<ConnectionsPool>)> {
+        let mut conn_pool_lock = self.conn_pool.lock().await;
+        let read_list_lock = self.read.read().await;
+        for read_host_info in &*read_list_lock{
+            match conn_pool_lock.remove(read_host_info){
+                Some(mut conn_pool) => {
+                    if let Some(v) = conn_pool.check_cache(key).await?{
+                        conn_pool_lock.insert(read_host_info.clone(), conn_pool.clone());
+                        return Ok((Some(v), Some(conn_pool)))
+                    }
+                }
+                None => {}
+            }
+        }
+        return Ok((None, None))
+    }
+
     /// 获取主节点连接
     async fn get_write_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         let mut conn_pool_lock = self.conn_pool.lock().await;
@@ -622,6 +645,10 @@ impl ConnectionsPoolPlatform{
 
     /// 通过最少连接数获取连接
     async fn get_read_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
+        if let (Some(conn), Some(conn_pool)) = self.get_cached_conn(key).await?{
+            return Ok((conn, conn_pool));
+        }
+
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
 
@@ -1248,7 +1275,7 @@ impl ConnectionsPool{
 #[derive(Debug)]
 pub struct MysqlConnectionInfo {
     pub conn: TcpStream,
-    pub cached: String,             //记录使用该连接的线程hash，用于不自动提交的update/insert/delete
+    pub cached: String,             //记录使用该连接的线程hash，用于prepare和需要固定连接的操作
     pub last_time: usize,          //记录该mysql连接最后执行命令的时间，用于计算空闲时间，如果没有设置缓存标签在达到200ms空闲时将放回连接池
     pub is_transaction: bool,        //记录是否还有事务或者锁存在
     pub is_write: bool,            //是否为写入连接
@@ -1329,17 +1356,17 @@ impl MysqlConnectionInfo{
         Ok(())
     }
 
-//    pub async fn set_cached(&mut self, key: &String) -> Result<()> {
-//        if key != &self.cached{
-//            self.cached = key.clone();
-//        }
-//        Ok(())
-//    }
+   pub async fn set_cached(&mut self, key: &String) -> Result<()> {
+       if key != &self.cached{
+           self.cached = key.clone();
+       }
+       Ok(())
+   }
 
-    // pub async fn reset_cached(&mut self) -> Result<()>{
-    //     self.cached = "".to_string();
-    //     Ok(())
-    // }
+    pub async fn reset_cached(&mut self) -> Result<()>{
+        self.cached = "".to_string();
+        Ok(())
+    }
 
     pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
         self.conn.write_all(packet)?;
