@@ -211,16 +211,38 @@ impl ClientResponse {
             return Ok(());
         }else if buf[0] == 0x00 {
             // COM_STMT_PREPARE_OK  eof结束
-            loop {
+
+            let mut eof_num = 0;
+            'b: loop {
+                if eof_num > 1{
+                    break 'b;
+                }
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-                debug!("response code:{}", buf[0]);
-                self.send_mysql_response_packet(handler, &buf, &header).await?;
-                if buf[0] == 0xfe{
-                    break;
-                }else if buf[0] == 0x00 && header.payload <9 {
-                    break;
+                debug!("response:  {:?}, {:?}", &header, &buf);
+                if buf[0] == 0xff {
+                    self.send_mysql_response_packet(handler, &buf, &header).await?;
+                    break 'b;
+                }else{
+                    let (is_eof,num) = self.check_p(&buf, eof_num.clone(), &header);
+                    if is_eof{
+                        eof_num = num;
+                    }
+                    self.query_response(handler, &buf, &mut header, &eof_num, is_eof).await?;
                 }
             }
+
+
+            //
+            // loop {
+            //     let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+            //     debug!("response code:{}", buf[0]);
+            //     self.send_mysql_response_packet(handler, &buf, &header).await?;
+            //     if buf[0] == 0xfe{
+            //         break;
+            //     }else if buf[0] == 0x00 && header.payload <9 {
+            //         break;
+            //     }
+            // }
         }
 
         self.set_is_cached(handler).await?;
