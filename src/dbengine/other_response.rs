@@ -8,6 +8,57 @@ use crate::readvalue;
 use crate::mysql::query_response::{ColumnDefinition41, packet_one_column_value};
 use tracing::{debug};
 use crate::mysql::Result;
+use crate::server::Handler;
+
+pub enum OtherType{
+    SelectUser,
+    SelectMaxPacket
+}
+impl OtherType{
+    async fn column_definitions(&self) -> Vec<Vec<u8>>{
+        match self{
+            OtherType::SelectUser => {
+                SelectUser::packet_column_definitions().await
+            }OtherType::SelectMaxPacket => {
+                SelectMaxPacket::packet_column_definitions().await
+            }
+        }
+    }
+    async fn packet(&self, handler: &Handler) -> Vec<u8>{
+        match self{
+            OtherType::SelectUser => {
+                let select_user = SelectUser::new(handler);
+                select_user.packet().await
+            }OtherType::SelectMaxPacket => {
+                let select_max = SelectMaxPacket::new();
+                select_max.packet().await
+            }
+        }
+    }
+
+}
+
+/// 用于select user()
+pub struct SelectUser{
+    user: String
+}
+
+impl SelectUser{
+    pub fn new(handler: &Handler) -> SelectUser{
+        SelectUser{user: format!("{}@%", handler.user_name.clone())}
+    }
+    async fn packet(&self) -> Vec<u8> {
+        let mut packet = vec![];
+        packet.extend(packet_one_column_value(self.user.clone()).await);
+        packet
+    }
+
+    async fn packet_column_definitions() -> Vec<Vec<u8>> {
+        let mut packet = vec![];
+        packet.push(ColumnDefinition41::show_status_column(&String::from("user()"), &VAR_STRING).await.packet().await);
+        packet
+    }
+}
 
 
 /// 用于未执行set platform之前对select @@max_allowed_packet做响应
@@ -42,15 +93,14 @@ impl TextResponse{
         TextResponse{ packet_list: vec![] , client_flags}
     }
 
-    pub async fn packet(&mut self) -> Result<()> {
+    pub async fn packet(&mut self, o_type: OtherType, handler: &Handler) -> Result<()> {
         self.packet_column_count(1).await;
-        self.packet_list.extend(SelectMaxPacket::packet_column_definitions().await);
+        self.packet_list.extend(o_type.column_definitions().await);
 
         debug!("{}", self.client_flags & CLIENT_DEPRECATE_EOF as i32);
         self.packet_eof().await;
 
-        let select_packet = SelectMaxPacket::new();
-        self.packet_list.push(select_packet.packet().await);
+        self.packet_list.push(o_type.packet(handler).await);
 
         // if (self.client_flags & CLIENT_DEPRECATE_EOF as i32) > 0 {
         //     debug!("ok packet");

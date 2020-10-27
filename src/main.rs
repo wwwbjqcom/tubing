@@ -136,7 +136,7 @@ pub const MIN: &str = "10";
 pub const MAX: &str = "20";
 pub const DEFAULT_HOST_INFO: &str = "127.0.0.1:3306";
 pub const MAX_CONNECTIONS: usize = 1000;
-pub const VERSION: &str = "1.0.1-MysqlBus";
+pub const VERSION: &str = "1.0.60-MysqlBus";
 
 #[derive(Clone, Debug)]
 pub struct Config {

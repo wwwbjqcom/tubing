@@ -23,6 +23,7 @@ use bytes::Buf;
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::*;
 use sqlparser::ast::Statement;
+use crate::dbengine::other_response::OtherType;
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -235,6 +236,9 @@ impl ClientResponse {
     /// 不能只有host_info, 但可以只有platform，这样是修改对应platform的所有节点
     pub async fn admin(&self, sql: &String, handler: &mut Handler, ast: &Vec<Statement>) -> Result<()> {
         let admin_sql = AdminSql::Null;
+        if self.check_select_user(handler, sql, ast).await?{
+            return Ok(())
+        }
         let admin_sql = admin_sql.parse_sql(ast).await?;
         match admin_sql{
             AdminSql::Set(set_struct) => {
@@ -266,6 +270,27 @@ impl ClientResponse {
             _ => {}
         }
         Ok(())
+    }
+
+    /// 检查是否未select user()语句， 仅用于admin服务端， 兼容部分客户端的问题
+    ///
+    /// 如果platform不为admin， 则会自动发往后端， 所以不需要做该返回
+    async fn check_select_user(&self, handler: &mut Handler, sql: &String, ast: &Vec<Statement>) -> Result<bool>{
+        for a in ast{
+            return match a {
+                Statement::Query(_) => {
+                    if sql.to_lowercase().contains("user()") {
+                        self.packet_other_and_send(handler, OtherType::SelectUser).await?;
+                        return Ok(true);
+                    }
+                    Ok(false)
+                }
+                _ => {
+                    Ok(false)
+                }
+            }
+        }
+        Ok(true)
     }
 
     /// 检测platform是否为admin, 如果为admin且当前语句不是set platfrom则重置platfrom并返回false
@@ -391,9 +416,7 @@ impl ClientResponse {
         // }
 
         if self.check_is_admin_paltform(handler, &a).await{
-            if let Err(e) = self.admin(&sql, handler, &sql_ast).await{
-                self.send_error_packet(handler, &e.to_string()).await?;
-            }
+            self.admin(&sql, handler, &sql_ast).await?;
             return Ok(())
         }
         //
@@ -528,19 +551,7 @@ impl ClientResponse {
         match sql_type{
             SqlStatement::Query => {
                 if sql.to_lowercase().contains("max_allowed_packet") {
-                    let mut text_response = other_response::TextResponse::new(handler.client_flags.clone());
-                    if let Err(e) = text_response.packet().await{
-                        info!("packet text response error: {:?},", &e.to_string());
-                        self.send_error_packet(handler, &e.to_string()).await?;
-                    }else {
-                        for packet in text_response.packet_list{
-                            //发送数据包
-                            debug!("send text packet");
-                            handler.send(&packet).await?;
-                            handler.seq_add();
-                        }
-                        handler.reset_seq();
-                    }
+                    self.packet_other_and_send(handler, OtherType::SelectMaxPacket).await?;
                 }
                 else {
                     return Ok(false);
@@ -552,6 +563,23 @@ impl ClientResponse {
         }
 
         Ok(true)
+    }
+
+    async fn packet_other_and_send(&self, handler: &mut Handler, o_type: OtherType) -> Result<()>{
+        let mut text_response = other_response::TextResponse::new(handler.client_flags.clone());
+        if let Err(e) = text_response.packet(o_type, handler).await{
+            info!("packet text response error: {:?},", &e.to_string());
+            self.send_error_packet(handler, &e.to_string()).await?;
+        }else {
+            for packet in text_response.packet_list{
+                //发送数据包
+                debug!("send text packet");
+                handler.send(&packet).await?;
+                handler.seq_add();
+            }
+            handler.reset_seq();
+        }
+        Ok(())
     }
 
     /// 当执行drop database之后执行检查
