@@ -381,6 +381,7 @@ impl ClientResponse {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let dialect = MySqlDialect {};
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
+        debug!("{:?}", sql_ast);
         let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
         // let sql_parser = SqlStatement::Default;
         // let (a, _) = sql_parser.parser(&sql);
@@ -388,9 +389,11 @@ impl ClientResponse {
         //     self.send_error_packet(handler, &e.to_string()).await?;
         //     return Ok(())
         // }
-        //
+
         if self.check_is_admin_paltform(handler, &a).await{
-            self.admin(&sql, handler, &sql_ast).await?;
+            if let Err(e) = self.admin(&sql, handler, &sql_ast).await{
+                self.send_error_packet(handler, &e.to_string()).await?;
+            }
             return Ok(())
         }
         //
