@@ -511,6 +511,7 @@ impl AllUserPri{
 
     /// 获取所有用户权限列表
     pub async fn get_pris(&mut self, all_user_info: &AllUserInfo) -> Result<()>{
+        debug!("get all user privileges");
         for (user, user_info) in &all_user_info.all_info{
             if &user_info.platform == &"admin".to_string(){
                 continue;

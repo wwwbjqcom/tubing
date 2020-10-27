@@ -605,9 +605,10 @@ impl ConnectionsPoolPlatform{
         for read_host_info in &*read_list_lock{
             match conn_pool_lock.remove(read_host_info){
                 Some(mut conn_pool) => {
+                    conn_pool_lock.insert(read_host_info.clone(), conn_pool.clone());
                     if let Some(v) = conn_pool.check_cache(key).await?{
-                        conn_pool_lock.insert(read_host_info.clone(), conn_pool.clone());
                         return Ok((Some(v), Some(conn_pool)))
+                    }else {
                     }
                 }
                 None => {}
