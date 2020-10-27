@@ -207,15 +207,15 @@ impl ClientResponse {
         let (buf, header) = self.send_packet(handler, &packet).await?;
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
-        if buf[0] == 0xfe{
+        if buf[0] == 0xff{
             return Ok(());
         }else if buf[0] == 0x00 {
             // COM_STMT_PREPARE_OK  eof结束
             loop {
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-                info!("response code:{}", buf[0]);
+                debug!("response code:{}", buf[0]);
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
-                if buf[0] == 0xff{
+                if buf[0] == 0xfe{
                     break;
                 }else if buf[0] == 0x00 && header.payload <9 {
                     break;
