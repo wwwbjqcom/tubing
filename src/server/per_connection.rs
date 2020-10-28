@@ -4,6 +4,7 @@ use crate::mysql::Result;
 use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
 use crate::MyError;
+use tracing::{debug, error};
 
 /// mysql connection
 #[derive(Debug)]
@@ -91,10 +92,12 @@ impl PerMysqlConn {
 
     /// 检查是否存在未提交事务
     pub async fn check_have_transaction(&self) -> Result<()>{
+        debug!("check for uncommitted transactions");
         match &self.conn_info {
             Some(conn) =>{
                 if conn.is_transaction{
                     let err = String::from("must commit outstanding transactions");
+                    error!("{}", err);
                     return Err(Box::new(MyError(err.into())));
                 }
             }

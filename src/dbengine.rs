@@ -7,7 +7,7 @@ pub mod server;
 pub mod client;
 pub mod admin;
 pub mod other_response;
-use tracing::{debug, info};
+use tracing::{debug, info, error};
 
 ///
 /// 部分capabilities
@@ -103,7 +103,7 @@ pub enum PacketType {
 }
 impl PacketType{
     pub fn new(num: &u8) -> PacketType{
-        info!("packet type number: {}", num);
+        // info!("packet type number: {}", num);
         if num == &0x03{
             PacketType::ComQuery
         }else if num == &0x01 {
@@ -125,7 +125,7 @@ impl PacketType{
         }else if num == &0x18 {
             PacketType::ComPrepare(PreparePacketType::ComStmtSendLongData)
         }else {
-            debug!("packet type number: {}", num);
+            error!("no support packet type number: {}", num);
             PacketType::Null
         }
     }

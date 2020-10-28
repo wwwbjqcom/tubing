@@ -15,7 +15,6 @@ use std::borrow::{Borrow};
 use tracing::{error, debug, info};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
-use tracing::field::{debug};
 use crate::dbengine::admin::AdminSql;
 use crate::mysql::query_response::TextResponse;
 use crate::mysql::privileges::{CheckPrivileges, TableInfo};
@@ -100,7 +99,7 @@ impl ClientResponse {
             }
             PacketType::ComInitDb => {
                 let db = readvalue::read_string_value(&self.buf[1..]);
-                debug(format!("initdb {}", &db));
+                debug!("initdb {:?}", &db);
                 if !self.check_change_db_privileges(handler, &db).await?{
                     return Ok(())
                 }
@@ -155,7 +154,7 @@ impl ClientResponse {
         let packet = self.packet_my_value();
         debug!("{}",crate::info_now_time(String::from("start send pakcet to mysql")));
         let (buf, header) = self.send_packet(handler, &packet).await?;
-        info!("prepare execute:{}", buf[0]);
+        debug!("prepare execute:{}", buf[0]);
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
         if buf[0] == 0x00 || buf[0] == 0xff{
@@ -166,7 +165,7 @@ impl ClientResponse {
         let mut eof_num = 0;
         loop {
             let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-            info!("prepare execute response:{}", buf[0]);
+            debug!("prepare execute response:{}", buf[0]);
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             if buf[0] == 0xfe{
                 if eof_num < 1{
@@ -219,14 +218,14 @@ impl ClientResponse {
         let (buf, header) = self.send_packet(handler, &packet).await?;
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
-        info!("prepare reponse : {}", buf[0]);
+        debug!("prepare reponse : {}", buf[0]);
         if buf[0] == 0xff{
             return Ok(());
         }else if buf[0] == 0x00 {
             // COM_STMT_PREPARE_OK  eof结束
             let num_columns = readvalue::read_u16(&buf[5..7]);
             let num_params = readvalue::read_u16(&buf[7..9]);
-            info!("num_columns: {}, num_params:{}", &num_columns, &num_params);
+            debug!("num_columns: {}, num_params:{}", &num_columns, &num_params);
             self.prepare_sql_loop_block(num_columns, handler).await?;
             self.prepare_sql_loop_block(num_params, handler).await?;
         }
@@ -239,15 +238,15 @@ impl ClientResponse {
         if num > 0  {
             'a: loop{
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-                info!("prepare reponse : {}", buf[0]);
+                debug!("prepare reponse : {}", buf[0]);
                 if buf[0] == 0xfe{
                     if (handler.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
-                        info!("not deprecate eof");
+                        debug!("not deprecate eof");
                         self.send_mysql_response_packet(handler, &buf, &header).await?;
                     }
                     break 'a;
                 }else {
-                    info!("send to....");
+                    debug!("send to....");
                     self.send_mysql_response_packet(handler, &buf, &header).await?;
                 }
             }
@@ -289,6 +288,7 @@ impl ClientResponse {
             return Ok(())
         }
         let admin_sql = admin_sql.parse_sql(ast).await?;
+        debug!("admin info:{:?}", &admin_sql);
         match admin_sql{
             AdminSql::Set(set_struct) => {
                 if let Err(e) = handler.platform_pool.alter_pool_thread(&set_struct).await {
@@ -304,7 +304,7 @@ impl ClientResponse {
                 debug!("packet text response");
                 let mut text_response = TextResponse::new(handler.client_flags.clone());
                 if let Err(e) = text_response.packet(&show_struct, &show_state).await{
-                    info!("packet text response error: {:?},", &e.to_string());
+                    debug!("packet text response error: {:?},", &e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                 }else {
                     for packet in text_response.packet_list{
@@ -427,7 +427,7 @@ impl ClientResponse {
             self.send_error_packet(handler, &error).await?;
             return Ok(false)
         }
-
+        debug!("check and get connection from thread pool");
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
@@ -435,7 +435,7 @@ impl ClientResponse {
                                             &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
                 handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
             } else {
-                return Ok(false)
+                return Ok(true)
             }
         }
         return Ok(true)
@@ -453,7 +453,6 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        info!("{}", sql);
         let dialect = MySqlDialect {};
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         debug!("{:?}", sql_ast);
@@ -618,7 +617,7 @@ impl ClientResponse {
     async fn packet_other_and_send(&self, handler: &mut Handler, o_type: OtherType) -> Result<()>{
         let mut text_response = other_response::TextResponse::new(handler.client_flags.clone());
         if let Err(e) = text_response.packet(o_type, handler).await{
-            info!("packet text response error: {:?},", &e.to_string());
+            error!("packet text response error: {:?},", &e.to_string());
             self.send_error_packet(handler, &e.to_string()).await?;
         }else {
             for packet in text_response.packet_list{

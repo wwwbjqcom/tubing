@@ -641,6 +641,7 @@ impl Handler {
     ///
     /// 相同则直接返回
     pub async fn check_cur_platform(&mut self, platform: &String) -> Result<()>{
+        debug!("check current platform");
         if platform == "admin"{
             self.platform = Some(platform.clone());
             return Ok(())

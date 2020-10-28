@@ -5,7 +5,7 @@
 
 use crate::mysql::Result;
 use crate::MyError;
-use tracing::{debug, info};
+use tracing::{debug, info, error};
 use sqlparser::ast::{Statement, Expr, BinaryOperator, SetVariableValue, Value, Ident};
 use std::collections::HashMap;
 
@@ -53,7 +53,7 @@ impl ShowStruct{
         match ide{
             Expr::Identifier(i) => {
                 if a == String::from("r"){
-                    self.platform = Some(format!("{}",i).replace("\"",""));
+                    self.platform = Some(format!("{}",i).replace("\"","").replace("'",""));
                 }else if a == String::from("l") {
                     if i.value != String::from("platform"){
                         let err = format!("the show command only supports platform as a condition :{}", i);
@@ -61,6 +61,14 @@ impl ShowStruct{
                     }
                 }
 
+            }
+            Value => {
+                if a == String::from("r"){
+                    self.platform = Some(format!("{}",ide).replace("\"","").replace("'",""));
+                }else {
+                    let err = format!("unsupported syntax {}", ide);
+                    return Err(Box::new(MyError(err.into())));
+                }
             }
             _ => {
                 let err = format!("unsupported syntax {}", ide);
@@ -192,9 +200,9 @@ impl SetStruct{
             Expr::Identifier(i) => {
                 if aa == String::from("r"){
                     if vv == &String::from("platform"){
-                        self.platform = Some(format!("{}",i).replace("\"",""));
+                        self.platform = Some(format!("{}",i).replace("\"","").replace("'",""));
                     }else if vv == &String::from("host_info") {
-                        self.host_info = Some(format!("{}",i).replace("\"",""));
+                        self.host_info = Some(format!("{}",i).replace("\"","").replace("'",""));
                     }
                 }else if aa == String::from("l") {
                     if i.value == String::from("platform"){
@@ -202,11 +210,23 @@ impl SetStruct{
                     } else if i.value == String::from("host_info"){
                         *vv = String::from("host_info");
                     }else {
-                        let err = String::from("unsupported syntax");
+                        let err = format!("unsupported syntax: {} for {}",i.value.to_string(), aa);
                         return Err(Box::new(MyError(err.into())));
                     }
                 }
 
+            }
+            Value=> {
+                if aa == String::from("r"){
+                    if vv == &String::from("platform"){
+                        self.platform = Some(format!("{}",ide).replace("\"","").replace("'",""));
+                    }else if vv == &String::from("host_info") {
+                        self.host_info = Some(format!("{}",ide).replace("\"","").replace("'",""));
+                    }
+                }else {
+                    let err = format!("unsupported syntax {}", ide);
+                    return Err(Box::new(MyError(err.into())));
+                }
             }
             _ => {
                 let err = String::from("unsupported syntax");
@@ -257,6 +277,7 @@ impl SetStruct{
                         }
                         _ => {
                             let err = format!("unsupported syntax {}", op);
+
                             return Err(Box::new(MyError(err.into())));
                         }
                     }
@@ -304,12 +325,14 @@ impl AdminSql{
                     Ok(AdminSql::Show(show_struct))
                 }
                 Statement::AdminSetVariable { variable, value, selection } => {
+                    info!("aa");
                     let mut set_struct = SetStruct {
                         set_variables: SetVariables::Null,
                         platform: None,
                         host_info: None
                     };
                     set_struct.parse(format!("{}", variable), selection, value).await?;
+                    info!("cc");
                     Ok(AdminSql::Set(set_struct))
                 }
                 _ => {
@@ -317,6 +340,7 @@ impl AdminSql{
                 }
             }
         }
+        info!("bb");
         return Err(Box::new(MyError(String::from("unsupported syntax").into())));
 
     }
