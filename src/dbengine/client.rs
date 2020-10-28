@@ -220,6 +220,7 @@ impl ClientResponse {
             // COM_STMT_PREPARE_OK  eof结束
             let num_columns = readvalue::read_u16(&buf[5..7]);
             let num_params = readvalue::read_u16(&buf[7..9]);
+            info!("num_columns: {}, num_params:{}", &num_columns, &num_params);
             self.prepare_sql_loop_block(num_columns, handler).await?;
             self.prepare_sql_loop_block(num_params, handler).await?;
         }
@@ -232,6 +233,7 @@ impl ClientResponse {
         if num > 0  {
             'a: loop{
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+                info!("prepare reponse : {}", buf[0]);
                 if buf[0] == 0xfe{
                     if (handler.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
                         self.send_mysql_response_packet(handler, &buf, &header).await?;
