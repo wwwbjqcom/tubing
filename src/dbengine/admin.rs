@@ -325,14 +325,12 @@ impl AdminSql{
                     Ok(AdminSql::Show(show_struct))
                 }
                 Statement::AdminSetVariable { variable, value, selection } => {
-                    info!("aa");
                     let mut set_struct = SetStruct {
                         set_variables: SetVariables::Null,
                         platform: None,
                         host_info: None
                     };
                     set_struct.parse(format!("{}", variable), selection, value).await?;
-                    info!("cc");
                     Ok(AdminSql::Set(set_struct))
                 }
                 _ => {
@@ -340,7 +338,6 @@ impl AdminSql{
                 }
             }
         }
-        info!("bb");
         return Err(Box::new(MyError(String::from("unsupported syntax").into())));
 
     }
