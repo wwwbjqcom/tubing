@@ -443,6 +443,7 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
+        info!("{}", sql);
         let dialect = MySqlDialect {};
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         debug!("{:?}", sql_ast);
