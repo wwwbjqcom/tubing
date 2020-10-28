@@ -156,7 +156,7 @@ impl ClientResponse {
         let (buf, header) = self.send_packet(handler, &packet).await?;
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
-        if buf[0] == 0x00 || buf[0] == 0xfe{
+        if buf[0] == 0x00 || buf[0] == 0xff{
             return Ok(());
         }
 
@@ -164,8 +164,14 @@ impl ClientResponse {
         loop {
             let (buf, mut header) = self.get_packet_from_stream(handler).await?;
             self.send_mysql_response_packet(handler, &buf, &header).await?;
-            if buf[0] == 0xff{
-                break;
+            if handler.client_flags & CLIENT_DEPRECATE_EOF as i32 > 0{
+                if buf[0] == 0x00{
+                    break;
+                }
+            }else {
+                if buf[0] == 0xfe{
+                    break;
+                }
             }
         }
 
