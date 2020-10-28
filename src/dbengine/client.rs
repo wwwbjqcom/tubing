@@ -219,15 +219,15 @@ impl ClientResponse {
             // COM_STMT_PREPARE_OK  eof结束
             let num_columns = readvalue::read_u16(&buf[5..7]);
             let num_params = readvalue::read_u16(&buf[7..9]);
-            self.prepare_sql_loop_block(num_columns).await?;
-            self.prepare_sql_loop_block(num_params).await?;
+            self.prepare_sql_loop_block(num_columns, handler).await?;
+            self.prepare_sql_loop_block(num_params, handler).await?;
         }
 
         self.set_is_cached(handler).await?;
         Ok(())
     }
 
-    async fn prepare_sql_loop_block(&self,num: u16) -> Result<()>{
+    async fn prepare_sql_loop_block(&self,num: u16, handler: &mut Handler) -> Result<()>{
         if num > 0  {
             'a: loop{
                 let (buf, mut header) = self.get_packet_from_stream(handler).await?;
