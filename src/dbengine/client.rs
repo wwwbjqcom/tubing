@@ -138,6 +138,7 @@ impl ClientResponse {
                 self.exec_prepare_reset(handler).await?;
             }
         }
+        handler.stream_flush().await?;
         Ok(())
     }
 
@@ -236,10 +237,12 @@ impl ClientResponse {
                 info!("prepare reponse : {}", buf[0]);
                 if buf[0] == 0xfe{
                     if (handler.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
+                        info!("not deprecate eof");
                         self.send_mysql_response_packet(handler, &buf, &header).await?;
                     }
                     break 'a;
                 }else {
+                    info!("send to....");
                     self.send_mysql_response_packet(handler, &buf, &header).await?;
                 }
             }
