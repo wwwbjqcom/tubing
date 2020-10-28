@@ -211,47 +211,30 @@ impl ClientResponse {
             return Ok(());
         }else if buf[0] == 0x00 {
             // COM_STMT_PREPARE_OK  eof结束
-
-            let mut eof_num = 0;
-            // 'b: loop {
-            //     if eof_num > 1{
-            //         break 'b;
-            //     }
-            //     let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-            //     info!("response:  {:?}, {:?}", &header, &buf);
-            //     if buf[0] == 0xff {
-            //         self.send_mysql_response_packet(handler, &buf, &header).await?;
-            //         break 'b;
-            //     }else{
-            //         let (is_eof,num) = self.check_p(&buf, eof_num.clone(), &header);
-            //         if is_eof{
-            //             eof_num = num;
-            //         }
-            //         self.query_response(handler, &buf, &mut header, &eof_num, is_eof).await?;
-            //     }
-            // }
-
-
-
-            loop {
-                let (buf, mut header) = self.get_packet_from_stream(handler).await?;
-                info!("response code:{}", buf[0]);
-                self.send_mysql_response_packet(handler, &buf, &header).await?;
-                if buf[0] == 0xfe{
-                    eof_num += 1;
-                    if eof_num > 1{
-                        break;
-                    }
-                }else if buf[0] == 0x00 && header.payload <9 {
-                    eof_num += 1;
-                    if eof_num > 1{
-                        break;
-                    }
-                }
-            }
+            let num_columns = readvalue::read_u16(&buf[5..7]);
+            let num_params = readvalue::read_u16(&buf[7..9]);
+            self.prepare_sql_loop_block(num_columns).await?;
+            self.prepare_sql_loop_block(num_params).await?;
         }
 
         self.set_is_cached(handler).await?;
+        Ok(())
+    }
+
+    async fn prepare_sql_loop_block(&self,num: u16) -> Result<()>{
+        if num > 0  {
+            'a: loop{
+                let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+                if buf[0] == 0xfe{
+                    if (handler.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
+                        self.send_mysql_response_packet(handler, &buf, &header).await?;
+                    }
+                    break 'a;
+                }else {
+                    self.send_mysql_response_packet(handler, &buf, &header).await?;
+                }
+            }
+        }
         Ok(())
     }
 
