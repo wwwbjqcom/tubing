@@ -213,6 +213,7 @@ impl ClientResponse {
         let (buf, header) = self.send_packet(handler, &packet).await?;
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header).await?;
+        info!("prepare reponse : {}", buf[0]);
         if buf[0] == 0xff{
             return Ok(());
         }else if buf[0] == 0x00 {
