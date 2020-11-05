@@ -233,16 +233,16 @@ impl PlatformPool{
         let mut route_last_check_time = Local::now().timestamp_millis() as usize;
         loop {
             let now_time = Local::now().timestamp_millis() as usize;
-            //每隔60秒检查一次
-            if now_time - ping_last_check_time >= 60000{
+            //每隔600秒心跳检查一次
+            if now_time - ping_last_check_time >= 600000{
                 debug!("{}", String::from("check_ping"));
                 if let Err(e) = self.check_health_for_type(HealthType::Ping).await{
                     error!("check ping error:{}", e.to_string());
                 };
                 ping_last_check_time = now_time;
             }
-            //每隔600秒进行一次连接池数量维护
-            if now_time - maintain_last_check_time >= 600000{
+            //每隔300秒进行一次连接池数量维护
+            if now_time - maintain_last_check_time >= 300000{
                 debug!("{}", String::from("maintain_pool"));
                 if let Err(e) = self.check_health_for_type(HealthType::Maintain).await{
                     error!("pool maintain error:{}", e.to_string());
@@ -1331,11 +1331,11 @@ impl MysqlConnectionInfo{
 //        return false;
 //    }
 
-    /// 检查空闲时间，超过600s返回true
+    /// 检查空闲时间，超过300s返回true
     pub fn check_sleep(&mut self) -> bool {
         let dt = Local::now();
         let now_time = dt.timestamp_millis() as usize;
-        if now_time - self.last_time > 600000 {
+        if now_time - self.last_time > 300000 {
             return true
         }
         false
