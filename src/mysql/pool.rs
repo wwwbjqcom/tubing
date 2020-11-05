@@ -233,14 +233,6 @@ impl PlatformPool{
         let mut route_last_check_time = Local::now().timestamp_millis() as usize;
         loop {
             let now_time = Local::now().timestamp_millis() as usize;
-            //每隔600秒心跳检查一次
-            if now_time - ping_last_check_time >= 600000{
-                debug!("{}", String::from("check_ping"));
-                if let Err(e) = self.check_health_for_type(HealthType::Ping).await{
-                    error!("check ping error:{}", e.to_string());
-                };
-                ping_last_check_time = now_time;
-            }
             //每隔120秒进行一次连接池数量维护
             if now_time - maintain_last_check_time >= 120000{
                 debug!("{}", String::from("maintain_pool"));
@@ -248,6 +240,15 @@ impl PlatformPool{
                     error!("pool maintain error:{}", e.to_string());
                 }
                 maintain_last_check_time = now_time;
+            }
+            
+            //每隔600秒心跳检查一次
+            if now_time - ping_last_check_time >= 600000{
+                debug!("{}", String::from("check_ping"));
+                if let Err(e) = self.check_health_for_type(HealthType::Ping).await{
+                    error!("check ping error:{}", e.to_string());
+                };
+                ping_last_check_time = now_time;
             }
 
             //定时检查路由是否发生变动
