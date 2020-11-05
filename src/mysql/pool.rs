@@ -1098,7 +1098,7 @@ impl ConnectionsPool{
 
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
-        let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
+        let platform_conn_count_lock = self.platform_conn_count.lock().await;
         admin::HostPoolState{
             host_info: host_info.clone(),
             com_select: self.com_select.load(Ordering::Relaxed),

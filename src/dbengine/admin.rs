@@ -5,8 +5,8 @@
 
 use crate::mysql::Result;
 use crate::MyError;
-use tracing::{debug, info, error};
-use sqlparser::ast::{Statement, Expr, BinaryOperator, SetVariableValue, Value, Ident};
+use tracing::{debug};
+use sqlparser::ast::{Statement, Expr, BinaryOperator, SetVariableValue, Value};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -62,7 +62,7 @@ impl ShowStruct{
                 }
 
             }
-            Value => {
+            Expr::Value(_) => {
                 if a == String::from("r"){
                     self.platform = Some(format!("{}",ide).replace("\"","").replace("'",""));
                 }else {
@@ -216,7 +216,7 @@ impl SetStruct{
                 }
 
             }
-            Value=> {
+            Expr::Value(_) => {
                 if aa == String::from("r"){
                     if vv == &String::from("platform"){
                         self.platform = Some(format!("{}",ide).replace("\"","").replace("'",""));
@@ -288,7 +288,7 @@ impl SetStruct{
                 }
             }
         }
-        if let Some(host_info) = &self.host_info{
+        if let Some(_host_info) = &self.host_info{
             match self.platform {
                 None => {
                     let err = String::from("when the host_info parameter is provided, the platform parameter must also be provided");
@@ -319,7 +319,7 @@ impl AdminSql{
     pub async fn parse_sql(&self, ast: &Vec<Statement>) -> Result<AdminSql>{
         for a in ast{
             return match a {
-                Statement::ShowVariable { variable, global, selection } => {
+                Statement::ShowVariable { variable, selection, .. } => {
                     let mut show_struct = ShowStruct { command: ShowCommand::Null, platform: None };
                     show_struct.parse(format!("{}", variable), selection).await?;
                     Ok(AdminSql::Show(show_struct))

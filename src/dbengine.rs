@@ -7,7 +7,7 @@ pub mod server;
 pub mod client;
 pub mod admin;
 pub mod other_response;
-use tracing::{debug, info, error};
+use tracing::{error};
 
 ///
 /// 部分capabilities

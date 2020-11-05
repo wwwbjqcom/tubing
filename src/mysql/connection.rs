@@ -230,7 +230,7 @@ impl MysqlConnection{
         let (packet_buf,_) = self.get_packet_from_stream()?;
 
         let key = &packet_buf[1..];
-        let mut password = conf.password.as_bytes().to_vec();
+        let mut password = conf.mpassword.as_bytes().to_vec();
         password.push(0);
         for i in 0..password.len() {
             password[i] ^= auth_data[i % auth_data.len()];

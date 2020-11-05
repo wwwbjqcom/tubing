@@ -193,13 +193,13 @@ impl PerMysqlConn {
         Ok(())
     }
 
-    /// mysql发生异常，关闭连接
-    pub async fn reset_connection(&mut self) -> Result<()>{
-        self.conn_info = None;
-        self.conn_state = false;
-        self.conn_pool = None;
-        Ok(())
-    }
+    // /// mysql发生异常，关闭连接
+    // pub async fn reset_connection(&mut self) -> Result<()>{
+    //     self.conn_info = None;
+    //     self.conn_state = false;
+    //     self.conn_pool = None;
+    //     Ok(())
+    // }
 
     pub async fn get_connection_host_info(&self) -> String {
         let mut host_info = String::from("");

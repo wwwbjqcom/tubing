@@ -3,10 +3,8 @@
 @datetime: 2020/5/14
 */
 
-use std::future::Future;
-use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, Semaphore};
+use tokio::sync::{broadcast, mpsc};
 use tokio::time::{self, Duration};
 use tokio::signal::unix::{signal, SignalKind};
 use tracing::{debug, error, info, instrument};

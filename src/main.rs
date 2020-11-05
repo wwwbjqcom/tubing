@@ -4,8 +4,6 @@ mod mysql;
 mod readvalue;
 use structopt::StructOpt;
 use std::fmt;
-use chrono::prelude::*;
-use chrono;
 
 use serde_derive::{Deserialize};
 use std::fs::File;
@@ -111,7 +109,7 @@ impl Platform{
 }
 
 pub fn info_now_time(t: String) -> String {
-    let dt = Local::now();
+    //let dt = Local::now();
     //let now_time = dt.timestamp_millis() as usize;
     // let a = format!("{} end_time: {}", t, now_time);
     let a = format!("{}", t);
@@ -140,8 +138,8 @@ pub const VERSION: &str = "1.0.60-MysqlBus";
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub user: String,
-    pub password: String,
+    // pub user: String,
+    // pub password: String,
     pub muser: String,
     pub mpassword: String,
     pub program_name: String,
@@ -154,8 +152,8 @@ pub struct Config {
 impl Config{
     pub fn new(platform_conf: &Platform) -> Config{
         Config{
-            user: platform_conf.user.clone(),
-            password: platform_conf.password.clone(),
+            // user: platform_conf.user.clone(),
+            // password: platform_conf.password.clone(),
             muser: platform_conf.user.clone(),
             mpassword: platform_conf.password.clone(),
             program_name: String::from("MysqlBus"),
@@ -166,19 +164,19 @@ impl Config{
         }
     }
 
-    pub fn my_clone(&self) -> Config{
-        Config{
-            user: self.user.clone(),
-            password: self.password.clone(),
-            muser: self.muser.clone(),
-            mpassword: self.password.clone(),
-            program_name: self.program_name.clone(),
-            database: self.database.clone(),
-            min: self.min.clone(),
-            max: self.max.clone(),
-            host_info: self.host_info.clone()
-        }
-    }
+    // pub fn my_clone(&self) -> Config{
+    //     Config{
+    //         user: self.user.clone(),
+    //         password: self.password.clone(),
+    //         muser: self.muser.clone(),
+    //         mpassword: self.password.clone(),
+    //         program_name: self.program_name.clone(),
+    //         database: self.database.clone(),
+    //         min: self.min.clone(),
+    //         max: self.max.clone(),
+    //         host_info: self.host_info.clone()
+    //     }
+    // }
 }
 
 

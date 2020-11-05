@@ -12,7 +12,7 @@ use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{Borrow};
-use tracing::{error, debug, info};
+use tracing::{error, debug};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
 use crate::dbengine::admin::AdminSql;
@@ -164,7 +164,7 @@ impl ClientResponse {
         // result packet  eof结束
         let mut eof_num = 0;
         loop {
-            let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+            let (buf, header) = self.get_packet_from_stream(handler).await?;
             debug!("prepare execute response:{}", buf[0]);
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             if buf[0] == 0xfe{
@@ -241,7 +241,7 @@ impl ClientResponse {
     async fn prepare_sql_loop_block(&self,num: u16, handler: &mut Handler) -> Result<()>{
         if num > 0  {
             'a: loop{
-                let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+                let (buf, header) = self.get_packet_from_stream(handler).await?;
                 debug!("prepare reponse : {}", buf[0]);
                 if buf[0] == 0xfe{
                     if (handler.client_flags & CLIENT_DEPRECATE_EOF as i32) <= 0{
@@ -364,7 +364,7 @@ impl ClientResponse {
         return false;
     }
 
-    async fn check_change_db_privileges(&self,  handler: &mut Handler, database: &String) -> Result<bool>{
+    async fn check_change_db_privileges(&self,  handler: &mut Handler, _database: &String) -> Result<bool>{
         if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![TableInfo{ database: None, table: None }]).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false);

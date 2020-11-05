@@ -4,8 +4,6 @@
 */
 use tracing::{debug};
 use std::cmp::PartialEq;
-use sqlparser::dialect::MySqlDialect;
-use sqlparser::parser::*;
 use sqlparser::ast::{Statement, ObjectType, ObjectName, Expr, SetExpr, TableFactor, TableWithJoins, ExplainStmt};
 use crate::mysql::Result;
 use crate::MyError;
@@ -212,22 +210,22 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
             Expr::IsNotNull(e) => {
                 do_expr(e, tbl)?;
             }
-            Expr::InList { expr, list, negated } => {
+            Expr::InList { expr, list, .. } => {
                 do_expr(expr, tbl)?;
-                for e in list{
+                for _ in list{
                     do_expr(expr, tbl)?;
                 }
             }
-            Expr::Between { expr, negated, low, high } => {
+            Expr::Between { expr, low, high , .. } => {
                 do_expr(expr, tbl)?;
                 do_expr(low, tbl)?;
                 do_expr(high, tbl)?;
             }
-            Expr::BinaryOp { left, op, right } => {
+            Expr::BinaryOp { left, right , .. } => {
                 do_expr(left, tbl)?;
                 do_expr(right, tbl)?;
             }
-            Expr::UnaryOp {op, expr } => {
+            Expr::UnaryOp {expr, .. } => {
                 do_expr(expr, tbl)?;
             }
             Expr::Case { operand, conditions, results, else_result } => {
@@ -244,19 +242,19 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                     do_expr(expr, tbl)?;
                 }
             }
-            Expr::Cast { expr, data_type } => {
+            Expr::Cast { expr, .. } => {
                 do_expr(expr, tbl)?;
             }
-            Expr::Extract { field, expr } => {
+            Expr::Extract {  expr,.. } => {
                 do_expr(expr, tbl)?;
             }
-            Expr::Collate { expr, collation } => {
+            Expr::Collate { expr, .. } => {
                 do_expr(expr, tbl)?;
             }
             Expr::Nested(n) => {
                 do_expr(n, tbl)?;
             }
-            Expr::InSubquery { expr, subquery, negated } => {
+            Expr::InSubquery { subquery, .. } => {
                 let (a, _, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
                 tbl.extend(a);
             }
@@ -300,7 +298,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
 
                         fn get_relation(r: &TableFactor, tbl: &mut Vec<TableInfo>) -> Result<()>{
                             match r{
-                                TableFactor::Table { name, alias, args, with_hints } => {
+                                TableFactor::Table { name, args, with_hints, .. } => {
                                     push_tbl_list(name, tbl)?;
                                     for expr in args{
                                         do_expr(expr, tbl)?;
@@ -310,14 +308,13 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                                     }
 
                                 }
-                                TableFactor::Derived { lateral, subquery, alias } => {
+                                TableFactor::Derived { subquery, .. } => {
                                     let (a, _, _) = do_table_info(&vec![Statement::Query(subquery.clone())])?;
                                     tbl.extend(a);
                                 }
                                 TableFactor::NestedJoin(w) => {
                                     do_withjoin(w, tbl)?;
                                 }
-                                _ => {}
                             }
                             Ok(())
                         }
@@ -333,7 +330,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                     _ => {}
                 }
             }
-            Statement::Explain { analyze, format_type, body } => {
+            Statement::Explain { body , ..} => {
                 sql_type = SqlStatement::Query;
                 match body{
                     ExplainStmt::Stmt(a) => {
@@ -353,7 +350,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                     tbl_list.push(TableInfo{database: None, table: Some(lock_info.table_name.to_string().clone())});
                 }
             }
-            Statement::Drop { object_type, if_exists, names, on_info, cascade } => {
+            Statement::Drop { object_type, names, on_info, .. } => {
                 sql_type = SqlStatement::Drop;
                 match object_type{
                     ObjectType::Schema => {
@@ -372,7 +369,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                     _ => {}
                 }
             }
-            Statement::Update { table_name, assignments, selection } => {
+            Statement::Update { table_name, selection , ..} => {
                 sql_type = SqlStatement::Update;
                 push_tbl_list(table_name, &mut tbl_list)?;
                 if let Some(se) = selection{
@@ -386,17 +383,17 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                     do_expr(se, &mut tbl_list)?;
                 }
             }
-            Statement::AlterTable { name, operation } => {
+            Statement::AlterTable { name, .. } => {
                 sql_type = SqlStatement::AlterTable;
                 push_tbl_list(name, &mut tbl_list)?;
             }
-            Statement::Insert { table_name, columns, source } => {
+            Statement::Insert { table_name, source, .. } => {
                 sql_type = SqlStatement::Insert;
                 push_tbl_list(table_name, &mut tbl_list)?;
                 let (a, _, _) = do_table_info(&vec![Statement::Query(source.clone())])?;
                 tbl_list.extend(a);
             }
-            Statement::ShowColumns { extended, full, table_name, filter } => {
+            Statement::ShowColumns { table_name, .. } => {
                 sql_type = SqlStatement::Show;
                 push_tbl_list(table_name, &mut tbl_list)?;
             }
@@ -408,10 +405,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::Show;
                 push_tbl_list(table_name, &mut tbl_list)?;
             }
-            Statement::CreateTable { name, columns, index, constraints, with_options,
-                table_options, if_not_exists, external, file_format, location,
-                query, without_rowid
-            } => {
+            Statement::CreateTable { name, query, .. } => {
                 sql_type = SqlStatement::Create;
                 push_tbl_list(name, &mut tbl_list)?;
                 if let Some(q) = query{
@@ -420,7 +414,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 }
 
             }
-            Statement::CreateIndex { name, table_name, columns, unique, if_not_exists } => {
+            Statement::CreateIndex { table_name, .. } => {
                 sql_type = SqlStatement::Create;
                 push_tbl_list(table_name, &mut tbl_list)?;
             }
@@ -428,22 +422,22 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 sql_type = SqlStatement::ChangeDatabase;
                 push_tbl_list(schema_name, &mut tbl_list)?;
             }
-            Statement::SetVariable { local, variable, value } => {
+            Statement::SetVariable { variable, value , .. } => {
                 sql_type = SqlStatement::SetVariable(variable.value.clone(), value.to_string().replace('\'', ""));
             }
-            Statement::StartTransaction { modes } => {
+            Statement::StartTransaction { .. } => {
                 sql_type = SqlStatement::StartTransaction;
             }
-            Statement::Rollback { chain } => {
+            Statement::Rollback { .. } => {
                 sql_type = SqlStatement::Rollback;
             }
-            Statement::Call { name, parameter } => {
+            Statement::Call { .. } => {
                 sql_type = SqlStatement::Query;
             }
-            Statement::Commit { chain } => {
+            Statement::Commit { .. } => {
                 sql_type = SqlStatement::Commit;
             }
-            Statement::ShowVariable { variable, global, selection } => {
+            Statement::ShowVariable { .. } => {
                 sql_type = SqlStatement::Show;
             }
             _ => {}
