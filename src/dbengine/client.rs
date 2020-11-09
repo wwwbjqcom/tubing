@@ -364,8 +364,8 @@ impl ClientResponse {
         return false;
     }
 
-    async fn check_change_db_privileges(&self,  handler: &mut Handler, _database: &String) -> Result<bool>{
-        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![TableInfo{ database: None, table: None }]).await{
+    async fn check_change_db_privileges(&self,  handler: &mut Handler, database: &String) -> Result<bool>{
+        if let Err(e) = self.check_user_privileges(handler,  &SqlStatement::ChangeDatabase, &vec![TableInfo{ database: Some(database.clone()), table: None }]).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false);
         }
@@ -373,6 +373,7 @@ impl ClientResponse {
     }
 
     async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<TableInfo>) -> Result<()>{
+        debug!("check user prifileges on {:?}", tbl_info);
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
         }

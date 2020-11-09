@@ -249,7 +249,7 @@ impl Listener {
     /// strategy, which is what we do here.
     async fn run(&mut self) -> Result<()> {
         info!("accepting inbound connections");
-        loop {
+        'a: loop {
             // Wait for a permit to become available
             //
             // `acquire` returns a permit that is bound via a lifetime to the
@@ -269,8 +269,9 @@ impl Listener {
             let host = if let Ok(h) = socket.peer_addr(){
                 h.ip().to_string()
             }else {
-                continue;
+                continue 'a;
             };
+            debug!("accept connection from {}", host);
             //let host = socket.peer_addr()?.ip().to_string();
             // Create the necessary per-connection handler state.
             let handler = Handler {
@@ -316,7 +317,7 @@ impl Listener {
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
-                    error!(cause = ?err, "connection error");
+                    debug!(cause = ?err, "connection error");
                 }
             });
         }
