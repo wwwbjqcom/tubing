@@ -316,7 +316,7 @@ impl Listener {
                         }
                     });
                 }
-                Err(e) => {
+                Err(err) => {
                     error!(cause = ?err, "accept error");
                 }
             }
