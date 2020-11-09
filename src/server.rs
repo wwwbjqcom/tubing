@@ -265,55 +265,62 @@ impl Listener {
             // Accept a new socket. This will attempt to perform error handling.
             // The `accept` method internally attempts to recover errors, so an
             // error here is non-recoverable.
-            let socket = self.accept().await?;
-            let host = socket.peer_addr()?.ip().to_string();
-            // Create the necessary per-connection handler state.
-            let handler = Handler {
-                platform: None,
-                platform_pool: self.platform_pool.clone(),
-                platform_pool_on: ConnectionsPoolPlatform::default(),
-                per_conn_info: per_connection::PerMysqlConn::new(),
-                hand_key: thread_rng()
-                    .sample_iter(&Alphanumeric)
-                    .take(32)
-                    .collect(),
-                user_privileges: self.user_privileges.clone(),
-                auto_commit: true,
-                commited: false,
-                client_flags: 0,
-                db: Some("information_schema".to_string()),
-                host,
-                user_name: "".to_string(),
-                seq: 0,
+            match self.accept().await{
+                Ok(socket) => {
+                    let host = socket.peer_addr()?.ip().to_string();
+                    // Create the necessary per-connection handler state.
+                    let handler = Handler {
+                        platform: None,
+                        platform_pool: self.platform_pool.clone(),
+                        platform_pool_on: ConnectionsPoolPlatform::default(),
+                        per_conn_info: per_connection::PerMysqlConn::new(),
+                        hand_key: thread_rng()
+                            .sample_iter(&Alphanumeric)
+                            .take(32)
+                            .collect(),
+                        user_privileges: self.user_privileges.clone(),
+                        auto_commit: true,
+                        commited: false,
+                        client_flags: 0,
+                        db: Some("information_schema".to_string()),
+                        host,
+                        user_name: "".to_string(),
+                        seq: 0,
 
-                status: ConnectionStatus::Null,
+                        status: ConnectionStatus::Null,
 
-                // Initialize the connection state. This allocates read/write
-                // buffers to perform redis protocol frame parsing.
-                connection: Connection::new(socket),
+                        // Initialize the connection state. This allocates read/write
+                        // buffers to perform redis protocol frame parsing.
+                        connection: Connection::new(socket),
 
-                // The connection state needs a handle to the max connections
-                // semaphore. When the handler is done processing the
-                // connection, a permit is added back to the semaphore.
-                // limit_connections: self.limit_connections.clone(),
+                        // The connection state needs a handle to the max connections
+                        // semaphore. When the handler is done processing the
+                        // connection, a permit is added back to the semaphore.
+                        // limit_connections: self.limit_connections.clone(),
 
-                // Receive shutdown notifcations.
-                shutdown: shutdown::Shutdown::new(self.notify_shutdown.subscribe()),
+                        // Receive shutdown notifcations.
+                        shutdown: shutdown::Shutdown::new(self.notify_shutdown.subscribe()),
 
-                // Notifies the receiver half once all clones are
-                // dropped.
-                _shutdown_complete: self.shutdown_complete_tx.clone(),
+                        // Notifies the receiver half once all clones are
+                        // dropped.
+                        _shutdown_complete: self.shutdown_complete_tx.clone(),
 
-            };
+                    };
 
-            // Spawn a new task to process the connections. Tokio tasks are like
-            // asynchronous green threads and are executed concurrently.
-            tokio::spawn(async move {
-                // Process the connection. If an error is encountered, log it.
-                if let Err(err) = handler.run().await {
-                    error!(cause = ?err, "connection error");
+                    // Spawn a new task to process the connections. Tokio tasks are like
+                    // asynchronous green threads and are executed concurrently.
+                    tokio::spawn(async move {
+                        // Process the connection. If an error is encountered, log it.
+                        if let Err(err) = handler.run().await {
+                            error!(cause = ?err, "connection error");
+                        }
+                    });
                 }
-            });
+                Err(e) => {
+                    error!(cause = ?err, "accept error");
+                }
+            }
+
         }
     }
 

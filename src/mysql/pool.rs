@@ -241,7 +241,7 @@ impl PlatformPool{
                 }
                 maintain_last_check_time = now_time;
             }
-            
+
             //每隔600秒心跳检查一次
             if now_time - ping_last_check_time >= 600000{
                 debug!("{}", String::from("check_ping"));
