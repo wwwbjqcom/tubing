@@ -209,12 +209,13 @@ impl ClientResponse {
         debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
         let (a, tbl_info) = SqlStatement::Default.parser(&sql);
 
-        //进行ops操作
-        handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
-
         if !self.check_all_status(handler, &a, &tbl_info, &sql, None).await?{
             return Ok(())
         }
+
+        //进行ops操作
+        handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
+
         debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
         //self.send_one_packet(handler).await?;
         let packet = self.packet_my_value();
