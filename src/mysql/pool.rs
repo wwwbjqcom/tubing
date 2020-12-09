@@ -1562,7 +1562,7 @@ impl MysqlConnectionInfo{
         match self.get_packet_from_stream().await{
             Ok((buf, _header)) => {
                 if let Err(e) = self.check_packet_is(&buf){
-                    info!("check ping response packet error: {}",e.to_string());
+                    error!("check ping response packet error: {}",e.to_string());
                     self.close();
                     return Ok(false);
                 }
