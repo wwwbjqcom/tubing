@@ -540,7 +540,7 @@ impl ConnectionsPoolPlatform{
         debug!("save operation count:{:?} for {:?}", sql_type, host_info);
         self.questions.fetch_add(1, Ordering::SeqCst);
         if let Some(mut node_pool) = self.get_node_pool(host_info).await{
-            info!("save operation count:{:?} for {:?}", sql_type, host_info);
+            //info!("save operation count:{:?} for {:?}", sql_type, host_info);
             node_pool.save_ops_info(sql_type).await;
         }
         Ok(())
@@ -1099,6 +1099,11 @@ impl ConnectionsPool{
         Ok(())
     }
 
+    /// 减少连接池活跃连接计数，在client处理连接检查异常时对计数进行减少
+    /// 异常连接不需要归还，所以只做计数操作
+    pub async fn sub_active_count(&mut self) {
+        self.active_count.fetch_sub(1, Ordering::SeqCst);
+    }
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
         let platform_conn_count_lock = self.platform_conn_count.lock().await;

@@ -30,22 +30,36 @@ impl PerMysqlConn {
         loop {
             if let Some(conn) = &mut self.conn_info{
                 if conn.check_cacke_sleep(){
-                    conn.reset_conn_default()?;
+                    if let Err(e) = conn.reset_conn_default(){
+                        //操作连接异常，只重置状态，不归还连接
+                        error!("reset conn default err(per_connnection_health): {}", e.to_string());
+                        self.reset_my_state().await;
+                        if let Some(conn_pool) = &mut self.conn_pool{
+                            conn_pool.sub_active_count().await;
+                        }
+                        continue;
+                    }
+
+                    //操作正常则进行下一步归还连接
                     let new_conn = conn.try_clone()?;
                     if let Some(conn_pool) = &mut self.conn_pool{
                         conn_pool.return_pool(new_conn, &self.platform).await?;
                     }
                     // pool.return_pool(new_conn, 0, &self.platform).await?;
-                    self.conn_info = None;
-                    self.conn_state = false;
-                    self.cur_db = "information_schema".to_string();
-                    self.cur_autocommit = false;
+                    self.reset_my_state().await;
                     break;
                 }
             }
             delay_for(Duration::from_millis(50)).await;
         }
         Ok(())
+    }
+
+    async fn reset_my_state(&mut self) {
+        self.conn_info = None;
+        self.conn_state = false;
+        self.cur_db = "information_schema".to_string();
+        self.cur_autocommit = false;
     }
 
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
