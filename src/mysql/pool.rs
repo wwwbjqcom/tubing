@@ -1404,7 +1404,7 @@ impl MysqlConnectionInfo{
 
     /// send packet and return response packet for sync
     fn __send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
-        debug!("write packet to mysql connection (timeout {:?S})", self.conn.write_timeout().unwrap());
+        debug!("write packet to mysql connection (timeout {:?})", self.conn.write_timeout().unwrap());
         self.conn.write_all(packet)?;
         debug("write packet to socket(db): OK");
         let (buf, header) = self.__get_packet_from_stream()?;
