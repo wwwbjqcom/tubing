@@ -559,8 +559,9 @@ impl Handler {
                     debug!("{}",crate::info_now_time(String::from("start execute")));
                     if let Err(e) = response.exec(&mut self).await{
                         //发生异常关闭对应db连接，因为如果是语法或sql错误会直接发送到客户端， 这里返回错误一般是mysql异常
-                        error!("{}", e.to_string());
-                        break;
+                        error!("mysql error: {}", e.to_string());
+                        self.per_conn_info.cancel_failed_connection().await;
+                        return Ok(());
                     }
                     self.reset_seq();
                 }

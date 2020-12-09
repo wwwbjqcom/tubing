@@ -33,10 +33,7 @@ impl PerMysqlConn {
                     if let Err(e) = conn.reset_conn_default(){
                         //操作连接异常，只重置状态，不归还连接
                         error!("reset conn default err(per_connnection_health): {}", e.to_string());
-                        self.reset_my_state().await;
-                        if let Some(conn_pool) = &mut self.conn_pool{
-                            conn_pool.sub_active_count().await;
-                        }
+                        self.cancel_failed_connection().await;
                         continue;
                     }
 
@@ -53,6 +50,14 @@ impl PerMysqlConn {
             delay_for(Duration::from_millis(50)).await;
         }
         Ok(())
+    }
+
+    /// 异常连接直接丢弃，并减少连接池活跃连接计数值
+    pub async fn cancel_failed_connection(&mut self)  {
+        self.reset_my_state().await;
+        if let Some(conn_pool) = &mut self.conn_pool{
+            conn_pool.sub_active_count().await;
+        }
     }
 
     async fn reset_my_state(&mut self) {
