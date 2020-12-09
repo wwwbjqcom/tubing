@@ -133,7 +133,7 @@ impl PerMysqlConn {
         debug!("set default information fo connection");
         match &mut self.conn_info {
             Some(conn) => {
-                if !conn.check_health()?{
+                if !conn.check_health().await?{
                     return Err(Box::new(MyError(String::from("lost connection for mysql"))));
                 }
                 match db{
