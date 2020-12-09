@@ -91,7 +91,7 @@ pub fn conn(host_info: &str) -> Result<TcpStream> {
     //let tcp_conn = TcpStream::connect(host_info)?;
     let tcp_conn = TcpStream::connect_timeout(&addrs, Duration::new(1,0))?;
     tcp_conn.set_read_timeout(Some(Duration::new(10,0)))?;
-    tcp_conn.set_write_timeout(Some(Duration::new(0,1000)))?;
+    tcp_conn.set_write_timeout(Some(Duration::new(1,1000)))?;
     Ok(tcp_conn)
 }
 
