@@ -128,6 +128,7 @@ impl PerMysqlConn {
     }
 
     pub async fn set_default_info(&mut self, db: &Option<String>, auto_commit: &bool) -> Result<()> {
+        debug!("set default information fo connection");
         match &mut self.conn_info {
             Some(conn) => {
                 match db{

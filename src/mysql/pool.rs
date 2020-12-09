@@ -1032,7 +1032,7 @@ impl ConnectionsPool{
                     error!("{} connection access has reached the upper limit set by the system", platform);
                     return Err(Box::new(MyError(format!("{} connection access has reached the upper limit set by the system", platform).into())));
                 }
-                debug!("locak thread pool");
+                debug!("lock thread pool");
                 let mut pool = self.conn_queue.lock().await;
                 loop {
                     //从队列中获取，如果队列为空，则判断是否已达到最大，再进行判断获取
@@ -1405,6 +1405,7 @@ impl MysqlConnectionInfo{
     /// send packet and return response packet for sync
     fn __send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         self.conn.write_all(packet)?;
+        debug("write packet to socket(db): OK");
         let (buf, header) = self.__get_packet_from_stream()?;
         Ok((buf, header))
     }
