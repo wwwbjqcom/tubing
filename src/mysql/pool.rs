@@ -622,6 +622,7 @@ impl ConnectionsPoolPlatform{
 
     /// 获取主节点连接
     async fn get_write_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
+        debug!("get from write thread_pool");
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let write_host_lock = self.write.read().await;
         for write_host_info in &*write_host_lock{
@@ -649,6 +650,7 @@ impl ConnectionsPoolPlatform{
 
     /// 通过最少连接数获取连接
     async fn get_read_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
+        debug!("get from read thread_pool");
         if let (Some(conn), Some(conn_pool)) = self.get_cached_conn(key).await?{
             return Ok((conn, conn_pool));
         }
@@ -1030,10 +1032,12 @@ impl ConnectionsPool{
                     error!("{} connection access has reached the upper limit set by the system", platform);
                     return Err(Box::new(MyError(format!("{} connection access has reached the upper limit set by the system", platform).into())));
                 }
+                debug!("locak thread pool");
                 let mut pool = self.conn_queue.lock().await;
                 loop {
                     //从队列中获取，如果队列为空，则判断是否已达到最大，再进行判断获取
                     if let Some(conn) = pool.pool.pop_front(){
+                        debug!("pop_front for thread pool");
                         drop(pool);
                         self.queued_count.fetch_sub(1, Ordering::SeqCst);
                         self.active_count.fetch_add(1, Ordering::SeqCst);

@@ -92,9 +92,11 @@ impl PerMysqlConn {
 
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
                        auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<()>{
+        debug!("get connection from thread_pool");
         let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment,
                                               platform, self.platform_is_sublist.clone()).await?;
         //let conn = pool.get_pool(key).await?;
+        debug!("OK");
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
         self.set_default_info(db, auto_commit).await?;
