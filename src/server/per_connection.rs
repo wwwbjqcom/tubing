@@ -99,7 +99,9 @@ impl PerMysqlConn {
         debug!("OK");
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
-        self.set_default_info(db, auto_commit).await?;
+        if let Err(e) = self.set_default_info(db, auto_commit).await{
+            error!("set default info error: {}", e.to_string());
+        }
         self.conn_state = true;
         Ok(())
     }
