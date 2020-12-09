@@ -439,11 +439,13 @@ impl ClientResponse {
             if platform != &"admin".to_string(){
                 handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
                                             &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
+                debug!("connection check ok!");
                 handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
             } else {
                 return Ok(true)
             }
         }
+        debug!("check all status ok!");
         return Ok(true)
     }
 
