@@ -1383,7 +1383,6 @@ impl MysqlConnectionInfo{
     }
 
     pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
-        let _ = self.conn.peek(&mut [0;1])?;
         self.conn.write_all(packet)?;
         Ok(())
     }
@@ -1396,7 +1395,6 @@ impl MysqlConnectionInfo{
     /// send packet and return response packet
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         debug!("{}",crate::info_now_time(String::from("write all to mysql conn")));
-        let _ = self.conn.peek(&mut [0;1])?;
         self.conn.write_all(packet)?;
         self.set_last_time();
         debug!("{}",crate::info_now_time(String::from("get mysql response")));
@@ -1407,7 +1405,6 @@ impl MysqlConnectionInfo{
     /// send packet and return response packet for sync
     fn __send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         debug!("write packet to mysql connection (timeout {:?})", self.conn.write_timeout().unwrap());
-        let _ = self.conn.peek(&mut [0;1])?;
         self.conn.write_all(packet)?;
         debug("write packet to socket(db): OK");
         let (buf, header) = self.__get_packet_from_stream()?;
