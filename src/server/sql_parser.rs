@@ -458,9 +458,9 @@ mod tests {
 
     #[test]
     fn test_parse_sql() {
-        let sql = String::from("   UPDATE im_user.user_info SET qrcode = ? WHERE user_id = ?;");
-        let (a, b) = SqlStatement::Default.parser(&sql);
-        assert_eq!(SqlStatement::Update,a);
+        let sql = String::from("\n        insert\n        user_info(user_id,access_hash,first_name,last_name,country_code,local_phone,phone,bot,bot_info_version,bot_chat_history,bot_nochats,cluster_region, msgserverdc,encrypted, photo, sex,birthday, username)values\n        (?,?,?,?,?,?,?,?,?,?,?,?,?, 1, ?, ?,?, ?)\n    ");
+        let (a, b) = SqlStatement::Default.parser(&sql.replace("\n",""));
+        assert_eq!(SqlStatement::Insert,a);
         println!("sql: {:?}", &a);
         println!("tablesLL: {:?}", &b);
     }
