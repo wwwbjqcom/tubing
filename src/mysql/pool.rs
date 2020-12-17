@@ -1106,7 +1106,9 @@ impl ConnectionsPool{
     /// 减少连接池活跃连接计数，在client处理连接检查异常时对计数进行减少
     /// 异常连接不需要归还，所以只做计数操作
     pub async fn sub_active_count(&mut self) {
-        self.active_count.fetch_sub(1, Ordering::SeqCst);
+        if self.active_count.load(Ordering::SeqCst) > 0{
+            self.active_count.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
