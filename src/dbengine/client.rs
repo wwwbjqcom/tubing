@@ -209,6 +209,12 @@ impl ClientResponse {
         debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
         let (a, tbl_info) = SqlStatement::Default.parser(&sql);
 
+        // 检查sql类型， 是否符合标准， 在连接获取如果不能满足条件默认会获取读连接， 可能发生不可知的错误
+        if let SqlStatement::Default = a {
+            error!("error type {:?} for sql: {:?}", &a, &sql);
+            return Err(Box::new(MyError(String::from("unsupported sql type"))));
+        }
+
         if !self.check_all_status(handler, &a, &tbl_info, &sql, None).await?{
             return Ok(())
         }
