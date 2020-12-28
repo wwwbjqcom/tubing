@@ -602,7 +602,7 @@ impl ConnectionsPoolPlatform{
     // }
 
     /// 获取缓存的连接
-    async fn get_cached_conn(&mut self, key: &String) -> Result<(Option<MysqlConnectionInfo>, Option<ConnectionsPool>)> {
+    pub async fn get_cached_conn(&mut self, key: &String) -> Result<(Option<MysqlConnectionInfo>, Option<ConnectionsPool>)> {
         let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
         for read_host_info in &*read_list_lock{
@@ -1110,6 +1110,14 @@ impl ConnectionsPool{
             self.active_count.fetch_sub(1, Ordering::SeqCst);
         }
     }
+
+    // /// 减少连接缓存连接计数，在client处理连接检查异常时对计数进行减少
+    // /// 异常连接不需要归还，所以只做计数操作
+    // pub async fn sub_cached_count(&mut self) {
+    //     if self.cached_count.load(Ordering::SeqCst) > 0 {
+    //         self.cached_count.fetch_sub(1, Ordering::SeqCst);
+    //     }
+    // }
 
     async fn get_pool_state(&mut self, host_info: &String) -> admin::HostPoolState{
         let platform_conn_count_lock = self.platform_conn_count.lock().await;

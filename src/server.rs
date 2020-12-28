@@ -494,7 +494,8 @@ impl Handler {
             }
             debug!("{}",crate::info_now_time(String::from("start read maybe_response")));
             let maybe_response = tokio::select! {
-                res = self.connection.read() => res?,
+                // res = self.connection.read() => res?,
+                res = self.connection.read() => res,
                 _ = self.shutdown.recv() => {
                     // If a shutdown signal is received, return from `run`.
                     // This will result in the task terminating.
@@ -509,9 +510,21 @@ impl Handler {
             // the socket. There is no further work to do and the task can be
             // terminated.
             let response = match maybe_response {
-                Some(response) => response,
-                None => break,
+                Ok(a) => {
+                    match a {
+                        Some(response) => response,
+                        None => break,
+                    }
+                }
+                Err(e) => {
+                    info!(cause = ?e, "connection error");
+                    break;
+                }
             };
+            // let response = match maybe_response {
+            //     Some(response) => response,
+            //     None => break,
+            // };
             debug!("response packet payload: {:?}", &response.payload);
             debug!("{}....",crate::info_now_time(String::from("start")));
             if !self.check_seq(&response.seq){
@@ -568,7 +581,11 @@ impl Handler {
                 _ => {}
             }
         }
-        self.per_conn_info.return_connection( self.seq.clone()).await?;
+        // // 这里先初始化cached值， 因为可能prepare语句退出
+        // // prepare语句使用cached连接，如果不重置会直接归还到cached队列中， 就会成为僵尸连接一直存在
+        // self.per_conn_info.reset_cached().await?;
+        // self.per_conn_info.return_connection( self.seq.clone()).await?;
+        self.per_conn_info.cancel_error_return_connection(self.seq.clone(), &mut self.platform_pool_on, &self.hand_key).await?;
         Ok(())
     }
 

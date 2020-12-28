@@ -110,7 +110,7 @@ impl ClientResponse {
                 if let Err(e) = self.exec_prepare_main(handler, &v).await{
                     error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
-                    self.reset_is_cached(handler).await?;
+                    handler.per_conn_info.reset_cached().await?;
                     self.reset_is_transaction(handler).await?;
                     handler.per_conn_info.return_connection(0).await?;
                 }
@@ -189,7 +189,8 @@ impl ClientResponse {
             return Ok(())
         }
         self.send_no_response_packet(handler).await?;
-        self.reset_is_cached(handler).await?;
+        handler.per_conn_info.reset_cached().await?;
+        // self.reset_is_cached(handler).await?;
         Ok(())
     }
 
@@ -471,43 +472,12 @@ impl ClientResponse {
         let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         debug!("{:?}", sql_ast);
         let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
-        // let sql_parser = SqlStatement::Default;
-        // let (a, _) = sql_parser.parser(&sql);
-        // if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
-        //     self.send_error_packet(handler, &e.to_string()).await?;
-        //     return Ok(())
-        // }
 
         if self.check_is_admin_paltform(handler, &a).await{
             self.admin(&sql, handler, &sql_ast).await?;
             return Ok(())
         }
-        //
-        // //info!("{}",&sql);
-        // debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
-        // debug!("{}",format!("{:?}: {}", a, &sql));
-        //
-        // debug!("{}",crate::info_now_time(String::from("start check pool info")));
-        //
-        // //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
-        // if !self.check_is_set_platform(&a, handler).await?{
-        //     if self.check_other_query(&a, &sql, handler).await?{
-        //         return Ok(());
-        //     }
-        //     let error = format!("please set up a business platform first");
-        //     error!("{}", &error);
-        //     self.send_error_packet(handler, &error).await?;
-        //     return Ok(())
-        // }
-        //
-        // //已经设置了platform则进行连接检查及获取
-        // if let Some(platform) = &handler.platform{
-        //     if platform != &"admin".to_string(){
-        //         handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
-        //                                     &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
-        //         handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
-        //     }
-        // }
+
 
         if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
             return Ok(())
@@ -696,12 +666,12 @@ impl ClientResponse {
         return Err(Box::new(MyError(String::from("lost connection").into())));
     }
 
-    async fn reset_is_cached(&self, handler: &mut Handler) -> Result<()> {
-        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
-            return Ok(conn_info.reset_cached().await?);
-        }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
-    }
+    // async fn reset_is_cached(&self, handler: &mut Handler) -> Result<()> {
+    //     if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
+    //         return Ok(conn_info.reset_cached().await?);
+    //     }
+    //     return Err(Box::new(MyError(String::from("lost connection").into())));
+    // }
 //    async fn set_cached(&self, handler: &mut Handler) -> Result<()>{
 //        let hand_key = handler.hand_key.clone();
 //        if let Some(conn_info) = &mut handler.per_conn_info.conn_info{

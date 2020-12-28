@@ -49,14 +49,6 @@ impl PerMysqlConn {
                         }
                     }
                     break;
-                    //
-                    // let new_conn = conn.try_clone()?;
-                    // if let Some(conn_pool) = &mut self.conn_pool{
-                    //     conn_pool.return_pool(new_conn, &self.platform).await?;
-                    // }
-                    // // pool.return_pool(new_conn, 0, &self.platform).await?;
-                    // self.reset_my_state().await;
-                    // break;
                 }
             }
             delay_for(Duration::from_millis(50)).await;
@@ -70,6 +62,34 @@ impl PerMysqlConn {
         if let Some(conn_pool) = &mut self.conn_pool{
             conn_pool.sub_active_count().await;
         }
+    }
+
+    /// 客户端连接非正常结束导致的异常关闭， 归还连接流程
+    ///
+    /// 首先设置当前连接的cached为空，再执行return连接，这里避免归还的连接为prepare语句的
+    /// 如果不修改cache值，客户端连接最终退出会造成cache_queque中会一直存在一个僵尸连接
+    ///
+    /// 最后再从cached_queue中获取是否有缓存的连接， 如果有再归还到可用队列中，
+    /// 这里是为了避免连接处在cached_queue中， 而连接又退出，会产生无法正常归还的情况
+    pub async fn cancel_error_return_connection(&mut self, seq: u8, pool: &mut ConnectionsPoolPlatform, key: &String) -> Result<()>{
+        self.reset_cached().await?;
+        self.return_connection(seq).await?;
+
+        self.reset_my_state().await;
+        if let (Some(mut conn_info), Some(mut conn_pool)) = pool.get_cached_conn(key).await?{
+            conn_info.reset_cached().await?;
+            conn_pool.return_pool(conn_info, &self.platform).await?;
+        }
+        Ok(())
+    }
+
+
+    /// 重置当前连接cached值
+    pub async fn reset_cached(&mut self) -> Result<()> {
+        if let Some(conn_info) = &mut self.conn_info{
+            return Ok(conn_info.reset_cached().await?);
+        }
+        Ok(())
     }
 
     async fn reset_my_state(&mut self) {
@@ -215,17 +235,6 @@ impl PerMysqlConn {
                     self.cancel_failed_connection().await;
                 }
             }
-
-            // let mut new_conn = conn.try_clone()?;
-            // // 如果有事务存在则回滚， 回滚失败会结束该连接
-            // new_conn.check_rollback(seq).await?;
-            //
-            // if let Some(conn_pool) = &mut self.conn_pool{
-            //     conn_pool.return_pool(new_conn, &self.platform).await?;
-            // }
-            // self.conn_info = None;
-            // self.conn_state = false;
-            // self.conn_pool = None;
         }
         Ok(())
     }
