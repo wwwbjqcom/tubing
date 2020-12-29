@@ -112,7 +112,7 @@ impl Connection {
     pub async fn send(&mut self, packet: &Vec<u8>, seq_id: &u8) -> io::Result<()> {
         let packet_all = self.packet_value(packet, seq_id);
         self.stream.write_all(&packet_all).await?;
-        self.stream.flush().await
+        self.flush().await
     }
 
     pub async fn flush(&mut self) -> io::Result<()> {
@@ -122,9 +122,9 @@ impl Connection {
     /// send a packet to the connection
     pub async fn send_packet_full(&mut self, packet: &Vec<u8>) -> io::Result<()> {
         debug!("{}",crate::info_now_time(String::from("start write all to client")));
-        self.stream.write_all(&packet).await
+        self.stream.write_all(&packet).await?;
 //        debug!("{}",crate::info_now_time(String::from("flush to client")));
-//        self.stream.flush().await
+       self.flush().await
     }
 
 

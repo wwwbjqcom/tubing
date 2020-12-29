@@ -152,7 +152,7 @@ impl ClientResponse {
                 self.exec_prepare_reset(handler).await?;
             }
         }
-        handler.stream_flush().await?;
+        //handler.stream_flush().await?;
         Ok(())
     }
 
@@ -590,7 +590,7 @@ impl ClientResponse {
             }
             SqlStatement::Prepare => {return Ok(())}
         }
-        handler.stream_flush().await?;
+        //handler.stream_flush().await?;
 
         debug!("{}",crate::info_now_time(String::from("send ok")));
 
