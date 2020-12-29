@@ -12,7 +12,7 @@ use crate::server::{Handler, ConnectionStatus};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{Borrow};
-use tracing::{error, debug};
+use tracing::{error, debug, info};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
 use crate::dbengine::admin::AdminSql;
@@ -23,13 +23,15 @@ use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::*;
 use sqlparser::ast::Statement;
 use crate::dbengine::other_response::OtherType;
+use chrono::Local;
 
 #[derive(Debug)]
 pub struct ClientResponse {
     pub payload: u32,
     pub seq: u8,
     pub buf: Vec<u8>,
-    pub larger: Vec<ClientResponse>         //超出16m部分
+    pub larger: Vec<ClientResponse>,         //超出16m部分
+    pub cur_timestamp: usize
 }
 
 impl ClientResponse {
@@ -43,6 +45,8 @@ impl ClientResponse {
             let payload = packet.read_u24::<LittleEndian>()?;
             let seq = packet.read_u8()?;
             let mut buf = vec![0 as u8; payload as usize];
+            let dt = Local::now();
+            let cur_timestamp = dt.timestamp_millis() as usize;
             debug!("read_buf one packet: payload: {}, seq: {} , cursor_len: {}", &payload, &seq, &packet_len);
             return if payload <= (packet_len - 4) as u32 {
                 packet.read_exact(&mut buf)?;
@@ -50,14 +54,16 @@ impl ClientResponse {
                     payload,
                     seq,
                     buf,
-                    larger: vec![]
+                    larger: vec![],
+                    cur_timestamp
                 })
             }else {
                 Ok(ClientResponse{
                     payload: 0,
                     seq: 0,
                     buf: vec![],
-                    larger: vec![]
+                    larger: vec![],
+                    cur_timestamp
                 })
             }
         }
@@ -75,6 +81,14 @@ impl ClientResponse {
 
 
         Ok(one_packet)
+    }
+
+    async fn check_slow_questions(&self, ques: &String) {
+        let dt = Local::now();
+        let cur_timestamp = dt.timestamp_millis() as usize;
+        if cur_timestamp - self.cur_timestamp >= 1000 {
+            info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
+        }
     }
 
     /// 解析客户端发送的请求类型，并处理请求
@@ -105,6 +119,7 @@ impl ClientResponse {
                 }
                 handler.db = Some(db);
                 self.send_ok_packet(handler).await?;
+                self.check_slow_questions(&String::from("initdb")).await;
             }
             PacketType::ComPrepare(v) => {
                 if let Err(e) = self.exec_prepare_main(handler, &v).await{
@@ -179,7 +194,7 @@ impl ClientResponse {
                 }
             }
         }
-
+        self.check_slow_questions(&String::from("exec_prepare_execute")).await;
         Ok(())
     }
 
@@ -190,6 +205,7 @@ impl ClientResponse {
         }
         self.send_no_response_packet(handler).await?;
         handler.per_conn_info.reset_cached().await?;
+        self.check_slow_questions(&String::from("exec_prepare_close")).await;
         // self.reset_is_cached(handler).await?;
         Ok(())
     }
@@ -201,6 +217,7 @@ impl ClientResponse {
             return Ok(())
         }
         self.send_no_response_packet(handler).await?;
+        self.check_slow_questions(&String::from("exec_prepare_send_data")).await;
         return Ok(())
     }
 
@@ -243,6 +260,7 @@ impl ClientResponse {
         }
 
         self.set_is_cached(handler).await?;
+        self.check_slow_questions(&sql).await;
         Ok(())
     }
 
@@ -272,6 +290,7 @@ impl ClientResponse {
             return Ok(())
         }
         self.send_one_packet(handler).await?;
+        self.check_slow_questions(&String::from("exec_prepare_reset")).await;
         return Ok(())
     }
 
@@ -574,6 +593,8 @@ impl ClientResponse {
         handler.stream_flush().await?;
 
         debug!("{}",crate::info_now_time(String::from("send ok")));
+
+        self.check_slow_questions(&sql).await;
         Ok(())
     }
 

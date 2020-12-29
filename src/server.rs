@@ -517,7 +517,7 @@ impl Handler {
                     }
                 }
                 Err(e) => {
-                    info!(cause = ?e, "connection error from read");
+                    error!(cause = ?e, "connection error from read");
                     break;
                 }
             };
