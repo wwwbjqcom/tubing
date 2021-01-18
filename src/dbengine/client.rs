@@ -233,7 +233,12 @@ impl ClientResponse {
             return Err(Box::new(MyError(String::from("unsupported sql type"))));
         }
 
-        if !self.check_all_status(handler, &a, &tbl_info, &sql, None).await?{
+        let mut sql_comment = None;
+        if sql.contains("/*force_master*/") {
+            sql_comment = Some(String::from("force_master"));
+        }
+
+        if !self.check_all_status(handler, &a, &tbl_info, &sql, sql_comment).await?{
             return Ok(())
         }
 
