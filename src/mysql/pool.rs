@@ -568,6 +568,7 @@ impl ConnectionsPoolPlatform{
             _ => {
                 if let Some(comment) = select_comment {
                     if comment.to_lowercase() == String::from("force_master") {
+                        info!("get master conn");
                         Ok(self.get_write_conn(key, platform, is_sublist).await?)
                     } else {
                         Ok(self.get_read_conn(key, platform, is_sublist).await?)
@@ -752,6 +753,7 @@ impl ConnectionsPoolPlatform{
                     _ => {
                         if let Some(v) = select_comment {
                             if v.to_lowercase() == String::from("force_master") {
+                                info!("conn_type_check: force_master");
                                 return Ok(false);
                             }
                         }

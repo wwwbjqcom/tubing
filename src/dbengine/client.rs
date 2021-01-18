@@ -438,6 +438,7 @@ impl ClientResponse {
     ///
     /// 返回false代表不往下继续， 返回true则继续
     async fn check_all_status(&self, handler: &mut Handler, a: &SqlStatement, tbl_info_list: &Vec<TableInfo>, sql: &String, select_comment: Option<String>) -> Result<bool> {
+        info!("sql: {:?}", sql);
         if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false)
