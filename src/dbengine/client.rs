@@ -500,7 +500,7 @@ impl ClientResponse {
             }
             Err(e) => {
                 error!("sql parse error: {:?}", sql);
-                return Err(Box::new(MyError(e.into())));
+                return Err(Box::new(MyError(e.to_string().into())));
             }
         };
         // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
