@@ -466,6 +466,7 @@ impl ClientResponse {
             return Ok(false)
         }
         debug!("check and get connection from thread pool");
+        info!("aaaabc");
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
@@ -477,6 +478,7 @@ impl ClientResponse {
                 return Ok(true)
             }
         }
+        info!("aaaabc");
         debug!("check all status ok!");
         return Ok(true)
     }
