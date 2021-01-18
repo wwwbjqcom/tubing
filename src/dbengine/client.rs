@@ -494,7 +494,16 @@ impl ClientResponse {
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         let dialect = MySqlDialect {};
-        let sql_ast = Parser::parse_sql(&dialect, &sql)?;
+        let sql_ast = match Parser::parse_sql(&dialect, &sql){
+            Ok(a) => {
+                a
+            }
+            Err(e) => {
+                error!("sql parse error: {:?}", sql);
+                return Err(Box::new(MyError(e.into())));
+            }
+        };
+        // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         debug!("{:?}", sql_ast);
         let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
 
