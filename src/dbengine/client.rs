@@ -466,7 +466,6 @@ impl ClientResponse {
             return Ok(false)
         }
         debug!("check and get connection from thread pool");
-        info!("aaaabc");
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
@@ -478,7 +477,6 @@ impl ClientResponse {
                 return Ok(true)
             }
         }
-        info!("aaaabc");
         debug!("check all status ok!");
         return Ok(true)
     }
@@ -840,11 +838,8 @@ impl ClientResponse {
     async fn send_one_packet(&self, handler: &mut Handler) -> Result<()>{
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             let packet = self.packet_my_value();
-            info!("send_packet: {}", &handler.hand_key);
             let (buf, header) = conn.send_packet(&packet).await?;
-            info!("send_packet: {}", &handler.hand_key);
             self.send_mysql_response_packet(handler, &buf, &header).await?;
-            info!("send_packet: {}", &handler.hand_key);
             //self.check_eof(handler, conn).await?;
         }
         Ok(())
