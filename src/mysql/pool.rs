@@ -1396,6 +1396,7 @@ impl MysqlConnectionInfo{
 
     pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
         self.conn.write_all(packet)?;
+        self.conn.flush()?;
         Ok(())
     }
 
@@ -1408,6 +1409,7 @@ impl MysqlConnectionInfo{
     pub async fn send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         debug!("{}",crate::info_now_time(String::from("write all to mysql conn")));
         self.conn.write_all(packet)?;
+        self.conn.flush()?;
         self.set_last_time();
         debug!("{}",crate::info_now_time(String::from("get mysql response")));
         let (buf, header) = self.get_packet_from_stream().await?;
@@ -1418,6 +1420,7 @@ impl MysqlConnectionInfo{
     fn __send_packet(&mut self, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)> {
         debug!("write packet to mysql connection (timeout {:?})", self.conn.write_timeout().unwrap());
         self.conn.write_all(packet)?;
+        self.conn.flush()?;
         debug("write packet to socket(db): OK");
         let (buf, header) = self.__get_packet_from_stream()?;
         Ok((buf, header))
@@ -1577,6 +1580,7 @@ impl MysqlConnectionInfo{
             error!("check ping write error: {}",e.to_string());
             return Ok(false);
         };
+        self.conn.flush()?;
         match self.get_packet_from_stream().await{
             Ok((buf, _header)) => {
                 if let Err(e) = self.check_packet_is(&buf){
@@ -1613,6 +1617,7 @@ impl MysqlConnectionInfo{
         packet.push(0);
         packet.push(1);
         if let Err(_e) = self.conn.write_all(&packet){}
+        if let Err(_e) = self.conn.flush(){}
     }
 
     /// 执行sql语句并返回结果
