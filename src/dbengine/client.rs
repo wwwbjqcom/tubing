@@ -838,8 +838,11 @@ impl ClientResponse {
     async fn send_one_packet(&self, handler: &mut Handler) -> Result<()>{
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             let packet = self.packet_my_value();
+            info!("send_packet: {}", &handler.hand_key);
             let (buf, header) = conn.send_packet(&packet).await?;
+            info!("send_packet: {}", &handler.hand_key);
             self.send_mysql_response_packet(handler, &buf, &header).await?;
+            info!("send_packet: {}", &handler.hand_key);
             //self.check_eof(handler, conn).await?;
         }
         Ok(())
