@@ -550,6 +550,7 @@ impl ConnectionsPoolPlatform{
     pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String,
                           select_comment: &Option<String>,
                           platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)> {
+        //return Ok(self.get_read_conn(key, platform, is_sublist).await?);
         return match sql_type {
             SqlStatement::AlterTable |
             SqlStatement::Create |
@@ -604,12 +605,13 @@ impl ConnectionsPoolPlatform{
 
     /// 获取缓存的连接
     pub async fn get_cached_conn(&mut self, key: &String) -> Result<(Option<MysqlConnectionInfo>, Option<ConnectionsPool>)> {
-        let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
         for read_host_info in &*read_list_lock{
+            let mut conn_pool_lock = self.conn_pool.lock().await;
             match conn_pool_lock.remove(read_host_info){
                 Some(mut conn_pool) => {
                     conn_pool_lock.insert(read_host_info.clone(), conn_pool.clone());
+                    drop(conn_pool_lock);
                     if let Some(v) = conn_pool.check_cache(key).await?{
                         return Ok((Some(v), Some(conn_pool)))
                     }else {
@@ -624,13 +626,14 @@ impl ConnectionsPoolPlatform{
     /// 获取主节点连接
     async fn get_write_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         debug!("get from write thread_pool");
-        let mut conn_pool_lock = self.conn_pool.lock().await;
         let write_host_lock = self.write.read().await;
         for write_host_info in &*write_host_lock{
+            let mut conn_pool_lock = self.conn_pool.lock().await;
             match conn_pool_lock.remove(write_host_info){
                 Some(mut conn_pool) => {
-                    let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                     conn_pool_lock.insert(write_host_info.clone(), conn_pool.clone());
+                    drop(conn_pool_lock);
+                    let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                     match conn_info_result{
                         Ok(conn_info) => {
                             return Ok((conn_info, conn_pool));
@@ -656,15 +659,20 @@ impl ConnectionsPoolPlatform{
             return Ok((conn, conn_pool));
         }
 
-        let mut conn_pool_lock = self.conn_pool.lock().await;
         let read_list_lock = self.read.read().await;
-
+        let mut read_host_list: Vec<String> = vec![];
+        for read_host in &*read_list_lock{
+            read_host_list.push(read_host.clone());
+        }
+        drop(read_list_lock);
         let mut active_count = 0 as usize;
         let mut start = false;
         //存储最小连接的连接池key值，最终从这个连接池中获取连接
         let mut tmp_key = None;
-        for read_host_info in &*read_list_lock{
-            match conn_pool_lock.get(read_host_info){
+        let mut conn_pool_lock = self.conn_pool.lock().await;
+        for read_host_info in read_host_list{
+            // tmp_key = Some(read_host_info.clone());
+            match conn_pool_lock.get(&read_host_info){
                 Some(v) => {
                     let tmp_count = v.active_count.load(Ordering::SeqCst);
 
@@ -697,8 +705,9 @@ impl ConnectionsPoolPlatform{
             Some(v) => {
                 match conn_pool_lock.remove(&v){
                     Some(mut conn_pool) => {
-                        let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                         conn_pool_lock.insert(v.clone(), conn_pool.clone());
+                        drop(conn_pool_lock);
+                        let conn_info_result = conn_pool.get_pool(key, platform, is_sublist).await;
                         return match conn_info_result {
                             Ok(conn_info) => {
                                 Ok((conn_info, conn_pool))
@@ -726,7 +735,6 @@ impl ConnectionsPoolPlatform{
     ///
     /// 返回true表示可以执行该sql语句，如果为false则需要重新获取连接
     pub async fn conn_type_check(&mut self, host_info: &String, sql_type: &SqlStatement, select_comment: &Option<String>) -> Result<bool> {
-        let read_list_lock = self.read.read().await;
         let write_list_lock = self.write.read().await;
         //判断是否为写节点的连接，如果为写节点的连接可以执行任何操作
         for write_host_info in &*write_list_lock{
@@ -734,7 +742,8 @@ impl ConnectionsPoolPlatform{
                 return Ok(true)
             }
         }
-
+        drop(write_list_lock);
+        let read_list_lock = self.read.read().await;
         //上面已经判断过是否为写节点连接， 到这里表示肯定为读节点连接，
         //判断sql类型的同时还需要判断该连接节点是否存在读列表中
         //如果不存在则表示该连接节点宕机则需要重新获取
@@ -834,10 +843,11 @@ impl ConnectionsPoolPlatform{
     /// 这里为了管理端的准确性从连接池获取
     async fn get_node_role(&mut self, pool_state: &mut admin::PoolState) {
         let write_lock = self.write.read().await;
-        let read_lock = self.read.read().await;
         for write_host in &*write_lock{
             pool_state.write_host = write_host.clone();
         }
+        drop(write_lock);
+        let read_lock = self.read.read().await;
         for read_host in &*read_lock{
             pool_state.read_host.push(read_host.clone());
         }
@@ -994,18 +1004,15 @@ impl ConnectionsPool{
     }
 
     /// 归还连接时对记录减法
-    async fn return_platform_conn_count(&mut self, platform: &String) -> Result<()>{
+    pub async fn return_platform_conn_count(&mut self, platform: &String){
         let mut platform_conn_count_lock = self.platform_conn_count.lock().await;
         match platform_conn_count_lock.remove(platform) {
             Some(v) => {
                 if v > 0{
                     platform_conn_count_lock.insert(platform.clone(), v - 1);
                 }
-                Ok(())
             },
-            None => {
-                Ok(())
-            }
+            None => {}
         }
     }
 
@@ -1023,7 +1030,7 @@ impl ConnectionsPool{
     pub async fn get_pool(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<MysqlConnectionInfo> {
         let std_duration = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
         let start_time = Duration::from(std_duration);
-        let wait_time = Duration::from_millis(1000);    //等待时间1s
+        let wait_time = Duration::from_millis(100);    //等待时间1s
         match self.check_cache(key).await?{
             Some(conn) => {
                 return Ok(conn);
@@ -1034,9 +1041,9 @@ impl ConnectionsPool{
                     error!("{} connection access has reached the upper limit set by the system", platform);
                     return Err(Box::new(MyError(format!("{} connection access has reached the upper limit set by the system", platform).into())));
                 }
-                debug!("lock thread pool");
-                let mut pool = self.conn_queue.lock().await;
+                debug!("lock thread pool for loop get thread");
                 loop {
+                    let mut pool = self.conn_queue.lock().await;
                     //从队列中获取，如果队列为空，则判断是否已达到最大，再进行判断获取
                     if let Some(conn) = pool.pool.pop_front(){
                         debug!("pop_front for thread pool");
@@ -1055,14 +1062,14 @@ impl ConnectionsPool{
                             self.queued_count.fetch_add(1, Ordering::SeqCst);
                         }else {
                             drop(pool);
-                            //已达到最大连接数则等待指定时间,看能否获取到
+                            // return Err(Box::new(MyError(String::from("too many connections"))));
+                            // 已达到最大连接数则等待指定时间,看能否获取到
                             let now_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-                            pool  = if now_time - start_time > wait_time {
-                                self.return_platform_conn_count(platform).await?;
+                            if now_time - start_time > wait_time {
+                                self.return_platform_conn_count(platform).await;
                                 return Err(Box::new(MyError(String::from("get connection timeout").into())));
                             } else {
-                                delay_for(Duration::from_millis(50)).await;
-                                self.conn_queue.lock().await
+                                delay_for(Duration::from_millis(10)).await;
                                 //condvar.wait_timeout(pool, wait_time)?.0
                             };
                         }
@@ -1076,23 +1083,30 @@ impl ConnectionsPool{
     /// 操作完成归还连接到连接池中
     pub async fn return_pool(&mut self, mut conn: MysqlConnectionInfo, platform: &String) -> Result<()> {
         if conn.cached == String::from(""){
-            self.return_platform_conn_count(platform).await?;
+            self.return_platform_conn_count(platform).await;
             //let &(ref pool, ref condvar) = &*self.conn_queue;
             let mut pool = self.conn_queue.lock().await;
             match conn.check_health().await{
                 Ok(b) =>{
                     if b{
                         pool.pool.push_front(conn);
+                        drop(pool);
                         //pool.pool.push_back(conn);
                         self.queued_count.fetch_add(1, Ordering::SeqCst);
-                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        if self.check_active_count().await{
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        }
                     }else {
-                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        if self.check_active_count().await{
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        }
                         error!("return connection, but this connection {}",String::from("check ping failed"));
                     }
                 }
                 Err(e) => {
-                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                    if self.check_active_count().await{
+                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                    }
                     error!("{}",format!("return connection, but this connection : {:?}", e.to_string()));
                 }
             }
@@ -1100,17 +1114,28 @@ impl ConnectionsPool{
             let mut cache_pool = self.cached_queue.lock().await;
             cache_pool.insert(conn.cached.clone(), conn);
             self.cached_count.fetch_add(1, Ordering::SeqCst);
-            self.active_count.fetch_sub(1, Ordering::SeqCst);
+            if self.check_active_count().await{
+                self.active_count.fetch_sub(1, Ordering::SeqCst);
+            }
         }
         Ok(())
     }
 
     /// 减少连接池活跃连接计数，在client处理连接检查异常时对计数进行减少
     /// 异常连接不需要归还，所以只做计数操作
+    ///
+    /// 也用于连接池正常统计计数
     pub async fn sub_active_count(&mut self) {
-        if self.active_count.load(Ordering::SeqCst) > 0{
+        if self.check_active_count().await{
             self.active_count.fetch_sub(1, Ordering::SeqCst);
         }
+    }
+
+    async fn check_active_count(&self) -> bool {
+        if self.active_count.load(Ordering::SeqCst) > 0{
+            return true;
+        }
+        return false
     }
 
     // /// 减少连接缓存连接计数，在client处理连接检查异常时对计数进行减少
@@ -1196,10 +1221,14 @@ impl ConnectionsPool{
                     if !conn.check_sleep(){
                         pool.pool.push_back(conn);
                         self.queued_count.fetch_add(1, Ordering::SeqCst);
-                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        if self.check_active_count().await{
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        }
                     }else {
                         conn.close();
-                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        if self.check_active_count().await{
+                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                        }
                         tmp += 1;
                         if tmp >= num{
                             break;
@@ -1227,14 +1256,20 @@ impl ConnectionsPool{
                             if b{
                                 pool.pool.push_back(conn);
                                 self.queued_count.fetch_add(1, Ordering::SeqCst);
-                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                if self.check_active_count().await{
+                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                }
                             }else {
-                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                if self.check_active_count().await{
+                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                }
                                 error!("{}",String::from("check ping failed"));
                             }
                         }
                         Err(e) => {
-                            self.active_count.fetch_sub(1, Ordering::SeqCst);
+                            if self.check_active_count().await{
+                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                            }
                             error!("{}",format!("check ping error: {:?}", e.to_string()));
                         }
                     }
@@ -1260,14 +1295,20 @@ impl ConnectionsPool{
                                 if b{
                                     cache_pool.insert(key.clone(), conn);
                                     self.cached_count.fetch_add(1, Ordering::SeqCst);
-                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                    if self.check_active_count().await{
+                                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                    }
                                 }else {
-                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                    if self.check_active_count().await{
+                                        self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                    }
                                     error!("{}",String::from("check ping failed"));
                                 }
                             }
                             Err(e) => {
-                                self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                if self.check_active_count().await{
+                                    self.active_count.fetch_sub(1, Ordering::SeqCst);
+                                }
                                 error!("{}",format!("check ping error: {:?}", e.to_string()));
                             }
                         }

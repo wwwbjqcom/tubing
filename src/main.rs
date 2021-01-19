@@ -152,8 +152,6 @@ pub struct Config {
 impl Config{
     pub fn new(platform_conf: &Platform) -> Config{
         Config{
-            // user: platform_conf.user.clone(),
-            // password: platform_conf.password.clone(),
             muser: platform_conf.user.clone(),
             mpassword: platform_conf.password.clone(),
             program_name: String::from("MysqlBus"),
@@ -163,20 +161,6 @@ impl Config{
             host_info: "".to_string()
         }
     }
-
-    // pub fn my_clone(&self) -> Config{
-    //     Config{
-    //         user: self.user.clone(),
-    //         password: self.password.clone(),
-    //         muser: self.muser.clone(),
-    //         mpassword: self.password.clone(),
-    //         program_name: self.program_name.clone(),
-    //         database: self.database.clone(),
-    //         min: self.min.clone(),
-    //         max: self.max.clone(),
-    //         host_info: self.host_info.clone()
-    //     }
-    // }
 }
 
 

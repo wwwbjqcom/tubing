@@ -694,19 +694,4 @@ impl Handler {
     }
 }
 
-// impl Drop for Handler {
-//     fn drop(&mut self) {
-//         // Add a permit back to the semaphore.
-//         //
-//         // Doing so unblocks the listener if the max number of
-//         // connections has been reached.
-//         //
-//         // This is done in a `Drop` implementation in order to guaranatee that
-//         // the permit is added even if the task handling the connection panics.
-//         // If `add_permit` was called at the end of the `run` function and some
-//         // bug causes a panic. The permit would never be returned to the
-//         // semaphore.
-//         self.limit_connections.add_permits(1);
-//     }
-// }
 

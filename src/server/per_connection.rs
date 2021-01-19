@@ -61,6 +61,7 @@ impl PerMysqlConn {
         self.reset_my_state().await;
         if let Some(conn_pool) = &mut self.conn_pool{
             conn_pool.sub_active_count().await;
+            conn_pool.return_platform_conn_count(&self.platform).await;
         }
     }
 

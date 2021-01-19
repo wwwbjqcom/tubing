@@ -25,6 +25,18 @@ use sqlparser::ast::Statement;
 use crate::dbengine::other_response::OtherType;
 use chrono::Local;
 
+/// 记录每个函数发生时间，用于发生slow log 判断问题
+#[derive(Debug)]
+pub struct ClassTime{
+    class: String,
+    times: usize
+}
+impl ClassTime{
+    fn new() -> ClassTime{
+        ClassTime{ class: "".to_string(), times: 0 }
+    }
+}
+
 #[derive(Debug)]
 pub struct ClientResponse {
     pub payload: u32,
@@ -685,21 +697,24 @@ impl ClientResponse {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.reset_is_transaction().await?);
         }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
+        Ok(())
+        //return Err(Box::new(MyError(String::from("lost connection for reset_is_transaction").into())));
     }
 
     async fn set_is_transaction(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.set_is_transaction().await?);
         }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
+        Ok(())
+        //return Err(Box::new(MyError(String::from("lost connection for set_is_transaction").into())));
     }
 
     async fn set_is_cached(&self, handler: &mut Handler) -> Result<()> {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.set_cached(&handler.hand_key).await?);
         }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
+        Ok(())
+        //return Err(Box::new(MyError(String::from("lost connection for set_is_cached").into())));
     }
 
     // async fn reset_is_cached(&self, handler: &mut Handler) -> Result<()> {
@@ -779,7 +794,7 @@ impl ClientResponse {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.get_packet_from_stream().await?);
         }
-        let error = String::from("lost connection");
+        let error = String::from("lost connection for get_packet_from_stream");
         return Err(Box::new(MyError(error.into())));
     }
 
@@ -787,7 +802,7 @@ impl ClientResponse {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.send_packet(&packet).await?);
         }
-        let error = String::from("lost connection");
+        let error = String::from("lost connection for send_packet");
         return Err(Box::new(MyError(error.into())));
     }
 
@@ -934,7 +949,7 @@ impl ClientResponse {
             conn.check_packet_is(&buf)?;
             return Ok(());
         }
-        return Err(Box::new(MyError(String::from("lost connection").into())));
+        return Err(Box::new(MyError(String::from("lost connection for _set_packet_send").into())));
     }
 
 
