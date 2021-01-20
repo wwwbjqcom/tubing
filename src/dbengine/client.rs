@@ -25,17 +25,17 @@ use sqlparser::ast::Statement;
 use crate::dbengine::other_response::OtherType;
 use chrono::Local;
 
-/// 记录每个函数发生时间，用于发生slow log 判断问题
-#[derive(Debug)]
-pub struct ClassTime{
-    class: String,
-    times: usize
-}
-impl ClassTime{
-    fn new() -> ClassTime{
-        ClassTime{ class: "".to_string(), times: 0 }
-    }
-}
+// /// 记录每个函数发生时间，用于发生slow log 判断问题
+// #[derive(Debug)]
+// pub struct ClassTime{
+//     class: String,
+//     times: usize
+// }
+// impl ClassTime{
+//     fn new() -> ClassTime{
+//         ClassTime{ class: "".to_string(), times: 0 }
+//     }
+// }
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -233,11 +233,29 @@ impl ClientResponse {
         return Ok(())
     }
 
+    async fn parse_my_sql(&self, sql: &String) -> Result<(Vec<TableInfo>, SqlStatement, Option<String>, Vec<Statement>)>{
+        let dialect = MySqlDialect {};
+        let sql_ast = match Parser::parse_sql(&dialect, sql){
+            Ok(a) => {
+                a
+            }
+            Err(e) => {
+                error!("sql parse error: {:?}", sql);
+                return Err(Box::new(MyError(e.to_string().into())));
+            }
+        };
+        // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
+        debug!("{:?}", sql_ast);
+        let (tbl_info, a, sql_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
+        return Ok((tbl_info, a, sql_comment, sql_ast));
+    }
+
     /// 处理prepare类操作
     async fn exec_prepare(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
-        let (a, tbl_info) = SqlStatement::Default.parser(&sql.replace("\n","").replace("\t",""));
+        let (tbl_info, a, sql_comment, _) = self.parse_my_sql(&sql).await?;
+        //let (a, tbl_info) = SqlStatement::Default.parser(&sql.replace("\n","").replace("\t",""));
 
         // 检查sql类型， 是否符合标准， 在连接获取如果不能满足条件默认会获取读连接， 可能发生不可知的错误
         if let SqlStatement::Default = a {
@@ -245,10 +263,10 @@ impl ClientResponse {
             return Err(Box::new(MyError(String::from("unsupported sql type"))));
         }
 
-        let mut sql_comment = None;
-        if sql.contains("/*force_master*/") {
-            sql_comment = Some(String::from("force_master"));
-        }
+        // let mut sql_comment = None;
+        // if sql.contains("/*force_master*/") {
+        //     sql_comment = Some(String::from("force_master"));
+        // }
 
         if !self.check_all_status(handler, &a, &tbl_info, &sql, sql_comment).await?{
             return Ok(())
@@ -505,19 +523,22 @@ impl ClientResponse {
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
-        let dialect = MySqlDialect {};
-        let sql_ast = match Parser::parse_sql(&dialect, &sql){
-            Ok(a) => {
-                a
-            }
-            Err(e) => {
-                error!("sql parse error: {:?}", sql);
-                return Err(Box::new(MyError(e.to_string().into())));
-            }
-        };
-        // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
-        debug!("{:?}", sql_ast);
-        let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
+
+        // let dialect = MySqlDialect {};
+        // let sql_ast = match Parser::parse_sql(&dialect, &sql){
+        //     Ok(a) => {
+        //         a
+        //     }
+        //     Err(e) => {
+        //         error!("sql parse error: {:?}", sql);
+        //         return Err(Box::new(MyError(e.to_string().into())));
+        //     }
+        // };
+        // // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
+        // debug!("{:?}", sql_ast);
+        // let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
+
+        let (tbl_info_list, a, select_comment, sql_ast) = self.parse_my_sql(&sql).await?;
 
         if self.check_is_admin_paltform(handler, &a).await{
             self.admin(&sql, handler, &sql_ast).await?;
