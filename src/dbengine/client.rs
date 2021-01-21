@@ -162,6 +162,7 @@ impl ClientResponse {
     ///
     /// execute返回ok、error、result三种packet
     async fn exec_prepare_execute(&self,handler: &mut Handler) -> Result<()> {
+        handler.save_call_times(String::from("client exec_prepare_execute")).await;
         debug!("{}",crate::info_now_time(String::from("execute prepare sql")));
         if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
             return Ok(())
@@ -196,6 +197,7 @@ impl ClientResponse {
                 }
             }
         }
+        handler.save_call_times(String::from("client exec_prepare_execute ok")).await;
         self.check_slow_questions(&String::from("exec_prepare_execute"),&handler.class_time).await;
         Ok(())
     }
@@ -242,6 +244,7 @@ impl ClientResponse {
 
     /// 处理prepare类操作
     async fn exec_prepare(&self, handler: &mut Handler) -> Result<()> {
+        handler.save_call_times(String::from("client exec_prepare")).await;
         let sql = readvalue::read_string_value(&self.buf[1..]);
         debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
         handler.save_call_times(String::from("client parse_my_sql")).await;
@@ -286,6 +289,7 @@ impl ClientResponse {
         }
 
         self.set_is_cached(handler).await?;
+        handler.save_call_times(String::from("client exec_prepare ok")).await;
         self.check_slow_questions(&sql, &handler.class_time).await;
         Ok(())
     }
@@ -637,7 +641,7 @@ impl ClientResponse {
             SqlStatement::Prepare => {return Ok(())}
         }
         //handler.stream_flush().await?;
-
+        handler.save_call_times(String::from("client parse_auery_packet ok")).await;
         debug!("{}",crate::info_now_time(String::from("send ok")));
 
         self.check_slow_questions(&sql, &handler.class_time).await;
