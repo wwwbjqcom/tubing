@@ -8,7 +8,7 @@ use crate::{ readvalue};
 use crate::mysql::Result;
 use byteorder::{ReadBytesExt, LittleEndian};
 use crate::dbengine::{PacketType, CLIENT_BASIC_FLAGS, CLIENT_PROTOCOL_41, CLIENT_DEPRECATE_EOF, other_response, PreparePacketType};
-use crate::server::{Handler, ConnectionStatus};
+use crate::server::{Handler, ConnectionStatus, ClassTime};
 use crate::mysql::connection::response::pack_header;
 use crate::mysql::connection::PacketHeader;
 use std::borrow::{Borrow};
@@ -24,18 +24,6 @@ use sqlparser::parser::*;
 use sqlparser::ast::Statement;
 use crate::dbengine::other_response::OtherType;
 use chrono::Local;
-
-// /// 记录每个函数发生时间，用于发生slow log 判断问题
-// #[derive(Debug)]
-// pub struct ClassTime{
-//     class: String,
-//     times: usize
-// }
-// impl ClassTime{
-//     fn new() -> ClassTime{
-//         ClassTime{ class: "".to_string(), times: 0 }
-//     }
-// }
 
 #[derive(Debug)]
 pub struct ClientResponse {
@@ -95,16 +83,18 @@ impl ClientResponse {
         Ok(one_packet)
     }
 
-    async fn check_slow_questions(&self, ques: &String) {
+    async fn check_slow_questions(&self, ques: &String, call_times: &Vec<ClassTime>) {
         let dt = Local::now();
         let cur_timestamp = dt.timestamp_millis() as usize;
         if cur_timestamp - self.cur_timestamp >= 1000 {
             info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
+            info!("{:?}", call_times);
         }
     }
 
     /// 解析客户端发送的请求类型，并处理请求
     pub async fn exec(&self, handler: &mut Handler) -> Result<()> {
+        handler.save_call_times(String::from("client exec")).await;
         match PacketType::new(&self.buf[0]){
             PacketType::ComQuit => {
                 handler.status = ConnectionStatus::Quit;
@@ -115,7 +105,7 @@ impl ClientResponse {
             PacketType::ComQuery => {
                 debug!("{}",crate::info_now_time(String::from("start parse query packet")));
                 if let Err(e) = self.parse_query_packet(handler).await{
-                    error!("{}",&e.to_string());
+                    //error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                     self.reset_is_transaction(handler).await?;
                     handler.per_conn_info.return_connection(0).await?;
@@ -131,7 +121,7 @@ impl ClientResponse {
                 }
                 handler.db = Some(db);
                 self.send_ok_packet(handler).await?;
-                self.check_slow_questions(&String::from("initdb")).await;
+                self.check_slow_questions(&String::from("initdb"), &handler.class_time).await;
             }
             PacketType::ComPrepare(v) => {
                 if let Err(e) = self.exec_prepare_main(handler, &v).await{
@@ -206,7 +196,7 @@ impl ClientResponse {
                 }
             }
         }
-        self.check_slow_questions(&String::from("exec_prepare_execute")).await;
+        self.check_slow_questions(&String::from("exec_prepare_execute"),&handler.class_time).await;
         Ok(())
     }
 
@@ -217,7 +207,7 @@ impl ClientResponse {
         }
         self.send_no_response_packet(handler).await?;
         handler.per_conn_info.reset_cached().await?;
-        self.check_slow_questions(&String::from("exec_prepare_close")).await;
+        self.check_slow_questions(&String::from("exec_prepare_close"),&handler.class_time).await;
         // self.reset_is_cached(handler).await?;
         Ok(())
     }
@@ -229,7 +219,7 @@ impl ClientResponse {
             return Ok(())
         }
         self.send_no_response_packet(handler).await?;
-        self.check_slow_questions(&String::from("exec_prepare_send_data")).await;
+        self.check_slow_questions(&String::from("exec_prepare_send_data"), &handler.class_time).await;
         return Ok(())
     }
 
@@ -254,6 +244,7 @@ impl ClientResponse {
     async fn exec_prepare(&self, handler: &mut Handler) -> Result<()> {
         let sql = readvalue::read_string_value(&self.buf[1..]);
         debug!("{}",crate::info_now_time(format!("prepare sql {}", &sql)));
+        handler.save_call_times(String::from("client parse_my_sql")).await;
         let (tbl_info, a, sql_comment, _) = self.parse_my_sql(&sql).await?;
         //let (a, tbl_info) = SqlStatement::Default.parser(&sql.replace("\n","").replace("\t",""));
 
@@ -295,7 +286,7 @@ impl ClientResponse {
         }
 
         self.set_is_cached(handler).await?;
-        self.check_slow_questions(&sql).await;
+        self.check_slow_questions(&sql, &handler.class_time).await;
         Ok(())
     }
 
@@ -325,7 +316,7 @@ impl ClientResponse {
             return Ok(())
         }
         self.send_one_packet(handler).await?;
-        self.check_slow_questions(&String::from("exec_prepare_reset")).await;
+        self.check_slow_questions(&String::from("exec_prepare_reset"), &handler.class_time).await;
         return Ok(())
     }
 
@@ -410,6 +401,7 @@ impl ClientResponse {
 
     /// 检测platform是否为admin, 如果为admin且当前语句不是set platfrom则重置platfrom并返回false
     pub async fn check_is_admin_paltform(&self, handler: &mut Handler, sql_type: &SqlStatement) -> bool{
+        handler.save_call_times(String::from("client check_is_admin_platform")).await;
         if let Some(platform) = &handler.platform{
             if platform == &"admin".to_string(){
                 match sql_type{
@@ -435,6 +427,7 @@ impl ClientResponse {
     }
 
     async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<TableInfo>) -> Result<()>{
+        handler.save_call_times(String::from("client check_user_privileges")).await;
         debug!("check user prifileges on {:?}", tbl_info);
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
@@ -449,6 +442,7 @@ impl ClientResponse {
     ///
     /// 如果都通过则返回true继续进行下一步
     async fn check_platform_and_conn(&self, handler: &mut Handler, a: &SqlStatement) -> Result<bool> {
+        handler.save_call_times(String::from("client check_paltfrom_and_conn")).await;
         //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
         if !self.check_is_set_platform(&a, handler).await?{
             let error = format!("please set up a business platform first");
@@ -458,10 +452,11 @@ impl ClientResponse {
         }
 
         //已经设置了platform则进行连接检查及获取
+        handler.save_call_times(String::from("client check for check_platform_and_conn")).await;
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
-                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), None, platform).await?;
+                handler.class_time.extend(handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), None, platform).await?);
             } else {
                 return Ok(false)
             }
@@ -474,6 +469,7 @@ impl ClientResponse {
     /// 返回false代表不往下继续， 返回true则继续
     async fn check_all_status(&self, handler: &mut Handler, a: &SqlStatement, tbl_info_list: &Vec<TableInfo>, sql: &String, select_comment: Option<String>) -> Result<bool> {
         //info!("sql: {:?}", sql);
+        handler.save_call_times(String::from("client check_all_status")).await;
         if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
             self.send_error_packet(handler, &e.to_string()).await?;
             return Ok(false)
@@ -497,11 +493,13 @@ impl ClientResponse {
         }
         debug!("check and get connection from thread pool");
         //已经设置了platform则进行连接检查及获取
+        handler.save_call_times(String::from("client check for check_all_status")).await;
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
-                handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
-                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
+                handler.class_time.extend(handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
+                                            &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?);
                 debug!("connection check ok!");
+                handler.save_call_times(String::from("client check_auth_save for check_all_status")).await;
                 handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
             } else {
                 return Ok(true)
@@ -522,6 +520,7 @@ impl ClientResponse {
     ///
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
+        handler.save_call_times(String::from("client parse_auery_packet")).await;
         let sql = readvalue::read_string_value(&self.buf[1..]);
 
         // let dialect = MySqlDialect {};
@@ -537,7 +536,7 @@ impl ClientResponse {
         // // let sql_ast = Parser::parse_sql(&dialect, &sql)?;
         // debug!("{:?}", sql_ast);
         // let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
-
+        handler.save_call_times(String::from("client parse_my_sql")).await;
         let (tbl_info_list, a, select_comment, sql_ast) = self.parse_my_sql(&sql).await?;
 
         if self.check_is_admin_paltform(handler, &a).await{
@@ -556,8 +555,7 @@ impl ClientResponse {
         //进行语句操作
         match a{
             SqlStatement::ChangeDatabase => {
-
-                self.check_is_change_db(handler, &sql).await?;
+                self.check_is_change_db(handler, &sql, &tbl_info_list).await?;
                 //handler.set_per_conn_cached().await?;
             }
             SqlStatement::SetVariable (variable, value) => {
@@ -642,7 +640,7 @@ impl ClientResponse {
 
         debug!("{}",crate::info_now_time(String::from("send ok")));
 
-        self.check_slow_questions(&sql).await;
+        self.check_slow_questions(&sql, &handler.class_time).await;
         Ok(())
     }
 
@@ -650,6 +648,7 @@ impl ClientResponse {
     ///
     /// 主要适应部分框架在未设置变量之前执行部分状态检查
     async fn check_other_query(&self, sql_type: &SqlStatement, sql: &String, handler: &mut Handler) -> Result<bool>{
+        handler.save_call_times(String::from("client check_other_query")).await;
         match sql_type{
             SqlStatement::Query => {
                 if sql.to_lowercase().contains("max_allowed_packet") {
@@ -701,6 +700,7 @@ impl ClientResponse {
 
     /// 用于语句执行之前进行判断有没有设置platform
     async fn check_is_set_platform(&self, sql_type: &SqlStatement, handler: &mut Handler) -> Result<bool>{
+        handler.save_call_times(String::from("client check_is_set_platform")).await;
         if let None = &handler.platform{
             match sql_type{
                 SqlStatement::SetVariable(_variable, _value) => {
@@ -977,29 +977,49 @@ impl ClientResponse {
     /// 检查是否为use db语句
     ///
     /// 因为sqlparse不支持该类语句
-    async fn check_is_change_db(&self, handler: &mut Handler, sql: &String) -> Result<()>{
+    async fn check_is_change_db(&self, handler: &mut Handler, _sql: &String, tbl_info: &Vec<TableInfo>) -> Result<()>{
 //        if sql.to_lowercase().starts_with("use"){
-        let sql = sql.to_lowercase();
-        let sql_ver = sql.split(" ");
-        let sql_ver = sql_ver.collect::<Vec<&str>>();
-        let mut tmp: Vec<String> = vec![];
-        for i in &sql_ver{
-            if &i.to_string() != &"".to_string(){
-                tmp.push(i.to_string().clone())
+//         let sql = sql.to_lowercase();
+//         let sql_ver = sql.split(" ");
+//         let sql_ver = sql_ver.collect::<Vec<&str>>();
+//         let mut tmp: Vec<String> = vec![];
+//         for i in &sql_ver{
+//             if &i.to_string() != &"".to_string(){
+//                 tmp.push(i.to_string().clone())
+//             }
+//         }
+//         let my_tmp = tmp[1].to_string().clone();
+
+        if tbl_info.len() > 0 {
+            if let Some(db) = &tbl_info[0].database{
+                if !self.check_change_db_privileges(handler, db).await?{
+                    return Ok(())
+                }
+
+                if let Err(e) = self.__set_default_db(db.clone(), handler).await{
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                }else {
+                    handler.db = Some(db.clone());
+                    self.send_ok_packet(handler).await?;
+                }
+                return Ok(())
             }
         }
-        let my_tmp = tmp[1].to_string().clone();
-        if !self.check_change_db_privileges(handler, &my_tmp).await?{
-            return Ok(())
-        }
 
-        if let Err(e) = self.__set_default_db(my_tmp.clone(), handler).await{
-            self.send_error_packet(handler, &e.to_string()).await?;
-        }else {
-            handler.db = Some(my_tmp);
-            self.send_ok_packet(handler).await?;
-        }
-        return Ok(())
+        let err = String::from("You have an error in your SQL syntax: use database");
+        return Err(Box::new(MyError(err)));
+
+        // if !self.check_change_db_privileges(handler, &my_tmp).await?{
+        //     return Ok(())
+        // }
+        //
+        // if let Err(e) = self.__set_default_db(my_tmp.clone(), handler).await{
+        //     self.send_error_packet(handler, &e.to_string()).await?;
+        // }else {
+        //     handler.db = Some(my_tmp);
+        //     self.send_ok_packet(handler).await?;
+        // }
+        // return Ok(())
     }
 
 

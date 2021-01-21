@@ -5,6 +5,8 @@ use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
 use crate::MyError;
 use tracing::{debug, error};
+use crate::server::ClassTime;
+use chrono::Local;
 
 /// mysql connection
 #[derive(Debug)]
@@ -102,9 +104,10 @@ impl PerMysqlConn {
 
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
                        db: &Option<String>, auto_commit: &bool,
-                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<()> {
+                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<(Vec<ClassTime>)> {
+        let mut class_times = vec![ClassTime::new(String::from("per_connections check"))];
         if !self.conn_state{
-            self.check_get(pool, key, db, auto_commit, sql_type, &select_comment,platform).await?;
+            class_times.extend(self.check_get(pool, key, db, auto_commit, sql_type, &select_comment,platform).await?);
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
@@ -113,18 +116,20 @@ impl PerMysqlConn {
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
                     self.return_connection(seq).await?;
-                    self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?;
+                    class_times.extend(self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?);
                 }
             }
         }
-        Ok(())
+        Ok((class_times))
     }
 
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
-                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<()>{
+                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<(Vec<ClassTime>)>{
+        let mut class_times = vec![ClassTime::new(String::from("per_connections check_get"))];
         debug!("get connection from thread_pool");
         let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment,
                                               platform, self.platform_is_sublist.clone()).await?;
+        class_times.push(ClassTime::new(String::from("get_pool ok")));
         debug!("OK");
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
@@ -132,7 +137,7 @@ impl PerMysqlConn {
             error!("set default info error: {}", e.to_string());
         }
         self.conn_state = true;
-        Ok(())
+        Ok((class_times))
     }
 
     /// 判断是否开启审计，开启则打印sql
@@ -258,4 +263,9 @@ impl PerMysqlConn {
         host_info
     }
 
+    fn call_times(&self) -> usize {
+        let dt = Local::now();
+        let cur_timestamp = dt.timestamp_millis() as usize;
+        return cur_timestamp
+    }
 }

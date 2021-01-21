@@ -27,6 +27,7 @@ use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT, SERVER_STATUS_IN_TRANS};
 use tokio::runtime::Builder;
 use crate::server::mysql_mp::ResponseValue;
 use crate::mysql::privileges::AllUserPri;
+use chrono::Local;
 
 async fn unix_signal() -> Result<()> {
     let mut stream = signal(SignalKind::terminate())?;
@@ -277,6 +278,7 @@ impl Listener {
             // Create the necessary per-connection handler state.
             let handler = Handler {
                 platform: None,
+                class_time: vec![],
                 platform_pool: self.platform_pool.clone(),
                 platform_pool_on: ConnectionsPoolPlatform::default(),
                 per_conn_info: per_connection::PerMysqlConn::new(),
@@ -382,12 +384,29 @@ pub enum  ConnectionStatus {
 }
 
 
+/// 记录每个函数发生时间，用于发生slow log 判断问题
+#[derive(Debug)]
+pub struct ClassTime{
+    class: String,
+    times: usize
+}
+impl ClassTime{
+    pub fn new(class_name: String) -> ClassTime{
+        let dt = Local::now();
+        let cur_timestamp = dt.timestamp_millis() as usize;
+        ClassTime{ class: class_name, times: cur_timestamp }
+    }
+}
+
 /// Per-connection handler. Reads requests from `connection` and applies the
 /// commands to `db`.
 #[derive(Debug)]
 pub struct Handler {
     /// record the business library to which the current connection belongs
     pub platform: Option<String>,
+
+    /// record the class operation times
+    pub class_time: Vec<ClassTime>,
 
     /// all connections pool
     pub platform_pool: PlatformPool,
@@ -581,6 +600,7 @@ impl Handler {
                 }
                 _ => {}
             }
+            self.class_time = vec![];
         }
         // // 这里先初始化cached值， 因为可能prepare语句退出
         // // prepare语句使用cached连接，如果不重置会直接归还到cached队列中， 就会成为僵尸连接一直存在
@@ -691,6 +711,10 @@ impl Handler {
             self.platform = Some(platform.clone());
         }
         Ok(())
+    }
+
+    pub async fn save_call_times(&mut self, class_name: String) {
+        self.class_time.push(ClassTime::new(class_name));
     }
 }
 

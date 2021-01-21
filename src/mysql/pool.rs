@@ -20,7 +20,7 @@ use std::collections::{VecDeque, HashMap};
 use crate::{Config, readvalue, Platform, MyConfig};
 use crate::{MyError};
 use crate::mysql::Result;
-use crate::server::mysql_mp;
+use crate::server::{mysql_mp, ClassTime};
 use std::net::TcpStream;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 use std::time::{SystemTime, Duration};
@@ -626,10 +626,16 @@ impl ConnectionsPoolPlatform{
     /// 获取主节点连接
     async fn get_write_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         debug!("get from write thread_pool");
-        let write_host_lock = self.write.read().await;
-        for write_host_info in &*write_host_lock{
+        let write_list_lock = self.write.read().await;
+        let mut write_host_list: Vec<String> = vec![];
+        for write_host in &*write_list_lock{
+            write_host_list.push(write_host.clone());
+        }
+        drop(write_list_lock);
+
+        for write_host_info in write_host_list{
             let mut conn_pool_lock = self.conn_pool.lock().await;
-            match conn_pool_lock.remove(write_host_info){
+            match conn_pool_lock.remove(&write_host_info){
                 Some(mut conn_pool) => {
                     conn_pool_lock.insert(write_host_info.clone(), conn_pool.clone());
                     drop(conn_pool_lock);
@@ -1038,7 +1044,7 @@ impl ConnectionsPool{
             None => {
                 //检查熔断机制
                 if self.check_fuse(platform, is_sublist).await?{
-                    error!("{} connection access has reached the upper limit set by the system", platform);
+                    //error!("{} connection access has reached the upper limit set by the system", platform);
                     return Err(Box::new(MyError(format!("{} connection access has reached the upper limit set by the system", platform).into())));
                 }
                 debug!("lock thread pool for loop get thread");
@@ -1438,6 +1444,7 @@ impl MysqlConnectionInfo{
     pub async fn send_packet_only(&mut self, packet: &Vec<u8>) -> Result<()> {
         self.conn.write_all(packet)?;
         self.conn.flush()?;
+        self.set_last_time();
         Ok(())
     }
 
@@ -1462,6 +1469,7 @@ impl MysqlConnectionInfo{
         debug!("write packet to mysql connection (timeout {:?})", self.conn.write_timeout().unwrap());
         self.conn.write_all(packet)?;
         self.conn.flush()?;
+        self.set_last_time();
         debug("write packet to socket(db): OK");
         let (buf, header) = self.__get_packet_from_stream()?;
         Ok((buf, header))
