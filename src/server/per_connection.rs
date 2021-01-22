@@ -111,7 +111,7 @@ impl PerMysqlConn {
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
-                if pool.conn_type_check(&conn.host_info, sql_type, &select_comment).await?{
+                if pool.conn_type_check(&conn.host_info, sql_type, &select_comment,key).await?{
                     self.check_default_db_and_autocommit(db, auto_commit).await?;
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池

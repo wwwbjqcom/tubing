@@ -500,6 +500,12 @@ impl ClientResponse {
         handler.save_call_times(String::from("client check for check_all_status")).await;
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
+                //检测force_master获取连接时使用
+                if let Some(sl) = &select_comment{
+                    if &sl.to_lowercase() == &String::from("force_master"){
+                        info!("key: {:?}, sql:{:?}", &handler.hand_key, sql);
+                    }
+                }
                 handler.class_time.extend(handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
                                             &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?);
                 debug!("connection check ok!");
