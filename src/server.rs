@@ -48,7 +48,7 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     let cpus = num_cpus::get();
     let mut runtime = Builder::new()
         .threaded_scheduler()
-        // .core_threads(cpus * 4)
+        .core_threads(cpus * 2)
         .max_threads(200)
         .enable_all()
         .thread_name("my-custom-name")
