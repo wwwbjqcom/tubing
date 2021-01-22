@@ -49,7 +49,7 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     let mut runtime = Builder::new()
         .threaded_scheduler()
         .core_threads(cpus * 2)
-        .max_threads(200)
+        // .max_threads(200)
         .enable_all()
         .thread_name("my-custom-name")
         .thread_stack_size(64 * 1024 * 1024 )

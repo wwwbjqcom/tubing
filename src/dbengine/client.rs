@@ -86,7 +86,7 @@ impl ClientResponse {
     async fn check_slow_questions(&self, ques: &String, call_times: &Vec<ClassTime>) {
         let dt = Local::now();
         let cur_timestamp = dt.timestamp_millis() as usize;
-        if cur_timestamp - self.cur_timestamp >= 10 {
+        if cur_timestamp - self.cur_timestamp >= 5 {
             info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
             info!("{:?}", call_times);
         }
@@ -828,7 +828,7 @@ impl ClientResponse {
     }
 
     async fn get_packet_from_stream(&self, handler: &mut Handler) -> Result<(Vec<u8>, PacketHeader)>{
-        handler.save_call_times(String::from("client ge_packet_from_stream")).await;
+        // handler.save_call_times(String::from("client ge_packet_from_stream")).await;
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.get_packet_from_stream().await?);
         }
@@ -845,7 +845,7 @@ impl ClientResponse {
     }
 
     async fn query_response(&self, handler: &mut Handler, buf: &Vec<u8>, header: &mut PacketHeader, eof_num: &i32, is_eof: bool) -> Result<()> {
-        handler.save_call_times(String::from("client query_response")).await;
+        // handler.save_call_times(String::from("client query_response")).await;
         if handler.client_flags & CLIENT_DEPRECATE_EOF as i32 > 0{
             //客户端没有metadata eof结束包， 这里需要对metadata eof后续的包进行改写seq_id
             if eof_num == 1.borrow() && !is_eof {
@@ -927,7 +927,7 @@ impl ClientResponse {
 
     async fn send_mysql_response_packet(&self, handler: &mut Handler, buf: &Vec<u8>, header: &PacketHeader) -> Result<()> {
         debug!("{}",crate::info_now_time(String::from("start send packet to mysql")));
-        handler.save_call_times(String::from("client send_mysql_response_packet")).await;
+        // handler.save_call_times(String::from("client send_mysql_response_packet")).await;
         let my_buf = self.packet_response_value(buf, header);
         handler.send_full(&my_buf).await?;
         Ok(())
