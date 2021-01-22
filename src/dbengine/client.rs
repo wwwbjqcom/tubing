@@ -105,7 +105,7 @@ impl ClientResponse {
             PacketType::ComQuery => {
                 debug!("{}",crate::info_now_time(String::from("start parse query packet")));
                 if let Err(e) = self.parse_query_packet(handler).await{
-                    //error!("{}",&e.to_string());
+                    error!("{}",&e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                     self.reset_is_transaction(handler).await?;
                     handler.per_conn_info.return_connection(0).await?;
