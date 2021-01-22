@@ -111,11 +111,15 @@ impl PerMysqlConn {
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
+                class_times.push(ClassTime::new(String::from("conn_type_check")));
                 if pool.conn_type_check(&conn.host_info, sql_type, &select_comment,key).await?{
+                    class_times.push(ClassTime::new(String::from("check_default_db_and_autocommit")));
                     self.check_default_db_and_autocommit(db, auto_commit).await?;
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
+                    class_times.push(ClassTime::new(String::from("return_connection")));
                     self.return_connection(seq).await?;
+                    class_times.push(ClassTime::new(String::from("return_connection ok")));
                     class_times.extend(self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?);
                 }
             }
@@ -133,9 +137,11 @@ impl PerMysqlConn {
         debug!("OK");
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
+        class_times.push(ClassTime::new(String::from("set_default_info")));
         if let Err(e) = self.set_default_info(db, auto_commit).await{
             error!("set default info error: {}", e.to_string());
         }
+        class_times.push(ClassTime::new(String::from("set_default_info ok")));
         self.conn_state = true;
         Ok((class_times))
     }
