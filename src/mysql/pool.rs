@@ -537,7 +537,6 @@ impl ConnectionsPoolPlatform{
 
     /// 修改ops计数状态
     pub async fn save_com_state(&mut self, host_info: &String, sql_type: &SqlStatement) -> Result<()> {
-        handler.save_call_times(String::from("client save_com_state")).await;
         debug!("save operation count:{:?} for {:?}", sql_type, host_info);
         self.questions.fetch_add(1, Ordering::SeqCst);
         if let Some(mut node_pool) = self.get_node_pool(host_info).await{

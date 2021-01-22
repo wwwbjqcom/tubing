@@ -268,6 +268,7 @@ impl ClientResponse {
         }
 
         //进行ops操作
+        handler.save_call_times(String::from("client save_com_state")).await;
         handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
 
         debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
@@ -562,6 +563,7 @@ impl ClientResponse {
         }
 
         //进行ops操作
+        handler.save_call_times(String::from("client save_com_state")).await;
         handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
 
         //进行语句操作
