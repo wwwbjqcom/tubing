@@ -651,7 +651,7 @@ impl ClientResponse {
             }
             SqlStatement::Prepare => {return Ok(())}
         }
-        handler.stream_flush().await?;
+        // handler.stream_flush().await?;
         handler.save_call_times(String::from("client parse_auery_packet ok")).await;
         debug!("{}",crate::info_now_time(String::from("send ok")));
 

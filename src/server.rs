@@ -562,6 +562,7 @@ impl Handler {
                         self.db = db;
                         self.user_name = user_name;
                         self.send(&buf).await?;
+                        self.stream_flush().await?;
                         self.seq += 1;
                         continue;
                     }
@@ -575,11 +576,13 @@ impl Handler {
                         self.status = ConnectionStatus::Failure;
                     }
                     self.send(&buf).await?;
+                    self.stream_flush().await?;
                     self.reset_seq();
                 }
                 ConnectionStatus::Switch(handshake) => {
                     let buf = handshake.switch_auth(&response, &self.platform_pool, &self.user_name, self.get_status_flags()).await?;
                     self.send(&buf).await?;
+                    self.stream_flush().await?;
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                     }else {
@@ -600,6 +603,7 @@ impl Handler {
                 }
                 _ => {}
             }
+            self.stream_flush().await?;
             self.class_time = vec![];
         }
         // // 这里先初始化cached值， 因为可能prepare语句退出
@@ -618,6 +622,7 @@ impl Handler {
         let handshake = dbengine::server::HandShake::new();
         let handshake_packet = handshake.server_handshake_packet()?;
         self.send(&handshake_packet).await?;
+        self.stream_flush().await?;
         self.status = ConnectionStatus::Auth(handshake);
         self.seq += 1;
         Ok(())
