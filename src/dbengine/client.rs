@@ -167,7 +167,7 @@ impl ClientResponse {
         if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
             return Ok(())
         }
-
+        handler.platform_pool_on.save_com_platform_state().await;
         debug!("{}",crate::info_now_time(String::from("set conn db for query sucess")));
         let packet = self.packet_my_value();
         debug!("{}",crate::info_now_time(String::from("start send pakcet to mysql")));
@@ -207,6 +207,7 @@ impl ClientResponse {
         if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
             return Ok(())
         }
+        handler.platform_pool_on.save_com_platform_state().await;
         self.send_no_response_packet(handler).await?;
         handler.per_conn_info.reset_cached().await?;
         self.check_slow_questions(&String::from("exec_prepare_close"),&handler.class_time).await;
@@ -319,6 +320,7 @@ impl ClientResponse {
         if !self.check_platform_and_conn(handler, &SqlStatement::Prepare).await?{
             return Ok(())
         }
+        handler.platform_pool_on.save_com_platform_state().await;
         self.send_one_packet(handler).await?;
         self.check_slow_questions(&String::from("exec_prepare_reset"), &handler.class_time).await;
         return Ok(())
@@ -501,11 +503,11 @@ impl ClientResponse {
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
                 //检测force_master获取连接时使用
-                if let Some(sl) = &select_comment{
-                    if &sl.to_lowercase() == &String::from("force_master"){
-                        info!("key: {:?}, sql:{:?}", &handler.hand_key, sql);
-                    }
-                }
+                // if let Some(sl) = &select_comment{
+                //     if &sl.to_lowercase() == &String::from("force_master"){
+                //         info!("key: {:?}, sql:{:?}", &handler.hand_key, sql);
+                //     }
+                // }
                 handler.class_time.extend(handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
                                             &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?);
                 debug!("connection check ok!");
@@ -563,6 +565,7 @@ impl ClientResponse {
         handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
 
         //进行语句操作
+        handler.save_call_times(String::from("client start query")).await;
         match a{
             SqlStatement::ChangeDatabase => {
                 self.check_is_change_db(handler, &sql, &tbl_info_list).await?;

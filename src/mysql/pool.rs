@@ -537,6 +537,7 @@ impl ConnectionsPoolPlatform{
 
     /// 修改ops计数状态
     pub async fn save_com_state(&mut self, host_info: &String, sql_type: &SqlStatement) -> Result<()> {
+        handler.save_call_times(String::from("client save_com_state")).await;
         debug!("save operation count:{:?} for {:?}", sql_type, host_info);
         self.questions.fetch_add(1, Ordering::SeqCst);
         if let Some(mut node_pool) = self.get_node_pool(host_info).await{
@@ -545,6 +546,13 @@ impl ConnectionsPoolPlatform{
         }
         Ok(())
     }
+
+    /// 记录platform总的ops计数
+    pub async fn save_com_platform_state(&mut self) {
+        debug!("save platform operation");
+        self.questions.fetch_add(1, Ordering::SeqCst);
+    }
+
 
     /// 通过sql类型判断从总连接池中获取对应读/写连接
     pub async fn get_pool(&mut self, sql_type: &SqlStatement, key: &String,
@@ -569,7 +577,7 @@ impl ConnectionsPoolPlatform{
             _ => {
                 if let Some(comment) = select_comment {
                     if comment.to_lowercase() == String::from("force_master") {
-                        info!("force_master to get master conn for key :{:?}", key);
+                        // info!("force_master to get master conn for key :{:?}", key);
                         Ok(self.get_write_conn(key, platform, is_sublist).await?)
                     } else {
                         Ok(self.get_read_conn(key, platform, is_sublist).await?)
@@ -768,7 +776,7 @@ impl ConnectionsPoolPlatform{
                     _ => {
                         if let Some(v) = select_comment {
                             if v.to_lowercase() == String::from("force_master") {
-                                info!("conn_type_check: force_master, key: {:?}", key);
+                                // info!("conn_type_check: force_master, key: {:?}", key);
                                 return Ok(false);
                             }
                         }
