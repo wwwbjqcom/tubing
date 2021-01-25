@@ -268,7 +268,7 @@ impl Listener {
             // The `accept` method internally attempts to recover errors, so an
             // error here is non-recoverable.
             let socket = self.accept().await?;
-            socket.set_nodelay(true)?;
+            // socket.set_nodelay(true)?;
             let host = if let Ok(h) = socket.peer_addr(){
                 h.ip().to_string()
             }else {
