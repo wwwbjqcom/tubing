@@ -178,6 +178,7 @@ impl PerMysqlConn {
                         self.cur_db = v.clone();
                     }
                     None => {
+                        info!("db:{:?}", db);
                         conn.set_default_db("information_schema".to_string())?;
                         self.cur_db = "information_schema".to_string();
                     }
@@ -207,7 +208,6 @@ impl PerMysqlConn {
                     }
                     None => {
                         if &self.cur_db != &"information_schema".to_string(){
-                            info!("db: {:?}", db);
                             conn.set_default_db("information_schema".to_string())?;
                             self.cur_db = "information_schema".to_string();
                         }
