@@ -494,7 +494,6 @@ impl Handler {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
         //self.get_platform_conn_on(&"test1".to_string()).await?;
-        self.stream_flush().await?;
 
         // 设置platform
         if let Some(p) = &self.platform{
@@ -572,6 +571,7 @@ impl Handler {
                         self.db = db;
                         self.user_name = user_name;
                         self.send(&buf).await?;
+                        self.stream_flush().await?;
                         self.seq += 1;
                         continue;
                     }
@@ -585,11 +585,13 @@ impl Handler {
                         self.status = ConnectionStatus::Failure;
                     }
                     self.send(&buf).await?;
+                    self.stream_flush().await?;
                     self.reset_seq();
                 }
                 ConnectionStatus::Switch(handshake) => {
                     let buf = handshake.switch_auth(&response, &self.platform_pool, &self.user_name, self.get_status_flags()).await?;
                     self.send(&buf).await?;
+                    self.stream_flush().await?;
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                     }else {
@@ -628,6 +630,7 @@ impl Handler {
         let handshake = dbengine::server::HandShake::new();
         let handshake_packet = handshake.server_handshake_packet()?;
         self.send(&handshake_packet).await?;
+        self.stream_flush().await?;
         self.status = ConnectionStatus::Auth(handshake);
         self.seq += 1;
         Ok(())

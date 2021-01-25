@@ -156,7 +156,7 @@ impl ClientResponse {
                 self.exec_prepare_reset(handler).await?;
             }
         }
-        //handler.stream_flush().await?;
+        handler.stream_flush().await?;
         Ok(())
     }
 
@@ -655,7 +655,7 @@ impl ClientResponse {
             }
             SqlStatement::Prepare => {return Ok(())}
         }
-        // handler.stream_flush().await?;
+        handler.stream_flush().await?;
         handler.save_call_times(String::from("client parse_auery_packet ok")).await;
         debug!("{}",crate::info_now_time(String::from("send ok")));
 
@@ -1062,6 +1062,7 @@ impl ClientResponse {
             packet.extend(vec![0,0]);    //warnings
         }
         handler.send(&packet).await?;
+        handler.stream_flush().await?;
         handler.reset_seq();
         Ok(())
     }
@@ -1077,6 +1078,7 @@ impl ClientResponse {
         }
         err.extend(error.as_bytes());
         handler.send(&err).await?;
+        handler.stream_flush().await?;
         handler.reset_seq();
         Ok(())
     }
