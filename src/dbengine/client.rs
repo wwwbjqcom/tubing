@@ -88,7 +88,11 @@ impl ClientResponse {
         let cur_timestamp = dt.timestamp_millis() as usize;
         // info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
         // info!("{:?}", call_times);
+<<<<<<< HEAD
         if cur_timestamp - self.cur_timestamp >= 1000 {
+=======
+        if cur_timestamp - self.cur_timestamp >= 100 {
+>>>>>>> parent of aeebf51... test
             info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
             info!("{:?}", call_times);
         }
