@@ -92,10 +92,14 @@ impl ClientResponse {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         if cur_timestamp - self.cur_timestamp >= 1000 {
 =======
         if cur_timestamp - self.cur_timestamp >= 100 {
 >>>>>>> parent of aeebf51... test
+=======
+        if cur_timestamp - self.cur_timestamp >= 10000 {
+>>>>>>> parent of 7992492... 1
 =======
         if cur_timestamp - self.cur_timestamp >= 10000 {
 >>>>>>> parent of 7992492... 1
