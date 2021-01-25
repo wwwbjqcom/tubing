@@ -845,6 +845,7 @@ impl ClientResponse {
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.send_packet(&packet).await?);
         }
+        handler.save_call_times(String::from("client send_packet to mysql ok")).await;
         let error = String::from("lost connection for send_packet");
         return Err(Box::new(MyError(error.into())));
     }
@@ -940,6 +941,7 @@ impl ClientResponse {
         handler.save_call_times(String::from("client send_mysql_response_packet")).await;
         let my_buf = self.packet_response_value(buf, header);
         handler.send_full(&my_buf).await?;
+        handler.save_call_times(String::from("client send_mysql_response_packet ok")).await;
         Ok(())
     }
 
