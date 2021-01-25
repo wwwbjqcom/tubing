@@ -28,6 +28,7 @@ use tokio::runtime::Builder;
 use crate::server::mysql_mp::ResponseValue;
 use crate::mysql::privileges::AllUserPri;
 use chrono::Local;
+use crate::server::sql_parser::SqlStatement;
 
 async fn unix_signal() -> Result<()> {
     let mut stream = signal(SignalKind::terminate())?;
@@ -722,6 +723,11 @@ impl Handler {
 
     pub async fn save_call_times(&mut self, class_name: String) {
         self.class_time.push(ClassTime::new(class_name));
+    }
+
+    pub async fn save_ops(&mut self, sql_type: &SqlStatement) {
+        self.platform_pool_on.save_com_state(sql_type).await;
+        self.per_conn_info.save_ops(sql_type).await;
     }
 }
 
