@@ -727,7 +727,9 @@ impl Handler {
 
     pub async fn save_ops(&mut self, sql_type: &SqlStatement) {
         self.platform_pool_on.save_com_state(sql_type).await;
+        self.save_call_times(String::from("save_ops for platfrom questions success"));
         self.per_conn_info.save_ops(sql_type).await;
+        self.save_call_times(String::from("save_ops for thread pool questions success"));
     }
 }
 
