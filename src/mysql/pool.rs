@@ -694,9 +694,9 @@ impl ConnectionsPoolPlatform{
         //存储最小连接的连接池key值，最终从这个连接池中获取连接
         let mut tmp_key = None;
         let mut conn_pool_lock = self.conn_pool.lock().await;
-        for read_host_info in read_host_list{
+        for read_host_info in &read_host_list{
             // tmp_key = Some(read_host_info.clone());
-            match conn_pool_lock.get(&read_host_info){
+            match conn_pool_lock.get(read_host_info){
                 Some(v) => {
                     let tmp_count = v.active_count.load(Ordering::SeqCst);
 
@@ -749,7 +749,7 @@ impl ConnectionsPoolPlatform{
                 }
             }
             None => {
-                error!("get read connections error: no host info");
+                error!("get read connections error: no host info ,read host list : {:?}", &read_host_list);
             }
         }
         let error = "no available connection".to_string();
