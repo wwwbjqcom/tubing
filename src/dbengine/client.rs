@@ -86,8 +86,8 @@ impl ClientResponse {
     async fn check_slow_questions(&self, ques: &String, call_times: &Vec<ClassTime>) {
         let dt = Local::now();
         let cur_timestamp = dt.timestamp_millis() as usize;
-        info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
-        info!("{:?}", call_times);
+        // info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
+        // info!("{:?}", call_times);
         if cur_timestamp - self.cur_timestamp >= 10000 {
             info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
             info!("{:?}", call_times);
