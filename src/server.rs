@@ -571,7 +571,7 @@ impl Handler {
                         self.db = db;
                         self.user_name = user_name;
                         self.send(&buf).await?;
-                        self.stream_flush().await?;
+                        // self.stream_flush().await?;
                         self.seq += 1;
                         continue;
                     }
@@ -585,13 +585,13 @@ impl Handler {
                         self.status = ConnectionStatus::Failure;
                     }
                     self.send(&buf).await?;
-                    self.stream_flush().await?;
+                    // self.stream_flush().await?;
                     self.reset_seq();
                 }
                 ConnectionStatus::Switch(handshake) => {
                     let buf = handshake.switch_auth(&response, &self.platform_pool, &self.user_name, self.get_status_flags()).await?;
                     self.send(&buf).await?;
-                    self.stream_flush().await?;
+                    // self.stream_flush().await?;
                     if &buf[0] == &0{
                         self.status = ConnectionStatus::Connected;
                     }else {
@@ -630,7 +630,6 @@ impl Handler {
         let handshake = dbengine::server::HandShake::new();
         let handshake_packet = handshake.server_handshake_packet()?;
         self.send(&handshake_packet).await?;
-        self.stream_flush().await?;
         self.status = ConnectionStatus::Auth(handshake);
         self.seq += 1;
         Ok(())
@@ -732,9 +731,7 @@ impl Handler {
 
     pub async fn save_ops(&mut self, sql_type: &SqlStatement) {
         self.platform_pool_on.save_com_state(sql_type).await;
-        self.save_call_times(String::from("save_ops for platfrom questions success"));
         self.per_conn_info.save_ops(sql_type).await;
-        self.save_call_times(String::from("save_ops for thread pool questions success"));
     }
 }
 

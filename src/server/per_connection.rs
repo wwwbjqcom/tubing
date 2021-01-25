@@ -104,27 +104,22 @@ impl PerMysqlConn {
 
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
                        db: &Option<String>, auto_commit: &bool,
-                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<(Vec<ClassTime>)> {
-        let mut class_times = vec![ClassTime::new(String::from("per_connections check"))];
+                       sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<()> {
         if !self.conn_state{
-            class_times.extend(self.check_get(pool, key, db, auto_commit, sql_type, &select_comment,platform).await?);
+            self.check_get(pool, key, db, auto_commit, sql_type, &select_comment,platform).await?;
         }else {
             if let Some(conn) = &self.conn_info{
                 //检查当前语句是否使用当前连接
-                class_times.push(ClassTime::new(String::from("conn_type_check")));
                 if pool.conn_type_check(&conn.host_info, sql_type, &select_comment,key).await?{
-                    class_times.push(ClassTime::new(String::from("check_default_db_and_autocommit")));
                     self.check_default_db_and_autocommit(db, auto_commit).await?;
                 }else {
                     //不能使用，则需要重新获取连接， 先归还当前连接到连接池
-                    class_times.push(ClassTime::new(String::from("return_connection")));
                     self.return_connection(seq).await?;
-                    class_times.push(ClassTime::new(String::from("return_connection ok")));
-                    class_times.extend(self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?);
+                    self.check_get(pool, key, db, auto_commit, sql_type, &select_comment, platform).await?;
                 }
             }
         }
-        Ok((class_times))
+        Ok(())
     }
 
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
