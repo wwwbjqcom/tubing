@@ -276,8 +276,8 @@ impl PerMysqlConn {
     }
 
     /// 对当前连接进行ops计数
-    pub async fn save_ops(&self, sql_type: &SqlStatement) {
-        if let Some(mut node_pool) = &self.conn_pool{
+    pub async fn save_ops(&mut self, sql_type: &SqlStatement) {
+        if let Some(node_pool) = &mut self.conn_pool{
             node_pool.save_ops_info(sql_type).await;
         }
     }
