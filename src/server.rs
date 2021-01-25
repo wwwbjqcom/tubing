@@ -276,8 +276,10 @@ impl Listener {
             debug!("accept connection from {}", host);
             //let host = socket.peer_addr()?.ip().to_string();
             // Create the necessary per-connection handler state.
+            let tmp_platfrom = String::from("test");
             let handler = Handler {
-                platform: None,
+                // platform: None,
+                platform: Some(tmp_platfrom),
                 class_time: vec![],
                 platform_pool: self.platform_pool.clone(),
                 platform_pool_on: ConnectionsPoolPlatform::default(),
