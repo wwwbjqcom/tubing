@@ -669,7 +669,7 @@ impl ConnectionsPoolPlatform{
         let read_list_lock = self.read.read().await;
         let mut read_host_list: Vec<String> = vec![];
         for read_host in &*read_list_lock{
-            read_host_list.push(write_host.clone());
+            read_host_list.push(read_host.clone());
         }
         return read_host_list;
     }
