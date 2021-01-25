@@ -816,6 +816,7 @@ impl ClientResponse {
                 break 'b;
             }
             let (buf, mut header) = self.get_packet_from_stream(handler).await?;
+            handler.save_call_times(String::from("client exec_query for get_packet_from_stream ok")).await;
             debug!("response:  {:?}, {:?}", &header, &buf);
             if buf[0] == 0xff {
                 self.send_mysql_response_packet(handler, &buf, &header).await?;
