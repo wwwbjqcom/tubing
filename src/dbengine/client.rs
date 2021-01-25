@@ -88,7 +88,7 @@ impl ClientResponse {
         let cur_timestamp = dt.timestamp_millis() as usize;
         // info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
         // info!("{:?}", call_times);
-        if cur_timestamp - self.cur_timestamp >= 30 {
+        if cur_timestamp - self.cur_timestamp >= 1000 {
             info!("slow questions({}ms): {:?}", cur_timestamp - self.cur_timestamp, ques);
             info!("{:?}", call_times);
         }
