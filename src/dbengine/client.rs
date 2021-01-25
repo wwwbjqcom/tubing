@@ -895,15 +895,17 @@ impl ClientResponse {
 
     /// 发送只回复ok/error的数据包
     async fn send_one_packet(&self, handler: &mut Handler) -> Result<()>{
-        handler.save_call_times(String::from("client send_one_packet")).await;
+        let mut call_times_list : Vec<ClassTime>= vec![];
+        handler.save_call_times(String::from("client send_one_packet")).await
         if let Some(conn) = &mut handler.per_conn_info.conn_info{
             let packet = self.packet_my_value();
-            handler.save_call_times(String::from("client send_one_packet for send_packet to mysql")).await;
+            call_times_list.push(ClassTime::new(String::from("client send_one_packet for send mysql response to mysql")));
             let (buf, header) = conn.send_packet(&packet).await?;
-            handler.save_call_times(String::from("client send_one_packet for send mysql response to client")).await;
+            call_times_list.push(ClassTime::new(String::from("client send_one_packet for send mysql response to client")));
             self.send_mysql_response_packet(handler, &buf, &header).await?;
             //self.check_eof(handler, conn).await?;
         }
+        handler.class_time.extend(call_times_list);
         Ok(())
     }
 
