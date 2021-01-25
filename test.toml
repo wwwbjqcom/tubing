@@ -3,7 +3,7 @@ password="root"
 bind="0.0.0.0"
 port=3399
 auth=false
-#配置文件读取还是MysqlMP获取，可配置file、mp, 默认file也可以不配置
+#配置文件读取还是MysqlMP获取，可配置file、mp 默认file也可以不配置
 mode="file"
 #server_url="http://192.168.0.47:8099/getrouteinfo"
 ##配置高可用用户验证id

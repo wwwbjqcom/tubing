@@ -495,7 +495,7 @@ impl Handler {
         //self.get_platform_conn_on(&"test1".to_string()).await?;
         // 设置platform
         if let Some(p) = &self.platform{
-            self.get_platform_conn_on(p).await?;
+            self.get_platform_conn_on(&p.clone()).await?;
         }
 
         while !self.shutdown.is_shutdown() {
