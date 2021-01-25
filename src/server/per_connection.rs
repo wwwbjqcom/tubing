@@ -4,7 +4,7 @@ use crate::mysql::Result;
 use tokio::time::delay_for;
 use crate::server::sql_parser::SqlStatement;
 use crate::MyError;
-use tracing::{debug, error};
+use tracing::{debug, error,info};
 use crate::server::ClassTime;
 use chrono::Local;
 
