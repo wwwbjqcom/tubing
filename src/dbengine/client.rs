@@ -832,7 +832,7 @@ impl ClientResponse {
     }
 
     async fn get_packet_from_stream(&self, handler: &mut Handler) -> Result<(Vec<u8>, PacketHeader)>{
-        handler.save_call_times(String::from("client ge_packet_from_stream")).await;
+        handler.save_call_times(String::from("client get_packet_from_stream")).await;
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.get_packet_from_stream().await?);
         }
