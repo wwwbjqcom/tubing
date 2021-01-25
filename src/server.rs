@@ -494,6 +494,8 @@ impl Handler {
         // As long as the shutdown signal has not been received, try to read a
         // new request frame.
         //self.get_platform_conn_on(&"test1".to_string()).await?;
+        self.stream_flush().await?;
+
         // 设置platform
         if let Some(p) = &self.platform{
             self.get_platform_conn_on(&p.clone()).await?;
