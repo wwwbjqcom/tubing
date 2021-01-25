@@ -138,7 +138,6 @@ impl PerMysqlConn {
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
         class_times.push(ClassTime::new(String::from("set_default_info")));
-        info!("db: {:?}", db);
         if let Err(e) = self.set_default_info(db, auto_commit).await{
             error!("set default info error: {}", e.to_string());
         }
