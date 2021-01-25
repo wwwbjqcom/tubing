@@ -536,7 +536,7 @@ impl ClientResponse {
     ///
     /// 如果为use语句，直接修改hanler中db的信息，并回复
     async fn parse_query_packet(&self, handler: &mut Handler) -> Result<()> {
-        handler.save_call_times(String::from("client parse_auery_packet")).await;
+        handler.save_call_times(String::from("client parse_query_packet")).await;
         let sql = readvalue::read_string_value(&self.buf[1..]);
 
         // let dialect = MySqlDialect {};
@@ -832,7 +832,7 @@ impl ClientResponse {
     }
 
     async fn get_packet_from_stream(&self, handler: &mut Handler) -> Result<(Vec<u8>, PacketHeader)>{
-        // handler.save_call_times(String::from("client ge_packet_from_stream")).await;
+        handler.save_call_times(String::from("client ge_packet_from_stream")).await;
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.get_packet_from_stream().await?);
         }
@@ -841,6 +841,7 @@ impl ClientResponse {
     }
 
     async fn send_packet(&self, handler: &mut Handler, packet: &Vec<u8>) -> Result<(Vec<u8>, PacketHeader)>{
+        handler.save_call_times(String::from("client send_packet to mysql")).await;
         if let Some(conn_info) = &mut handler.per_conn_info.conn_info{
             return Ok(conn_info.send_packet(&packet).await?);
         }
@@ -849,7 +850,7 @@ impl ClientResponse {
     }
 
     async fn query_response(&self, handler: &mut Handler, buf: &Vec<u8>, header: &mut PacketHeader, eof_num: &i32, is_eof: bool) -> Result<()> {
-        // handler.save_call_times(String::from("client query_response")).await;
+        handler.save_call_times(String::from("client query_response")).await;
         if handler.client_flags & CLIENT_DEPRECATE_EOF as i32 > 0{
             //客户端没有metadata eof结束包， 这里需要对metadata eof后续的包进行改写seq_id
             if eof_num == 1.borrow() && !is_eof {
@@ -931,7 +932,7 @@ impl ClientResponse {
 
     async fn send_mysql_response_packet(&self, handler: &mut Handler, buf: &Vec<u8>, header: &PacketHeader) -> Result<()> {
         debug!("{}",crate::info_now_time(String::from("start send packet to mysql")));
-        // handler.save_call_times(String::from("client send_mysql_response_packet")).await;
+        handler.save_call_times(String::from("client send_mysql_response_packet")).await;
         let my_buf = self.packet_response_value(buf, header);
         handler.send_full(&my_buf).await?;
         Ok(())
@@ -1001,18 +1002,6 @@ impl ClientResponse {
     ///
     /// 因为sqlparse不支持该类语句
     async fn check_is_change_db(&self, handler: &mut Handler, _sql: &String, tbl_info: &Vec<TableInfo>) -> Result<()>{
-//        if sql.to_lowercase().starts_with("use"){
-//         let sql = sql.to_lowercase();
-//         let sql_ver = sql.split(" ");
-//         let sql_ver = sql_ver.collect::<Vec<&str>>();
-//         let mut tmp: Vec<String> = vec![];
-//         for i in &sql_ver{
-//             if &i.to_string() != &"".to_string(){
-//                 tmp.push(i.to_string().clone())
-//             }
-//         }
-//         let my_tmp = tmp[1].to_string().clone();
-
         if tbl_info.len() > 0 {
             if let Some(db) = &tbl_info[0].database{
                 if !self.check_change_db_privileges(handler, db).await?{
