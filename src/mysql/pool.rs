@@ -612,10 +612,10 @@ impl ConnectionsPoolPlatform{
 
     /// 获取缓存的连接
     pub async fn get_cached_conn(&mut self, key: &String) -> Result<(Option<MysqlConnectionInfo>, Option<ConnectionsPool>)> {
-        let read_list_lock = self.read.read().await;
-        for read_host_info in &*read_list_lock{
+        let read_host_list = self.get_read_host_info_list().await;
+        for read_host_info in read_host_list{
             let mut conn_pool_lock = self.conn_pool.lock().await;
-            match conn_pool_lock.remove(read_host_info){
+            match conn_pool_lock.remove(&read_host_info){
                 Some(mut conn_pool) => {
                     conn_pool_lock.insert(read_host_info.clone(), conn_pool.clone());
                     drop(conn_pool_lock);
@@ -665,6 +665,15 @@ impl ConnectionsPoolPlatform{
         return Err(Box::new(MyError(error.into())));
     }
 
+    async fn get_read_host_info_list(&mut self) -> Vec<String> {
+        let read_list_lock = self.read.read().await;
+        let mut read_host_list: Vec<String> = vec![];
+        for read_host in &*read_list_lock{
+            read_host_list.push(write_host.clone());
+        }
+        return read_host_list;
+    }
+
     /// 通过最少连接数获取连接
     async fn get_read_conn(&mut self, key: &String, platform: &String, is_sublist: bool) -> Result<(MysqlConnectionInfo, ConnectionsPool)>{
         debug!("get from read thread_pool");
@@ -672,12 +681,14 @@ impl ConnectionsPoolPlatform{
             return Ok((conn, conn_pool));
         }
 
-        let read_list_lock = self.read.read().await;
-        let mut read_host_list: Vec<String> = vec![];
-        for read_host in &*read_list_lock{
-            read_host_list.push(read_host.clone());
-        }
-        drop(read_list_lock);
+        // let read_list_lock = self.read.read().await;
+        // let mut read_host_list: Vec<String> = vec![];
+        // for read_host in &*read_list_lock{
+        //     read_host_list.push(read_host.clone());
+        // }
+        // drop(read_list_lock);
+
+        let read_host_list = self.get_read_host_info_list().await;
         let mut active_count = 0 as usize;
         let mut start = false;
         //存储最小连接的连接池key值，最终从这个连接池中获取连接
@@ -711,7 +722,9 @@ impl ConnectionsPoolPlatform{
                     }
 //                    conn_pool_lock.insert(read_host_info.clone(), v);
                 },
-                None => {}
+                None => {
+                    error!("get read connection error: no connections pool for {}", &read_host_info);
+                }
             }
         }
         match tmp_key{
@@ -730,10 +743,14 @@ impl ConnectionsPoolPlatform{
                             }
                         }
                     }
-                    None => {}
+                    None => {
+                        error!("get read connection error: no thread pool for {}", &v);
+                    }
                 }
             }
-            None => {}
+            None => {
+                error!("get read connections error: no host info");
+            }
         }
         let error = "no available connection".to_string();
         error!("get read connection error: {}", error);
