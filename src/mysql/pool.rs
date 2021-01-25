@@ -1570,12 +1570,13 @@ impl MysqlConnectionInfo{
                 }
                 Err(e) => {
                     //debug(e);
-                    let str_tmp = e.to_string();
-                    error!("{}", &str_tmp);
-                    if str_tmp.contains("Resource temporarily unavailable") {
-                        continue;
-                    }
-                    return Err(Box::new(MyError(e.to_string().into())));
+                    continue;
+                    // let str_tmp = e.to_string();
+                    // error!("{}", &str_tmp);
+                    // if str_tmp.contains("Resource temporarily unavailable") {
+                    //     continue;
+                    // }
+                    // return Err(Box::new(MyError(e.to_string().into())));
                 }
             }
 
