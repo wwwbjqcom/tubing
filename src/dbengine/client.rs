@@ -364,6 +364,7 @@ impl ClientResponse {
                         //发送数据包
                         debug!("send text packet");
                         handler.send(&packet).await?;
+                        handler.stream_flush().await?;
                         handler.seq_add();
                     }
                     handler.reset_seq();
