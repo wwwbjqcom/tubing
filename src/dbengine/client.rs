@@ -110,8 +110,6 @@ impl ClientResponse {
                     self.send_error_packet(handler, &e.to_string()).await?;
                     self.reset_is_transaction(handler).await?;
                     handler.per_conn_info.return_connection(0).await?;
-                    //handler.per_conn_info.reset_connection().await?;
-                    //return Err(Box::new(MyError(e.to_string().into())));
                 };
             }
             PacketType::ComInitDb => {
@@ -254,11 +252,6 @@ impl ClientResponse {
             error!("error type {:?} for sql: {:?}", &a, &sql);
             return Err(Box::new(MyError(String::from("unsupported sql type"))));
         }
-
-        // let mut sql_comment = None;
-        // if sql.contains("/*force_master*/") {
-        //     sql_comment = Some(String::from("force_master"));
-        // }
 
         if !self.check_all_status(handler, &a, &tbl_info, &sql, sql_comment).await?{
             return Ok(())
