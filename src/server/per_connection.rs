@@ -1,7 +1,6 @@
 use crate::mysql::pool::{MysqlConnectionInfo, ConnectionsPoolPlatform, ConnectionsPool};
-use std::time::Duration;
 use crate::mysql::Result;
-use tokio::time::delay_for;
+use tokio::time::{sleep, Duration};
 use crate::server::sql_parser::SqlStatement;
 use crate::MyError;
 use tracing::{debug, error,info};
@@ -56,7 +55,7 @@ impl PerMysqlConn {
                     break;
                 }
             }
-            delay_for(Duration::from_millis(50)).await;
+            sleep(Duration::from_millis(50)).await;
         }
         Ok(())
     }

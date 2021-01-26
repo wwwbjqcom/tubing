@@ -23,7 +23,7 @@ use crate::mysql::Result;
 use crate::server::{mysql_mp, ClassTime};
 use std::net::TcpStream;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
-use std::time::{SystemTime, Duration};
+use std::time::{SystemTime};
 use std::sync::{Arc};
 use std::io::{Write, Read};
 use tracing::field::{debug};
@@ -31,7 +31,7 @@ use crate::mysql::connection::response::pack_header;
 use tracing::{debug, error, info};
 use chrono::prelude::*;
 use chrono;
-use tokio::time::delay_for;
+use tokio::time::{sleep, Duration};
 use crate::server::sql_parser::SqlStatement;
 use crate::server::mysql_mp::RouteInfo;
 use crate::dbengine::admin;
@@ -264,7 +264,7 @@ impl PlatformPool{
                     route_last_check_time = now_time;
                 }
             }
-            delay_for(Duration::from_millis(50)).await;
+            sleep(Duration::from_millis(50)).await;
         }
     }
 
@@ -536,7 +536,7 @@ impl ConnectionsPoolPlatform{
     }
 
     /// 修改ops计数状态
-    pub async fn save_com_state(&mut self,  sql_type: &SqlStatement) {
+    pub async fn save_com_state(&mut self,  _sql_type: &SqlStatement) {
         // debug!("save operation count:{:?} for {:?}", sql_type, host_info);
         self.questions.fetch_add(1, Ordering::SeqCst);
         // if let Some(mut node_pool) = self.get_node_pool(host_info).await{
@@ -1098,7 +1098,7 @@ impl ConnectionsPool{
                                 self.return_platform_conn_count(platform).await;
                                 return Err(Box::new(MyError(String::from("get connection timeout").into())));
                             } else {
-                                delay_for(Duration::from_millis(10)).await;
+                                sleep(Duration::from_millis(10)).await;
                                 //condvar.wait_timeout(pool, wait_time)?.0
                             };
                         }

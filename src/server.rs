@@ -5,7 +5,7 @@
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::{self, Duration};
+use tokio::time::{self, Duration, sleep};
 use tokio::signal::unix::{signal, SignalKind};
 use tracing::{debug, error, info, instrument};
 use num_cpus;
@@ -47,10 +47,9 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let cpus = num_cpus::get();
-    let mut runtime = Builder::new()
-        .threaded_scheduler()
-        .core_threads(cpus * 4)
-        .max_threads(cpus * 5)
+    let mut runtime = Builder::new_multi_thread()
+        .worker_threads(cpus*2)
+        // .max_threads(cpus * 5)
         .enable_all()
         .thread_name("my-custom-name")
         .thread_stack_size(64 * 1024 * 1024 )
@@ -354,7 +353,7 @@ impl Listener {
             }
 
             // Pause execution until the back off period elapses.
-            time::delay_for(Duration::from_secs(backoff)).await;
+            sleep(Duration::from_secs(backoff)).await;
 
             // Double the back off
             backoff *= 2;
