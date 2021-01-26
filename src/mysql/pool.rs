@@ -763,7 +763,7 @@ impl ConnectionsPoolPlatform{
     /// 如果现在是需要执行update则需要获取写节点的连接
     ///
     /// 返回true表示可以执行该sql语句，如果为false则需要重新获取连接
-    pub async fn conn_type_check(&mut self, host_info: &String, sql_type: &SqlStatement, select_comment: &Option<String>, key: &String) -> Result<bool> {
+    pub async fn conn_type_check(&mut self, host_info: &String, sql_type: &SqlStatement, select_comment: &Option<String>, _key: &String) -> Result<bool> {
         let write_list_lock = self.write.read().await;
         //判断是否为写节点的连接，如果为写节点的连接可以执行任何操作
         for write_host_info in &*write_list_lock{

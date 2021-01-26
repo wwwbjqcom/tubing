@@ -83,7 +83,7 @@ impl Connection {
 
             debug!("{}",crate::info_now_time(String::from("get response from client")));
 
-            self.read_bytes = self.stream.read(&mut self.buffer).await?;
+            self.read_bytes = self.stream.read_buf(&mut self.buffer).await?;
             debug!("read value({} bytes) from stream", &self.read_bytes);
             if 0 == self.read_bytes {
                 // The remote closed the connection. For this to be a clean

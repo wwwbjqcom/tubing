@@ -126,23 +126,19 @@ impl PerMysqlConn {
     }
 
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
-                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<(Vec<ClassTime>)>{
-        let mut class_times = vec![ClassTime::new(String::from("per_connections check_get"))];
+                       auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<()>{
         debug!("get connection from thread_pool");
         let (conn, conn_pool) = pool.get_pool(sql_type,key, select_comment,
                                               platform, self.platform_is_sublist.clone()).await?;
-        class_times.push(ClassTime::new(String::from("get_pool ok")));
         debug!("OK");
         self.conn_info = Some(conn);
         self.conn_pool = Some(conn_pool);
-        class_times.push(ClassTime::new(String::from("set_default_info")));
         // info!("db: {:?}", db);
         if let Err(e) = self.set_default_info(db, auto_commit).await{
             error!("set default info error: {}", e.to_string());
         }
-        class_times.push(ClassTime::new(String::from("set_default_info ok")));
         self.conn_state = true;
-        Ok((class_times))
+        Ok(())
     }
 
     /// 判断是否开启审计，开启则打印sql
