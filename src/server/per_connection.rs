@@ -39,7 +39,8 @@ impl PerMysqlConn {
                         self.cancel_failed_connection().await;
                         continue;
                     }
-                    self.reset_my_db_state().await;
+                    self.cur_db = "information_schema".to_string();
+                    self.cur_autocommit = false;
 
                     //操作正常则进行下一步归还连接
                     match conn.try_clone(){
@@ -100,12 +101,10 @@ impl PerMysqlConn {
     async fn reset_my_state(&mut self) {
         self.conn_info = None;
         self.conn_state = false;
-    }
-
-    async fn reset_my_db_state(&mut self) {
         self.cur_db = "information_schema".to_string();
         self.cur_autocommit = false;
     }
+
 
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
                        db: &Option<String>, auto_commit: &bool,
