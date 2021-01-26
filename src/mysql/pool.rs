@@ -1675,7 +1675,7 @@ impl MysqlConnectionInfo{
     /// 用于缓存线程归还到线程池时使用
     pub fn reset_conn_default(&mut self) -> Result<()>{
         self.set_autocommit()?;
-        let sql = String::from("use information_schema");
+        let sql = String::from("use sbtest");
         let packet_full = self.set_default_packet(&sql, 0);
         let (a, _b) = self.__send_packet(&packet_full)?;
         self.check_packet_is(&a)?;

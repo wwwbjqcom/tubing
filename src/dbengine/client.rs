@@ -545,9 +545,9 @@ impl ClientResponse {
         // }
 
 
-        if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
-            return Ok(())
-        }
+        // if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
+        //     return Ok(())
+        // }
 
         //进行ops操作
         //handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
