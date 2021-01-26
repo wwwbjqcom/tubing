@@ -32,6 +32,7 @@ impl PerMysqlConn {
         loop {
             if let Some(conn) = &mut self.conn_info{
                 if conn.check_cacke_sleep(){
+                    info!("reset default db");
                     if let Err(e) = conn.reset_conn_default(){
                         //操作连接异常，只重置状态，不归还连接
                         error!("reset conn default err(per_connnection_health): {}", e.to_string());
