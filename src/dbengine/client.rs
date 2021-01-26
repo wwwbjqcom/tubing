@@ -468,28 +468,28 @@ impl ClientResponse {
     /// 返回false代表不往下继续， 返回true则继续
     async fn check_all_status(&self, handler: &mut Handler, a: &SqlStatement, tbl_info_list: &Vec<TableInfo>, sql: &String, select_comment: Option<String>) -> Result<bool> {
         //info!("sql: {:?}", sql);
-        if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
-            self.send_error_packet(handler, &e.to_string()).await?;
-            return Ok(false)
-        }
-
-
-        debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
-        debug!("{}",format!("{:?}: {}", a, &sql));
-
-        debug!("{}",crate::info_now_time(String::from("start check pool info")));
+        // if let Err(e) = self.check_user_privileges(handler,  &a, &tbl_info_list).await{
+        //     self.send_error_packet(handler, &e.to_string()).await?;
+        //     return Ok(false)
+        // }
+        //
+        //
+        // debug!("{}",crate::info_now_time(String::from("parser sql sucess")));
+        // debug!("{}",format!("{:?}: {}", a, &sql));
+        //
+        // debug!("{}",crate::info_now_time(String::from("start check pool info")));
 
         //检查是否已经设置platform， 如果语句不为set platform语句则必须先进行platform设置，返回错误
-        if !self.check_is_set_platform(&a, handler).await?{
-            if self.check_other_query(&a, &sql, handler).await?{
-                return Ok(false);
-            }
-            let error = format!("please set up a business platform first");
-            error!("{}", &error);
-            self.send_error_packet(handler, &error).await?;
-            return Ok(false)
-        }
-        debug!("check and get connection from thread pool");
+        // if !self.check_is_set_platform(&a, handler).await?{
+        //     if self.check_other_query(&a, &sql, handler).await?{
+        //         return Ok(false);
+        //     }
+        //     let error = format!("please set up a business platform first");
+        //     error!("{}", &error);
+        //     self.send_error_packet(handler, &error).await?;
+        //     return Ok(false)
+        // }
+        // debug!("check and get connection from thread pool");
         //已经设置了platform则进行连接检查及获取
         if let Some(platform) = &handler.platform{
             if platform != &"admin".to_string(){
@@ -502,7 +502,7 @@ impl ClientResponse {
                 handler.per_conn_info.check(&mut handler.platform_pool_on, &handler.hand_key,
                                             &handler.db, &handler.auto_commit, &a, handler.seq.clone(), select_comment, platform).await?;
                 debug!("connection check ok!");
-                handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
+                // handler.per_conn_info.check_auth_save(&sql, &handler.host).await;
             } else {
                 return Ok(true)
             }
@@ -545,9 +545,9 @@ impl ClientResponse {
         // }
 
 
-        // if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
-        //     return Ok(())
-        // }
+        if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
+            return Ok(())
+        }
 
         //进行ops操作
         //handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
