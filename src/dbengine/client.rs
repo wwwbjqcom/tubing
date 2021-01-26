@@ -539,10 +539,10 @@ impl ClientResponse {
         // let (tbl_info_list, a, select_comment) = crate::server::sql_parser::do_table_info(&sql_ast)?;
         let (tbl_info_list, a, select_comment, sql_ast) = self.parse_my_sql(&sql).await?;
 
-        if self.check_is_admin_paltform(handler, &a).await{
-            self.admin(&sql, handler, &sql_ast).await?;
-            return Ok(())
-        }
+        // if self.check_is_admin_paltform(handler, &a).await{
+        //     self.admin(&sql, handler, &sql_ast).await?;
+        //     return Ok(())
+        // }
 
 
         if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
@@ -551,7 +551,7 @@ impl ClientResponse {
 
         //进行ops操作
         //handler.platform_pool_on.save_com_state(&handler.per_conn_info.get_connection_host_info().await, &a).await?;
-        handler.save_ops(&a).await;
+        // handler.save_ops(&a).await;
 
         //进行语句操作
         match a{
