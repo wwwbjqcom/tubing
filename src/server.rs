@@ -48,8 +48,10 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let cpus = num_cpus::get();
     let mut runtime = Builder::new_multi_thread()
+        .on_thread_start(|| {
+            println!("started");
+        })
         .worker_threads(cpus*2)
-        // .max_threads(cpus * 5)
         .enable_all()
         .thread_name("my-custom-name")
         .thread_stack_size(64 * 1024 * 1024 )
@@ -78,12 +80,23 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     runtime.block_on(async{
 
         //通过高可用远程获取各业务集群路由关系并初始化配置
+        // if config.check_is_mp(){
+        //     let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
+        //     debug!("get_platform_route: {:?}", &ha_route);
+        //     config.reset_init_config(&ha_route);
+        // }
+
+        let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
+        if let Some(l_port) = config.port{
+            port = l_port;
+        };
+        let listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
+
         if config.check_is_mp(){
             let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
             debug!("get_platform_route: {:?}", &ha_route);
             config.reset_init_config(&ha_route);
         }
-
         //创建各业务后端连接池
         let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
         debug!("init thread pool success");
@@ -91,11 +104,6 @@ pub fn run(mut config: MyConfig) -> Result<()> {
         let mut user_pri = AllUserPri::new(&platform_pool);
         user_pri.get_pris(&all_user_info).await?;
 
-        let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
-        if let Some(l_port) = config.port{
-            port = l_port;
-        };
-        let listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
 
         let mut pool_maintain = ThreadPoolMaintain{
             platform_pool: platform_pool.clone(),
