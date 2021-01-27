@@ -284,10 +284,10 @@ impl Listener {
             debug!("accept connection from {}", host);
             //let host = socket.peer_addr()?.ip().to_string();
             // Create the necessary per-connection handler state.
-            let tmp_platfrom = String::from("test");
+            // let tmp_platfrom = String::from("test");
             let handler = Handler {
-                // platform: None,
-                platform: Some(tmp_platfrom),
+                platform: None,
+                // platform: Some(tmp_platfrom),
                 class_time: vec![],
                 platform_pool: self.platform_pool.clone(),
                 platform_pool_on: ConnectionsPoolPlatform::default(),
@@ -503,9 +503,9 @@ impl Handler {
         //self.get_platform_conn_on(&"test1".to_string()).await?;
 
         // 设置platform, 用于临时设置platform，兼容sysbench测试
-        if let Some(p) = &self.platform{
-            self.get_platform_conn_on(&p.clone()).await?;
-        }
+        // if let Some(p) = &self.platform{
+        //     self.get_platform_conn_on(&p.clone()).await?;
+        // }
 
         while !self.shutdown.is_shutdown() {
             // While reading a request frame, also listen for the shutdown

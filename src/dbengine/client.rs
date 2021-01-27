@@ -336,12 +336,10 @@ impl ClientResponse {
     /// 但最大值必须大雨等于最小值, 如果不带任何条件则是修改所有， 如果带条件，platform为必须,
     /// 不能只有host_info, 但可以只有platform，这样是修改对应platform的所有节点
     pub async fn admin(&self, sql: &String, handler: &mut Handler, ast: &Vec<Statement>) -> Result<()> {
-        info!("admin");
         let admin_sql = AdminSql::Null;
         if self.check_select_user(handler, sql, ast).await?{
             return Ok(())
         }
-        info!("parse admin sql");
         let admin_sql = admin_sql.parse_sql(ast).await?;
         debug!("admin info:{:?}", &admin_sql);
         match admin_sql{
@@ -354,17 +352,17 @@ impl ClientResponse {
             }
             AdminSql::Show(show_struct) => {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
-                info!("show_state: {:?}", &show_state);
+                debug!("show_state: {:?}", &show_state);
                 //self.send_ok_packet(handler).await?;
-                info!("packet text response");
+                debug!("packet text response");
                 let mut text_response = TextResponse::new(handler.client_flags.clone());
                 if let Err(e) = text_response.packet(&show_struct, &show_state).await{
-                    info!("packet text response error: {:?},", &e.to_string());
+                    debug!("packet text response error: {:?},", &e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                 }else {
                     for packet in text_response.packet_list{
                         //发送数据包
-                        info!("send text packet");
+                        debug!("send text packet");
                         handler.send(&packet).await?;
                         handler.stream_flush().await?;
                         handler.seq_add();
@@ -381,7 +379,6 @@ impl ClientResponse {
     ///
     /// 如果platform不为admin， 则会自动发往后端， 所以不需要做该返回
     async fn check_select_user(&self, handler: &mut Handler, sql: &String, ast: &Vec<Statement>) -> Result<bool>{
-        info!("check select user");
         for a in ast{
             return match a {
                 Statement::Query(_) => {
