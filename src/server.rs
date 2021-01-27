@@ -47,11 +47,9 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let cpus = num_cpus::get();
-    let mut thread_num = 0;
     let mut runtime = Builder::new_multi_thread()
         .on_thread_start(|| {
-            println!("runtime thread {} started", thread_num);
-            thread_num += 1;
+            println!("runtime thread started");
         })
         .worker_threads(cpus*4)
         .enable_all()
