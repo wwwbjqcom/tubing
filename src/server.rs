@@ -44,12 +44,6 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     debug!("config: {:?}", &config);
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
-    use futures::executor::block_on;
-    if config.check_is_mp(){
-        let ha_route: ResponseValue  = block_on(mysql_mp::get_platform_route(&config))?;
-        debug!("get_platform_route: {:?}", &ha_route);
-        config.reset_init_config(&ha_route);
-    }
 
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);

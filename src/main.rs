@@ -8,7 +8,9 @@ use std::fmt;
 use serde_derive::{Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
-use crate::server::mysql_mp::RouteInfo;
+use crate::server::mysql_mp::{RouteInfo, ResponseValue};
+use crate::server::mysql_mp;
+use tracing::{debug};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct UserConfig{
@@ -181,8 +183,15 @@ fn main() -> mysql::Result<()> {
         Ok(s) => s,
         Err(e) => panic!("Error Reading file: {}", e)
     };
-    let my_config: MyConfig = toml::from_str(&str_val).unwrap();
+    let mut my_config: MyConfig = toml::from_str(&str_val).unwrap();
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
+    use futures::executor::block_on;
+    if my_config.check_is_mp(){
+        let ha_route: ResponseValue  = block_on(mysql_mp::get_platform_route(&my_config))?;
+        debug!("get_platform_route: {:?}", &ha_route);
+        my_config.reset_init_config(&ha_route);
+    }
+
     server::run(my_config)
 }
 
