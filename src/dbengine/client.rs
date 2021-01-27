@@ -336,6 +336,7 @@ impl ClientResponse {
     /// 但最大值必须大雨等于最小值, 如果不带任何条件则是修改所有， 如果带条件，platform为必须,
     /// 不能只有host_info, 但可以只有platform，这样是修改对应platform的所有节点
     pub async fn admin(&self, sql: &String, handler: &mut Handler, ast: &Vec<Statement>) -> Result<()> {
+        info!("admin");
         let admin_sql = AdminSql::Null;
         if self.check_select_user(handler, sql, ast).await?{
             return Ok(())
@@ -375,7 +376,7 @@ impl ClientResponse {
         Ok(())
     }
 
-    /// 检查是否未select user()语句， 仅用于admin服务端， 兼容部分客户端的问题
+    /// 检查是否为select user()语句， 仅用于admin服务端， 兼容部分客户端的问题
     ///
     /// 如果platform不为admin， 则会自动发往后端， 所以不需要做该返回
     async fn check_select_user(&self, handler: &mut Handler, sql: &String, ast: &Vec<Statement>) -> Result<bool>{
@@ -650,6 +651,7 @@ impl ClientResponse {
                 //发送数据包
                 debug!("send text packet");
                 handler.send(&packet).await?;
+                handler.stream_flush().await?;
                 handler.seq_add();
             }
             handler.reset_seq();

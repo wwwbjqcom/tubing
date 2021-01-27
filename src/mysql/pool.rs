@@ -205,7 +205,6 @@ impl PlatformPool{
 
     /// 获取对应业务库总连接池、当前platform是否为子业务
     pub async fn get_platform_pool(&mut self, platform: &String) -> (Option<ConnectionsPoolPlatform>, bool){
-        info!("get paltform pool");
         if let  (Some(client_platform), is_sub) = self.config.get_pool_platform(platform){
             let platform_pool_lock = self.platform_pool.lock().await;
             if let Some(on_platform_pool) = platform_pool_lock.get(&client_platform){
@@ -362,7 +361,6 @@ impl PlatformPool{
 
     /// 获取所有连接池状态信息
     pub async fn show_pool_state(&mut self, show_struct: &admin::ShowStruct) -> Result<admin::ShowState> {
-        info!("show pool state");
         let mut show_state = vec![];
         if let Some(platform) = &show_struct.platform{
             let pool_state = self.get_state(&platform).await?;
@@ -379,7 +377,6 @@ impl PlatformPool{
 
     /// 获取某一个platform下的连接池状态信息
     async fn get_state(&mut self, platform: &String) -> Result<admin::PoolState>{
-        info!("get state");
         if let (Some(mut platform_pool), _) = self.get_platform_pool(platform).await{
             return Ok(platform_pool.get_pool_state(platform).await?)
         }
@@ -851,7 +848,6 @@ impl ConnectionsPoolPlatform{
 
     /// 获取连接池状态
     async fn get_pool_state(&mut self, platform: &String) -> Result<admin::PoolState> {
-        info!("get pool state");
         let mut pool_state = admin::PoolState{
             platform: platform.clone(),
             write_host: "".to_string(),
