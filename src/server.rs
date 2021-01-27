@@ -44,6 +44,13 @@ pub fn run(mut config: MyConfig) -> Result<()> {
     debug!("config: {:?}", &config);
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
+    use futures::executor::block_on;
+    if config.check_is_mp(){
+        let ha_route: ResponseValue  = block_on(mysql_mp::get_platform_route(&config))?;
+        debug!("get_platform_route: {:?}", &ha_route);
+        config.reset_init_config(&ha_route);
+    }
+
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let cpus = num_cpus::get();
@@ -85,18 +92,6 @@ pub fn run(mut config: MyConfig) -> Result<()> {
         //     debug!("get_platform_route: {:?}", &ha_route);
         //     config.reset_init_config(&ha_route);
         // }
-
-        let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
-        if let Some(l_port) = config.port{
-            port = l_port;
-        };
-        let listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
-
-        if config.check_is_mp(){
-            let ha_route: ResponseValue  = mysql_mp::get_platform_route(&config).await?;
-            debug!("get_platform_route: {:?}", &ha_route);
-            config.reset_init_config(&ha_route);
-        }
         //创建各业务后端连接池
         let (platform_pool, all_user_info) = mysql::pool::PlatformPool::new(&config)?;
         debug!("init thread pool success");
@@ -104,6 +99,12 @@ pub fn run(mut config: MyConfig) -> Result<()> {
         let mut user_pri = AllUserPri::new(&platform_pool);
         user_pri.get_pris(&all_user_info).await?;
 
+        let mut port: u16 = crate::DEFAULT_PORT.parse().unwrap();
+        if let Some(l_port) = config.port{
+            port = l_port;
+        };
+
+        let listener = TcpListener::bind(&format!("{}:{}",config.bind, port)).await?;
 
         let mut pool_maintain = ThreadPoolMaintain{
             platform_pool: platform_pool.clone(),
