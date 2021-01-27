@@ -352,17 +352,17 @@ impl ClientResponse {
             }
             AdminSql::Show(show_struct) => {
                 let show_state = handler.platform_pool.show_pool_state(&show_struct).await?;
-                debug!("show_state: {:?}", &show_state);
+                info!("show_state: {:?}", &show_state);
                 //self.send_ok_packet(handler).await?;
-                debug!("packet text response");
+                info!("packet text response");
                 let mut text_response = TextResponse::new(handler.client_flags.clone());
                 if let Err(e) = text_response.packet(&show_struct, &show_state).await{
-                    debug!("packet text response error: {:?},", &e.to_string());
+                    info!("packet text response error: {:?},", &e.to_string());
                     self.send_error_packet(handler, &e.to_string()).await?;
                 }else {
                     for packet in text_response.packet_list{
                         //发送数据包
-                        debug!("send text packet");
+                        info!("send text packet");
                         handler.send(&packet).await?;
                         handler.stream_flush().await?;
                         handler.seq_add();
