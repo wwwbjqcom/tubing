@@ -341,6 +341,7 @@ impl ClientResponse {
         if self.check_select_user(handler, sql, ast).await?{
             return Ok(())
         }
+        info!("parse admin sql");
         let admin_sql = admin_sql.parse_sql(ast).await?;
         debug!("admin info:{:?}", &admin_sql);
         match admin_sql{
@@ -380,6 +381,7 @@ impl ClientResponse {
     ///
     /// 如果platform不为admin， 则会自动发往后端， 所以不需要做该返回
     async fn check_select_user(&self, handler: &mut Handler, sql: &String, ast: &Vec<Statement>) -> Result<bool>{
+        info!("check select user");
         for a in ast{
             return match a {
                 Statement::Query(_) => {

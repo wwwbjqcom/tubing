@@ -1573,6 +1573,7 @@ impl MysqlConnectionInfo{
                     let str_tmp = e.to_string();
                     error!("{}", &str_tmp);
                     if str_tmp.contains("Resource temporarily unavailable") {
+                        sleep(Duration::from_millis(5)).await;
                         continue;
                     }
                     return Err(Box::new(MyError(e.to_string().into())));
