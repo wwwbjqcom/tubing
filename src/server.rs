@@ -53,7 +53,7 @@ pub fn run(mut config: MyConfig) -> Result<()> {
             println!("runtime thread {} started", thread_num);
             thread_num += 1;
         })
-        .worker_threads(cpus*2)
+        .worker_threads(cpus*4)
         .enable_all()
         .thread_name("my-custom-name")
         .thread_stack_size(64 * 1024 * 1024 )
