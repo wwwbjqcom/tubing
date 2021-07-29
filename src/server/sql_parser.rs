@@ -423,7 +423,7 @@ pub fn do_table_info(ast: &Vec<Statement>) -> Result<(Vec<TableInfo>, SqlStateme
                 push_tbl_list(schema_name, &mut tbl_list)?;
             }
             Statement::SetVariable { variable, value , .. } => {
-                sql_type = SqlStatement::SetVariable(variable.value.clone(), value.to_string().replace('\'', ""));
+                sql_type = SqlStatement::SetVariable(variable.value.clone(), value.to_string().replace('\'', "").replace("\"", ""));
             }
             Statement::StartTransaction { .. } => {
                 sql_type = SqlStatement::StartTransaction;

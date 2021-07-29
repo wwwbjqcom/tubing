@@ -8,7 +8,10 @@ use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
-use tracing::{debug};
+use tracing::{debug, info};
+use tokio::sync::RwLock;
+use std::sync::Arc;
+use serde::de::value::StringDeserializer;
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
@@ -395,22 +398,35 @@ pub struct UserPri{
     pub user: String,                   //用户名
     pub user_pri: Option<Vec<User>>,
     pub db_pri: Option<Vec<DBPri>>,
-    pub table_pri: Option<Vec<TablePri>>
+    pub table_pri: Option<Vec<TablePri>>,
+    pub platform: String
 }
 
 impl UserPri{
-    pub fn new(user: &String) -> UserPri{
+    pub fn new(user: &String, platform: &String) -> UserPri{
         UserPri{
             user: user.clone(),
             user_pri: None,
             db_pri: None,
-            table_pri: None
+            table_pri: None,
+            platform: platform.clone()
         }
     }
 
-    pub fn check_user_name(&self, user_name: &String) -> bool{
+    /// 检查用户是否存在， 多个db可能有相同的用户名，所以这里同时匹配platform
+    ///
+    /// 当platform位none时代表还没有设置platform， 如果存在用户则直接返回成功
+    pub fn check_user_name(&self, user_name: &String, platform: &Option<String>) -> bool{
         if user_name == &self.user{
-            return true;
+            return if let Some(pl) = platform {
+                if pl == &self.platform {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                true
+            }
         }
         return false
     }
@@ -495,28 +511,84 @@ impl UserPri{
     // }
 }
 
+
+/// 保存对应db中已有的所有用户名
+///
+/// 用于加载权限信息
+#[derive(Debug, Clone)]
+pub struct PlatformUserInfo{
+    pub user_name: String,  //用户名
+    pub platform: String,   //所属platform
+}
+
+
+impl PlatformUserInfo{
+    fn init_value(row_value: &HashMap<String, String>, platform: String) -> Option<PlatformUserInfo> {
+        return if let Some(v) = row_value.get(&"user".to_string()) {
+            Some(PlatformUserInfo { user_name: v.clone(), platform })
+        } else {
+            None
+        }
+    }
+}
+
+
+/// 保存所有platform db中用户权限的结构体
+///
 #[derive(Clone, Debug)]
 pub struct AllUserPri{
-    pub all_pri: Vec<UserPri>,
-    pub platform_pool: PlatformPool
+    pub all_user_info: Arc<RwLock<Vec<PlatformUserInfo>>>,    //所有用户
+    pub all_pri: Arc<RwLock<Vec<UserPri>>>,                      // 用户权限
+    pub platform_pool: PlatformPool                 //所有platfrom的连接池
 }
 
 impl AllUserPri{
     pub fn new(platform_pool: &PlatformPool) -> AllUserPri{
         AllUserPri{
-            all_pri: vec![],
+            all_user_info: Arc::new(RwLock::new(vec![])),
+            all_pri: Arc::new(RwLock::new(vec![])),
             platform_pool: platform_pool.clone()
         }
     }
 
+    /// 从all_user_info中获取所有用户列表
+    ///
+    /// 由于rust所有权问题，在一个函数中获取锁读取数据，再利用该数据进行其他结构体数据操作会发生错误
+    ///
+    /// 所有这里单独一个函数获取一个临时列表
+    async fn get_user_info_list(&mut self) -> Vec<PlatformUserInfo>{
+        let read_user_info_lock = self.all_user_info.read().await;
+        let mut tmp_user_info_list = vec![];
+        for user_info in &*read_user_info_lock{
+            tmp_user_info_list.push(user_info.clone())
+        }
+        return tmp_user_info_list
+    }
+
+    /// 获取用户权限列表， 用于对单独platform进行权限重载
+    async fn get_user_pri_list(&mut self) -> Vec<UserPri> {
+        let read_user_pri_lock = self.all_pri.read().await;
+        let mut tmp_user_pri_list = vec![];
+        for user_pri in &*read_user_pri_lock{
+            tmp_user_pri_list.push(user_pri.clone())
+        }
+        return tmp_user_pri_list
+    }
+
     /// 获取所有用户权限列表
-    pub async fn get_pris(&mut self, all_user_info: &AllUserInfo) -> Result<()>{
+    ///
+    /// 用于全局重载用户权限和初始化的时候
+    pub async fn get_pris(&mut self) -> Result<()>{
         debug!("get all user privileges");
-        for (user, user_info) in &all_user_info.all_info{
-            if &user_info.platform == &"admin".to_string(){
-                continue;
-            }
-            let mut one_user_pri = UserPri::new(&user);
+        // 获取platfrom列表， 并通过platfrom从连接池获取相应链接，在查询出所有用户用户信息
+        let platform_list = self.platform_pool.get_platform_list().await;
+        self.reload_all_user_info(platform_list).await?;
+        //
+        let tmp_user_info_list = self.get_user_info_list().await;
+        // 存储所有权限的临时列表
+        let mut tmp_all_pri = vec![];
+        for user_info in &tmp_user_info_list {
+            let mut one_user_pri = UserPri::new(&user_info.user_name, &user_info.platform);
             if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&user_info.platform).await{
                 let (mut mysql_conn, mut mysql_conn_pool) =platform_pool_on.get_pool(&SqlStatement::Query,
                                                                    &"".to_string(), &None,
@@ -525,10 +597,13 @@ impl AllUserPri{
                 self.get_db_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 self.get_table_pri(&mut mysql_conn, &mut one_user_pri).await?;
                 mysql_conn_pool.return_pool(mysql_conn, &user_info.platform).await?;
-                // platform_pool_on.return_pool(mysql_conn, 0, &user_info.platform).await?;
-                self.all_pri.push(one_user_pri);
+                tmp_all_pri.push(one_user_pri);
             }
         }
+        // 获取全局写锁， 清空当前权限数据，并附加临时权限列表进去
+        let mut all_pri_write_lock = self.all_pri.write().await;
+        all_pri_write_lock.clear();
+        all_pri_write_lock.extend(tmp_all_pri);
         debug!("all user privileges: {:?}", &self.all_pri);
         Ok(())
     }
@@ -581,6 +656,134 @@ impl AllUserPri{
         Ok(())
     }
 
+
+
+
+    /// 重载用户信息的操作
+    ///
+    /// 如果有platform代表只重载该业务集群的用户信息
+    ///
+    /// 如果没有则全部重载， 就需把所有用户、用户权限重制
+    pub async fn reload_user_pri(&mut self, platform: Option<String>) -> Result<()> {
+        return if let Some(pl) = platform{
+            let new_platform_user_info_list = self.reload_platform_user_info(pl.clone()).await?;
+            self.reload_platform_user_pri(pl.clone(), &new_platform_user_info_list).await?;
+            Ok(())
+        }else {
+            self.reset_user_info().await;
+            Ok(self.get_pris().await?)
+        }
+    }
+
+    /// 重载某个platform的用户权限信息
+    ///
+    /// platform_user_info_list:  通过reload_platform_user_info函数返回最新用户信息列表
+    async fn reload_platform_user_pri(&mut self, platform: String, platform_user_info_list: &Vec<PlatformUserInfo>) -> Result<()> {
+        // 获取当前所有用户权限信息
+        // 剔除需要重载的platform用户信息
+        let user_pri_list = self.get_user_pri_list().await;
+        let mut tmp_user_pri_list = vec![];
+        for user_pri in user_pri_list{
+            if &user_pri.platform != &platform {
+                tmp_user_pri_list.push(user_pri);
+            }
+        }
+
+        // 从连接池中获取对应platform的链接， 并利用链接进行权限信息获取
+        for user_info in platform_user_info_list {
+            let mut one_user_pri = UserPri::new(&user_info.user_name, &user_info.platform);
+            if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&user_info.platform).await{
+                let (mut mysql_conn, mut mysql_conn_pool) =platform_pool_on.get_pool(&SqlStatement::Query,
+                                                                                     &"".to_string(), &None,
+                                                                                     &user_info.platform, false).await?;
+                self.get_user_pri(&mut mysql_conn, &mut one_user_pri).await?;
+                self.get_db_pri(&mut mysql_conn, &mut one_user_pri).await?;
+                self.get_table_pri(&mut mysql_conn, &mut one_user_pri).await?;
+                mysql_conn_pool.return_pool(mysql_conn, &user_info.platform).await?;
+                tmp_user_pri_list.push(one_user_pri);
+            }
+        }
+
+        //获取权限信息写锁， 并清空添加最新信息回去
+        let mut write_all_user_pri = self.all_pri.write().await;
+        write_all_user_pri.clear();
+        write_all_user_pri.extend(tmp_user_pri_list);
+        Ok(())
+    }
+
+    /// 重载某一个platform的用户信息, 并返回新的用户信息列表
+    async fn reload_platform_user_info(&mut self, platform: String) -> Result<Vec<PlatformUserInfo>> {
+        // 获取当前所有platform的用户信息
+        // 从当前用户信息中删除要重载的platform信息
+        let user_info_list = self.get_user_info_list().await;
+        let mut tmp_user_info_list = vec![];
+        let mut tmp_new_user_info_list = vec![];
+        for user_info in user_info_list{
+            if &user_info.platform != &platform {
+                tmp_user_info_list.push(user_info);
+            }
+        }
+
+        // 从连接池中获取对应platform的链接， 并获取到所有用户信息
+        if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&platform).await {
+            let (mut mysql_conn, mut mysql_conn_pool) = platform_pool_on.get_pool(&SqlStatement::Query,
+                                                                                  &"".to_string(), &None,
+                                                                                  &platform, false).await?;
+            let one_platform_user_info = self.get_db_all_user_info(&mut mysql_conn, &platform).await?;
+            mysql_conn_pool.return_pool(mysql_conn, &platform).await?;
+            tmp_new_user_info_list.extend(one_platform_user_info.clone());
+            tmp_user_info_list.extend(one_platform_user_info);
+        }
+
+        // 获取写锁， 清空当前信息， 并把所有用户信息重新写入
+        let mut write_all_info_lock = self.all_user_info.write().await;
+        write_all_info_lock.clear();
+        write_all_info_lock.extend(tmp_user_info_list);
+        Ok(tmp_new_user_info_list)
+    }
+
+    /// 重制用户信息
+    async fn reset_user_info(&mut self) {
+        // let mut pri_info = self.all_pri.write().await;
+        // pri_info.clear();
+        // drop(pri_info);
+        let mut all_user_info = self.all_user_info.write().await;
+        all_user_info.clear();
+    }
+
+
+    /// 获取所有用户信息
+    async fn reload_all_user_info(&mut self, platform_list: Vec<String>) -> Result<()> {
+        for platform in platform_list {
+            if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&platform).await {
+                let (mut mysql_conn, mut mysql_conn_pool) = platform_pool_on.get_pool(&SqlStatement::Query,
+                                                                                      &"".to_string(), &None,
+                                                                                      &platform, false).await?;
+                let one_platform_user_info = self.get_db_all_user_info(&mut mysql_conn, &platform).await?;
+                mysql_conn_pool.return_pool(mysql_conn, &platform).await?;
+
+                // 获取写锁， 并把一个platform的用户信息写入列表
+                let mut write_all_info_lock = self.all_user_info.write().await;
+                write_all_info_lock.extend(one_platform_user_info);
+                drop(write_all_info_lock);
+            }
+        }
+        Ok(())
+    }
+
+    /// 获取每个paltform对应所有用户信息
+    async fn get_db_all_user_info(&mut self,  mysql_conn: &mut MysqlConnectionInfo, platform: &String) -> Result<Vec<PlatformUserInfo>> {
+        let sql = String::from("select user from mysql.user group by user");
+        let value = mysql_conn.execute_command(&sql).await?;
+        let mut tmp_user_info_list = vec![];
+        for row_value in value{
+            if let Some(user_info) = PlatformUserInfo::init_value(&row_value, platform.clone()){
+                tmp_user_info_list.push(user_info);
+            }
+        }
+        Ok(tmp_user_info_list)
+    }
+
     // /// 判断用户权限
     // ///
     // /// 按权限从大到小的优先级进行判断，新判断user表中、再db表最后判断table表
@@ -626,10 +829,11 @@ pub struct CheckPrivileges{
     pub cur_sql_table_info: Vec<TableInfo>,     //记录当前执行sql使用的db、table信息
     pub sql_type: SqlStatement,                 //当前sql类型
     pub user_name: String,                      //当前使用的用户名
-    pub host: String                            //当前连接愿IP
+    pub host: String,                           //当前连接愿IP
+    pub platform: Option<String>                //当前使用的platform
 }
 impl CheckPrivileges{
-    pub fn new(cur_db: &Option<String>, sql_table_info: Vec<TableInfo>, sql_type: &SqlStatement, user_name: &String, host: &String) -> CheckPrivileges{
+    pub fn new(cur_db: &Option<String>, sql_table_info: Vec<TableInfo>, sql_type: &SqlStatement, user_name: &String, host: &String, platform: &Option<String>) -> CheckPrivileges{
         let mut my_cur_db;
         if let Some(db) = cur_db{
             my_cur_db = db.clone();
@@ -651,24 +855,28 @@ impl CheckPrivileges{
             cur_sql_table_info: sql_table_info,
             sql_type: sql_type.clone(),
             user_name: user_name.clone(),
-            host: host.clone()
+            host: host.clone(),
+            platform: platform.clone()
         }
     }
 
     /// 检查用户操作权限
     pub async fn check_user_privileges(&self, user_privileges: &AllUserPri) -> Result<()>{
-        for user_pri in &user_privileges.all_pri{
+        let all_pri_read_lock = user_privileges.all_pri.read().await;
+        for user_pri in &*all_pri_read_lock{
             //首先检查用户是否存在权限
-            if user_pri.check_user_name(&self.user_name){
+            if user_pri.check_user_name(&self.user_name, &self.platform) {
                 'a: for tble_info in &self.cur_sql_table_info{
                     if self.check_information_schema(tble_info).await{
                         continue 'a;
                     }
-                    user_pri.check_privileges(self, &tble_info).await?
+                    user_pri.check_privileges(self, &tble_info).await?;
                 }
+                return Ok(());
             }
         }
-        Ok(())
+        let err = format!("Access denied for user '{}'@'{}' ....!", &self.user_name, &self.host);
+        return Err(Box::new(MyError(err.into())));
     }
 
     fn check_cur_sql_table_info(&self, db: &String, table: &String, tbl_info: &TableInfo) -> bool{

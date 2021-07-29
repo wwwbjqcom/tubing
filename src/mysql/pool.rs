@@ -324,7 +324,7 @@ impl PlatformPool{
         Ok(())
     }
 
-    async fn get_platform_list(&mut self) -> Vec<String> {
+    pub async fn get_platform_list(&mut self) -> Vec<String> {
         let platform_pool_lock = self.platform_pool.lock().await;
         let mut platform_list = vec![];
         for platform in platform_pool_lock.keys(){

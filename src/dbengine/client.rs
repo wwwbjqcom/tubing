@@ -370,6 +370,14 @@ impl ClientResponse {
                     handler.reset_seq();
                 }
             }
+            // reload重载配置、用户权限
+            AdminSql::Reload(reload_struct) => {
+                if let Err(e) = handler.user_privileges.reload_user_pri(reload_struct.platform.clone()).await{
+                    self.send_error_packet(handler, &e.to_string()).await?;
+                }else {
+                    self.send_ok_packet(handler).await?;
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -427,13 +435,19 @@ impl ClientResponse {
         if &handler.user_name == &handler.platform_pool.config.user{
             return Ok(());
         }
-        let check_privileges = CheckPrivileges::new(&handler.db, tbl_info.clone(), sql_type, &handler.user_name, &handler.host);
+        let pool_platform = if let Some(pl) = &handler.platform{
+            let (pool_platform, _) = handler.platform_pool.config.get_pool_platform(&pl) ;
+            pool_platform
+        }else {
+            None
+        };
+        let check_privileges = CheckPrivileges::new(&handler.db, tbl_info.clone(), sql_type, &handler.user_name, &handler.host, &pool_platform);
         check_privileges.check_user_privileges(&handler.user_privileges).await?;
         //handler.user_privileges.check_privileges(&check_privileges).await?;
         Ok(())
     }
 
-    /// 这里只对platform检查和获取连接
+    /// 这里只对platform检查和获取连接, 适用于prepare语句后续的操作
     ///
     /// 如果都通过则返回true继续进行下一步
     async fn check_platform_and_conn(&self, handler: &mut Handler, a: &SqlStatement) -> Result<bool> {

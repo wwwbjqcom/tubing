@@ -15,13 +15,23 @@ pub enum ShowCommand{
     Connections,
     Questions,
     Fuse,
+    Config,
+    User,
     Null
 }
 
 #[derive(Debug)]
+pub enum ShowCommandType{
+    Show,
+    Reload
+}
+
+/// 用于解析show、reload两种语句的结构体
+#[derive(Debug)]
 pub struct ShowStruct{
     pub command: ShowCommand,
-    pub platform: Option<String>
+    pub platform: Option<String>,       //where条件的platform
+    pub command_type: ShowCommandType   //记录是show还是reload
 }
 
 impl ShowStruct{
@@ -40,9 +50,24 @@ impl ShowStruct{
             "fuse" => {
                 self.command = ShowCommand::Fuse;
             }
+            "config" => {
+                self.command = ShowCommand::Config;
+            }
+            "user" => {
+                self.command = ShowCommand::User;
+            }
             _ => {
-                let err = String::from("only support show status/connections/questions/fuse");
-                return Err(Box::new(MyError(err.into())));
+                return match self.command_type {
+                    ShowCommandType::Show => {
+                        let err = String::from("only support show status/connections/questions/fuse");
+                        Err(Box::new(MyError(err.into())))
+                    }
+                    ShowCommandType::Reload => {
+                        let err = String::from("only support reload config/user [where platform='']");
+                        Err(Box::new(MyError(err.into())))
+                    }
+                }
+
             }
         }
         self.parse_platform(selection).await?;
@@ -307,23 +332,27 @@ impl SetStruct{
 
 }
 
+/// 用于解析show、reload、set语句
 #[derive(Debug)]
 pub enum AdminSql{
     Show(ShowStruct),
     Set(SetStruct),
+    Reload(ShowStruct),
     Null
 }
 
 impl AdminSql{
-    /// 按固定规则解析管理命令， 该sql不支持标准sql规范，为字符串匹配
+    /// 管理命令， 包括set 、show、reload操作
     pub async fn parse_sql(&self, ast: &Vec<Statement>) -> Result<AdminSql>{
         for a in ast{
             return match a {
+                // show状态、
                 Statement::ShowVariable { variable, selection, .. } => {
-                    let mut show_struct = ShowStruct { command: ShowCommand::Null, platform: None };
+                    let mut show_struct = ShowStruct { command: ShowCommand::Null, platform: None, command_type: ShowCommandType::Show };
                     show_struct.parse(format!("{}", variable), selection).await?;
                     Ok(AdminSql::Show(show_struct))
                 }
+                //set 变量值
                 Statement::AdminSetVariable { variable, value, selection } => {
                     let mut set_struct = SetStruct {
                         set_variables: SetVariables::Null,
@@ -332,6 +361,13 @@ impl AdminSql{
                     };
                     set_struct.parse(format!("{}", variable), selection, value).await?;
                     Ok(AdminSql::Set(set_struct))
+                }
+                //reload config 和用户权限，  reload user [where platfrom='']
+                // 基础语法和show类似，所以这里共用一个结构体
+                Statement::ReLoad { variable, selection } => {
+                    let mut reload_struct = ShowStruct { command: ShowCommand::Null, platform: None, command_type: ShowCommandType::Reload };
+                    reload_struct.parse(format!("{}", variable), selection).await?;
+                    Ok(AdminSql::Reload(reload_struct))
                 }
                 _ => {
                     Err(Box::new(MyError(String::from("the admin module only supports set auth/pool/fuse where .. and show status/questions/connections/fuse").into())))
