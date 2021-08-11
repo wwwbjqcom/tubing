@@ -37,9 +37,9 @@ impl ColumnDefinition41{
         }
         ColumnDefinition41{
             catalog: "def".to_string(),
-            schema: "MysqlBus_system".to_string(),
-            table: "MysqlBus_system_status".to_string(),
-            org_table: "MysqlBus_system_status".to_string(),
+            schema: "Tubing_system".to_string(),
+            table: "Tubing_system_status".to_string(),
+            org_table: "Tubing_system_status".to_string(),
             name: column_name.clone(),
             org_name: column_name.clone(),
             fix_length: 0x0c,

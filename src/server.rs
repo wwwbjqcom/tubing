@@ -40,7 +40,7 @@ async fn unix_signal() -> Result<()> {
     Ok(())
 }
 
-pub fn run(mut config: MyConfig) -> Result<()> {
+pub fn run(mut config: MyConfig, config_file: String) -> Result<()> {
     debug!("config: {:?}", &config);
     // A broadcast channel is used to signal shutdown to each of the active
     // connections. When the provided `shutdown` future completes
@@ -92,7 +92,7 @@ pub fn run(mut config: MyConfig) -> Result<()> {
             config.reset_init_config(&ha_route);
         }
         //创建各业务后端连接池
-        let (platform_pool, _) = mysql::pool::PlatformPool::new(&config)?;
+        let (platform_pool, _) = mysql::pool::PlatformPool::new(&config, &config_file)?;
         debug!("init thread pool success");
         debug!("init_config: {:?}", &platform_pool.platform_node_info);
         let mut user_pri = AllUserPri::new(&platform_pool);

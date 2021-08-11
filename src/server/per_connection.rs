@@ -10,13 +10,13 @@ use chrono::Local;
 /// mysql connection
 #[derive(Debug)]
 pub struct PerMysqlConn{
-    pub conn_info: Option<MysqlConnectionInfo>,
-    pub conn_pool: Option<ConnectionsPool>,
-    pub conn_state: bool,
-    pub cur_db: String,
-    pub cur_autocommit: bool,
-    pub platform_is_sublist: bool,
-    pub platform: String,
+    pub conn_info: Option<MysqlConnectionInfo>,         // 后端链接
+    pub conn_pool: Option<ConnectionsPool>,             // 后端单个db连接池
+    pub conn_state: bool,                               // 链接状态，是否可用
+    pub cur_db: String,                                 // 当前链接默认database
+    pub cur_autocommit: bool,                           // 当前链接是否自动提交
+    pub platform_is_sublist: bool,                      // 当前客户端链接使用的platform是否在子列表中
+    pub platform: String,                               // 当前使用的platform名称
 }
 
 impl PerMysqlConn {
@@ -105,6 +105,11 @@ impl PerMysqlConn {
     }
 
 
+    /// 检查并获取链接、后端db连接池
+    ///
+    /// 传入总连接池信息， 如果conn_state为false，则直接从连接池获取
+    /// 如果为false， 则判断是否能使用当前链接，如果不能则返回链接到连接池再获取，
+    /// 如果可以直接使用则进行默认信息设置
     pub async fn check(&mut self,  pool: &mut ConnectionsPoolPlatform, key: &String,
                        db: &Option<String>, auto_commit: &bool,
                        sql_type: &SqlStatement,seq: u8, select_comment: Option<String>, platform: &String) -> Result<()> {
@@ -125,6 +130,7 @@ impl PerMysqlConn {
         Ok(())
     }
 
+    /// 从总连接池获取链接、连接池
     async fn check_get(&mut self, pool: &mut ConnectionsPoolPlatform, key: &String, db: &Option<String>,
                        auto_commit: &bool, sql_type: &SqlStatement, select_comment: &Option<String>, platform: &String) -> Result<()>{
         debug!("get connection from thread_pool");

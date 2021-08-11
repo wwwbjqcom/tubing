@@ -15,7 +15,7 @@ use std::borrow::{Borrow};
 use tracing::{error, debug, info};
 use crate::MyError;
 use crate::server::sql_parser::SqlStatement;
-use crate::dbengine::admin::AdminSql;
+use crate::dbengine::admin::{AdminSql, ShowCommand};
 use crate::mysql::query_response::TextResponse;
 use crate::mysql::privileges::{CheckPrivileges, TableInfo};
 use bytes::Buf;
@@ -372,11 +372,29 @@ impl ClientResponse {
             }
             // reload重载配置、用户权限
             AdminSql::Reload(reload_struct) => {
-                if let Err(e) = handler.user_privileges.reload_user_pri(reload_struct.platform.clone()).await{
-                    self.send_error_packet(handler, &e.to_string()).await?;
-                }else {
-                    self.send_ok_packet(handler).await?;
+                match reload_struct.command{
+                    ShowCommand::User => {
+                        if let Err(e) = handler.user_privileges.reload_user_pri(reload_struct.platform.clone()).await{
+                            self.send_error_packet(handler, &e.to_string()).await?;
+                        }else {
+                            self.send_ok_packet(handler).await?;
+                        }
+                    }
+                    ShowCommand::Config => {
+                        // 重载连接池信息
+                        info!("reload config");
+                        handler.platform_pool.reload_config().await?;
+
+                        // 重载用户权限
+                        if let Err(e) = handler.user_privileges.reload_user_pri(reload_struct.platform.clone()).await{
+                            self.send_error_packet(handler, &e.to_string()).await?;
+                        }else {
+                            self.send_ok_packet(handler).await?;
+                        }
+                    }
+                    _ => {}
                 }
+
             }
             _ => {}
         }
@@ -430,17 +448,28 @@ impl ClientResponse {
         return Ok(true);
     }
 
+
+    /// 检查用户权限
     async fn check_user_privileges(&self, handler: &mut Handler, sql_type: &SqlStatement, tbl_info: &Vec<TableInfo>) -> Result<()>{
         debug!("check user prifileges on {:?}", tbl_info);
-        if &handler.user_name == &handler.platform_pool.config.user{
+        // platform主用户直接返回成功
+        let config_lock = handler.platform_pool.config.read().await;
+        debug!("get platform_pool config read lock success");
+        if &handler.user_name == &*config_lock.user{
+            debug!("is thread pool user.....");
             return Ok(());
         }
+        drop(config_lock);
+        // 根据客户端设置的platform获取后端集群platform名称
+        debug!("get platform for cluster");
         let pool_platform = if let Some(pl) = &handler.platform{
-            let (pool_platform, _) = handler.platform_pool.config.get_pool_platform(&pl) ;
+            let config_lock = handler.platform_pool.config.read().await;
+            let (pool_platform, _) = config_lock.get_pool_platform(&pl) ;
             pool_platform
         }else {
             None
         };
+        debug!("check user privileges");
         let check_privileges = CheckPrivileges::new(&handler.db, tbl_info.clone(), sql_type, &handler.user_name, &handler.host, &pool_platform);
         check_privileges.check_user_privileges(&handler.user_privileges).await?;
         //handler.user_privileges.check_privileges(&check_privileges).await?;
@@ -513,6 +542,41 @@ impl ClientResponse {
         return Ok(true)
     }
 
+    /// set patlform语句
+    async fn set_platform_opration(&self, sql_type: &SqlStatement, handler: &mut Handler) -> Result<bool> {
+        debug!("check is set platform and oparation");
+        return match sql_type {
+            SqlStatement::SetVariable(variable, value) => {
+                if variable.to_lowercase() == String::from("platform") {
+                    // 首先判断是否有未提交事务
+                    debug!("check have transaction");
+                    if let Err(e) = handler.per_conn_info.check_have_transaction().await {
+                        self.send_error_packet(handler, &e.to_string()).await?;
+                        return Ok(true)
+                    }
+                    // 设置platform
+                    debug!("check and get thread pool.....");
+                    if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await {
+                        if let Err(e) = handler.check_cur_platform(&value).await {
+                            self.send_error_packet(handler, &e.to_string()).await?;
+                        } else {
+                            self.send_ok_packet(handler).await?;
+                        }
+                    } else {
+                        let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
+                        error!("{}", &error);
+                        self.send_error_packet(handler, &error).await?;
+                    }
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+            _ => {
+                Ok(false)
+            }
+        }
+    }
+
     /// 处理com_query packet
     ///
     /// 解析处sql语句
@@ -533,6 +597,10 @@ impl ClientResponse {
             return Ok(())
         }
 
+        // 判断是不是set platform语句， 如果是进行链接获取等操作，如果不是则继续往下执行
+        if self.set_platform_opration(&a, handler).await?{
+            return Ok(())
+        }
 
         if !self.check_all_status(handler, &a, &tbl_info_list, &sql, select_comment).await?{
             return Ok(())
@@ -551,27 +619,28 @@ impl ClientResponse {
             SqlStatement::SetVariable (variable, value) => {
                 if variable.to_lowercase() == String::from("autocommit"){
                     self.set_autocommit(handler, &value).await?;
-                }else if variable.to_lowercase() == String::from("platform") {
-                    // 首先判断是否有未提交事务
-                    if let Err(e) = handler.per_conn_info.check_have_transaction().await{
-                        self.send_error_packet(handler, &e.to_string()).await?;
-                        return Ok(())
-                    }
-
-                    // 设置platform
-                    if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
-                        if let Err(e) = handler.check_cur_platform(&value).await{
-                            self.send_error_packet(handler, &e.to_string()).await?;
-                        }else {
-                            self.send_ok_packet(handler).await?;
-                        }
-                    }else {
-                        let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
-                        error!("{}", &error);
-                        self.send_error_packet(handler, &error).await?;
-                    }
-
-                }else if variable.to_lowercase() == String::from("names"){
+                }
+                // else if variable.to_lowercase() == String::from("platform") {
+                //     // 首先判断是否有未提交事务
+                //     if let Err(e) = handler.per_conn_info.check_have_transaction().await{
+                //         self.send_error_packet(handler, &e.to_string()).await?;
+                //         return Ok(())
+                //     }
+                //     // 设置platform
+                //     if handler.platform_pool.check_conn_privileges(&value, &handler.user_name).await{
+                //         if let Err(e) = handler.check_cur_platform(&value).await{
+                //             self.send_error_packet(handler, &e.to_string()).await?;
+                //         }else {
+                //             self.send_ok_packet(handler).await?;
+                //         }
+                //     }else {
+                //         let error = format!("current user({}) does not have permission for the platform({})", &handler.user_name, &value);
+                //         error!("{}", &error);
+                //         self.send_error_packet(handler, &error).await?;
+                //     }
+                //
+                // }
+                else if variable.to_lowercase() == String::from("names"){
                     self.send_ok_packet(handler).await?;
                 }else {
                     let error = String::from("only supports set autocommit/platform/names");

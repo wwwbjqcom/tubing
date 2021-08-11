@@ -22,7 +22,6 @@ user="test"
 password="test@123"
 min=1
 max=10
-auth=false
 
 
 [[platform]]
@@ -37,7 +36,6 @@ password="test@123"
 min=1
 max=10
 mgr=true
-auth=false
 
 [[platform]]
 #当该platform模块属于mgr复制集时， platform代表该集群名称，不会从高可用获取
@@ -45,13 +43,13 @@ platform="127_3306"
 #业务通过set platform设置的名称
 platform_sublist=["127_3306"]
 write="192.168.1.127:3306"
+read=["192.168.1.127:3307"]
 #连接池建立使用的账号密码
 user="test"
 password="test@123"
 min=1
 max=10
 mgr=true
-auth=false
 
 [[platform]]
 #当该platform模块属于mgr复制集时， platform代表该集群名称，不会从高可用获取
@@ -65,7 +63,6 @@ password="test@123"
 min=1
 max=10
 mgr=true
-auth=false
 
 
 [[user_info]]

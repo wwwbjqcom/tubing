@@ -17,7 +17,7 @@
 use tokio::sync::{Mutex, RwLock};
 use crate::mysql::connection::{MysqlConnection, PacketHeader, AllUserInfo};
 use std::collections::{VecDeque, HashMap};
-use crate::{Config, readvalue, Platform, MyConfig};
+use crate::{Config, readvalue, Platform, MyConfig, mysql};
 use crate::{MyError};
 use crate::mysql::Result;
 use crate::server::{mysql_mp, ClassTime};
@@ -33,60 +33,9 @@ use chrono::prelude::*;
 use chrono;
 use tokio::time::{sleep, Duration};
 use crate::server::sql_parser::SqlStatement;
-use crate::server::mysql_mp::RouteInfo;
+use crate::server::mysql_mp::{RouteInfo, ResponseValue};
 use crate::dbengine::admin;
-use crate::mysql::privileges::MetaColumn;
-
-
-// #[derive(Debug)]
-// pub struct PlatformAuth{
-//     platform: String,
-//     auth: Arc<AtomicBool>
-// }
-// impl PlatformAuth{
-//     fn new(platform: &Platform) -> PlatformAuth{
-//         PlatformAuth{
-//             platform: platform.platform.clone(),
-//             auth: Arc::new(AtomicBool::new(platform.auth.clone()))
-//         }
-//     }
-// }
-//
-// #[derive(Debug)]
-// pub struct AllPlatformAuth{
-//     all_platform: Arc<HashMap<String, PlatformAuth>>,
-//     config: MyConfig
-// }
-//
-// impl AllPlatformAuth{
-//     pub fn new(conf: &MyConfig) -> AllPlatformAuth{
-//         let mut all_platform = HashMap::new();
-//         for platform in &conf.platform{
-//             let platform_auth = PlatformAuth::new(platform);
-//             all_plaform.insert(platform.platform.clone(), platform_auth);
-//         }
-//         AllPlatformAuth{ all_platform: Arc::new(all_platform), config: conf.clone() }
-//     }
-//
-//     pub async fn check_auth(&self, client_platform: &String) -> bool{
-//         if let Some(platform_name) = self.config.get_pool_platform(client_platform){
-//             if let Some(platform_auth) = self.all_platform.get(&platform_name){
-//                 if platform_auth.auth.load(Ordering::Relaxed){
-//                     return true
-//                 }
-//             }
-//         }
-//         return false;
-//     }
-//
-//     pub async fn alter_auth(&self, platform: &String, auth: bool){
-//         if let Some(platform_auth) = self.all_platform.get(&platform_name){
-//             if platform_auth.auth.store(auth){
-//                 return true
-//             }
-//         }
-//     }
-// }
+use crate::mysql::privileges::{MetaColumn, AllUserPri};
 
 
 enum HealthType{
@@ -155,6 +104,26 @@ impl PlatforNodeInfo{
         return true;
     }
 
+    /// 重载配置时，，如果变动则更改且返回true
+    fn check_node_info(&mut self, new_node_info: &PlatforNodeInfo) -> bool {
+        debug!("new node info check:  new_node_info_write:{:?}, read:{:?}, now_node_info_write:{:?}, read:{:?}", &new_node_info.write,&new_node_info.read,&self.write, &self.read);
+        if new_node_info.write == self.write && self.check_read_list(&new_node_info.read){
+            return false;
+        }
+        if new_node_info.write != self.write{
+            debug!("write no");
+            self.write_is_alter = true;
+            self.write = new_node_info.write.clone();
+        }
+        if !self.check_read_list(&new_node_info.read){
+            debug!("read no");
+            self.read_is_alter = true;
+            self.read = new_node_info.read.clone();
+        }
+        debug!("{:?}", self);
+        return true;
+    }
+
     /// 检查读列表是否相等
     fn check_read_list(&mut self, read: &Vec<String>) -> bool{
         return if self.read.len() == read.len() {
@@ -173,14 +142,15 @@ impl PlatforNodeInfo{
 /// 所有业务平台连接池集合以及用户列表
 #[derive(Clone, Debug)]
 pub struct PlatformPool{
-    pub platform_pool: Arc<Mutex<HashMap<String, ConnectionsPoolPlatform>>>,         //存储所有业务平台的连接池， 以platform做为key
+    pub platform_pool: Arc<Mutex<HashMap<String, ConnectionsPoolPlatform>>>,        // 存储所有业务平台的连接池， 以platform做为key
     pub user_info: Arc<RwLock<AllUserInfo>>,
-    pub platform_node_info: Vec<PlatforNodeInfo>,                                           //记录每个业务平台后端数据库读写关系,变更时同时变更连接池
-    pub config: MyConfig
+    pub platform_node_info: Arc<RwLock<Vec<PlatforNodeInfo>>>,                                   // 记录每个业务平台后端数据库读写关系,变更时同时变更连接池
+    pub config: Arc<RwLock<MyConfig>>,                                                           // 初始化读取的配置信息
+    pub config_file: String                                                         // 配置文件地址
 }
 
 impl PlatformPool{
-    pub fn new(conf: &MyConfig) -> Result<(PlatformPool,AllUserInfo)>{
+    pub fn new(conf: &MyConfig, config_file: &String) -> Result<(PlatformPool,AllUserInfo)>{
         let all_user_info = AllUserInfo::new(conf);
         debug!("{:?}", &all_user_info);
         let user_info = Arc::new(RwLock::new(all_user_info.clone()));
@@ -197,15 +167,131 @@ impl PlatformPool{
             PlatformPool{
                 platform_pool,
                 user_info,
-                platform_node_info,
-                config: conf.clone()
+                platform_node_info:Arc::new(RwLock::new(platform_node_info)),
+                config: Arc::new(RwLock::new(conf.clone())),
+                config_file: config_file.clone()
             }, all_user_info)
         )
     }
 
+    /// 重载配置时新增的platform连接池
+    async fn add_thread_pool(&mut self, new_platform_node_info: &PlatforNodeInfo, platform_info: &Platform) -> Result<()> {
+        info!("add thread pool:{:?}", new_platform_node_info);
+        let platform_pool = ConnectionsPoolPlatform::new(platform_info)?;
+        let mut pool_lock = self.platform_pool.lock().await;
+        pool_lock.insert(platform_info.platform.clone(), platform_pool);
+        drop(pool_lock);
+        let mut platform_node_info_lock = self.platform_node_info.write().await;
+        platform_node_info_lock.push(new_platform_node_info.clone());
+        Ok(())
+    }
+
+    /// 重载时对platform进行匹配， 不存在新列表中的进行删除操作
+    async fn delete_thread_pool(&mut self, new_platform_node_info: Vec<PlatforNodeInfo>) -> Result<()> {
+        let mut node_info_lock = self.platform_node_info.write().await;
+        'a: loop{
+            if let Some(info) = node_info_lock.pop(){
+                'b: for new_info in &new_platform_node_info{
+                    //如果都存在继续循环
+                    if info.platform == new_info.platform{
+                        continue 'a;
+                    }
+                }
+                // 如果不存在，则进行删除连接池
+                let mut all_pool_lock = self.platform_pool.lock().await;
+                all_pool_lock.remove(&info.platform);
+                drop(all_pool_lock);
+            }else {
+                break 'a;
+            }
+        }
+        // 附加新数据
+        for new_info in &new_platform_node_info{
+            node_info_lock.push(new_info.clone());
+        }
+        Ok(())
+    }
+
+    /// 重载配置
+    ///
+    /// 先根据配置重置连接池项， 最后再重载用户权限信息
+    ///
+    /// 重置连接池：
+    ///     1、如果为file方式需判断读写关系是否变化，如果变化则修改连接池
+    ///     2、子platform增删变化
+    ///     3、用户信息变化
+    ///     4、连接池大小设置变化不会修改
+    /// 重置用户权限信息:
+    ///     通过重建的连接池信息、用户信息去获取对应权限信息
+    pub async fn reload_config(&mut self) -> Result<()> {
+        let my_config = crate::read_config_from_file(&self.config_file);
+        let mut platform_node_info = vec![];
+        for platform in &my_config.platform{
+            let new_platform_node_info = PlatforNodeInfo::new(platform);
+            platform_node_info.push(new_platform_node_info.clone());
+            // 如果为file方式，进行连接池检查修改
+            if !my_config.check_is_mp() {
+                self.check_route_is_alter(&new_platform_node_info, &platform).await?;
+            }else{
+                // mp方式， 连接池增加
+                if !self.check_platform_exists(&new_platform_node_info).await{
+                    self.add_thread_pool(&new_platform_node_info, &platform).await?;
+                }
+            }
+        }
+        // 反向从已修改配置的数据中提取来匹配新platform_node_info,如果有不存在的则删除
+        self.delete_thread_pool(platform_node_info).await?;
+        // 连接池信息变动完成
+        // --------------------------------------------------
+        // 修改所有用户信息, 这里没有任何判断，直接获取写锁附加当前值
+        let all_user_info = AllUserInfo::new(&my_config);
+        let mut all_user_info_lock = self.user_info.write().await;
+        *all_user_info_lock = all_user_info;
+        drop(all_user_info_lock);
+
+        Ok(())
+    }
+
+    /// 用于检查重载的配置某个platform是否已经存在
+    async fn check_platform_exists(&mut self, new_platform_node_info: &PlatforNodeInfo) -> bool{
+        let mut platform_node_info = self.get_self_platform_node_info().await;
+        for node_info in &mut platform_node_info{
+            if node_info.platform == new_platform_node_info.platform{
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// 重载时，如果时file方式，进行读写节点判断，如果更改则进行连接池修改
+    async fn check_route_is_alter(&mut self, new_platform_node_info: &PlatforNodeInfo, platform_info: &Platform) -> Result<()> {
+        // let mut platform_node_info_lock = self.platform_node_info.write().await;
+        let mut platform_node_info = self.get_self_platform_node_info().await;
+        for node_info in &mut platform_node_info{
+            if node_info.platform == new_platform_node_info.platform{
+                if node_info.check_node_info(&new_platform_node_info){
+                    //发生变动， 开始修改连接池
+                    info!("alter router for : {:?}", &node_info);
+                    if let (Some(mut platform_pool), _) = self.get_platform_pool(&node_info.platform.clone()).await{
+                        platform_pool.alter_pool(&node_info).await?;
+                        node_info.reset_alter();
+                    }
+                }
+                self.reset_platform_node_info(platform_node_info).await;
+                return Ok(())
+            }
+        }
+
+        // 执行到这行表示该项不存在需增加连接池信息
+        self.add_thread_pool(&new_platform_node_info, platform_info).await?;
+        Ok(())
+
+    }
+
     /// 获取对应业务库总连接池、当前platform是否为子业务
     pub async fn get_platform_pool(&mut self, platform: &String) -> (Option<ConnectionsPoolPlatform>, bool){
-        if let  (Some(client_platform), is_sub) = self.config.get_pool_platform(platform){
+        let config_lock = self.config.read().await;
+        if let  (Some(client_platform), is_sub) = config_lock.get_pool_platform(platform){
             let platform_pool_lock = self.platform_pool.lock().await;
             if let Some(on_platform_pool) = platform_pool_lock.get(&client_platform){
                 return (Some(on_platform_pool.clone()), is_sub)
@@ -252,7 +338,10 @@ impl PlatformPool{
             }
 
             //定时检查路由是否发生变动
-            if self.config.check_is_mp(){
+            let config_lock = self.config.read().await;
+            let check_is_mp = config_lock.check_is_mp();
+            drop(config_lock);
+            if check_is_mp{
                 if now_time - route_last_check_time >= 1000 {
                     if let Err(e) = self.check_route_for_platform().await{
                         error!("Check route change error:{}", e.to_string());
@@ -263,6 +352,12 @@ impl PlatformPool{
                     }
                     route_last_check_time = now_time;
                 }
+            }else {
+                // 如果为file模式则只检查mgr路由信息
+                if let Err(e) = self.check_route_for_mgr().await{
+                    error!("Check mgr route error:{}", e.to_string());
+                }
+                route_last_check_time = now_time;
             }
             sleep(Duration::from_millis(50)).await;
         }
@@ -270,7 +365,8 @@ impl PlatformPool{
 
     /// 检查mgr主从变化, 这里只对mgr集群进行检测
     async fn check_route_for_mgr(&mut self) -> Result<()>{
-        let mut plaform_node_info = self.platform_node_info.clone();
+        // let mut platform_node_info_lock = self.platform_node_info.write().await;
+        let mut plaform_node_info: Vec<PlatforNodeInfo> = self.get_self_platform_node_info().await;
         for platform_node in &mut plaform_node_info{
             if platform_node.mgr{
                 if let (Some(mut platform_pool), _) = self.get_platform_pool(&platform_node.platform).await{
@@ -281,24 +377,46 @@ impl PlatformPool{
                 }
             }
         }
-        self.platform_node_info = plaform_node_info;
+        self.reset_platform_node_info(plaform_node_info).await;
         Ok(())
     }
 
     ///检查路由信息变动
     async fn check_route_for_platform(&mut self) -> Result<()> {
-        let ha_ser_route = mysql_mp::get_platform_route(&self.config).await?;
+        let ha_ser_route = self.get_platform_route().await?;
         debug!("{:?}", &ha_ser_route);
+        let mut plaform_node_info: Vec<PlatforNodeInfo> = self.get_self_platform_node_info().await;
         for route_info in ha_ser_route.value.route{
-            let mut plaform_node_info = self.platform_node_info.clone();
             for platform_node in &mut plaform_node_info{
                 if platform_node.platform == route_info.cluster_name{
                     self.alter_platform_pool(&route_info, platform_node).await?;
                 }
             }
-            self.platform_node_info = plaform_node_info;
         }
+        self.reset_platform_node_info(plaform_node_info).await;
         Ok(())
+    }
+
+    async fn get_platform_route(&mut self) -> mysql::Result<ResponseValue>{
+        let config_lock = self.config.read().await;
+        let ha_ser_route = mysql_mp::get_platform_route(&*config_lock).await?;
+        return Ok(ha_ser_route)
+    }
+
+    /// 获取临时platform_node_info信息
+    async fn get_self_platform_node_info(&mut self) -> Vec<PlatforNodeInfo>{
+        let platform_info_lock = self.platform_node_info.read().await;
+        let mut tmp= vec![];
+        for paltform_info in &*platform_info_lock{
+            tmp.push(paltform_info.clone());
+        }
+        return tmp
+    }
+
+    async fn reset_platform_node_info(&mut self, platform_node_info: Vec<PlatforNodeInfo>) {
+        let mut plaform_node_info_lock = self.platform_node_info.write().await;
+        plaform_node_info_lock.clear();
+        plaform_node_info_lock.extend(platform_node_info);
     }
 
     async fn alter_platform_pool(&mut self, route_info: &RouteInfo, platform_node: &mut PlatforNodeInfo) -> Result<()>{
@@ -399,7 +517,7 @@ pub struct ConnectionsPoolPlatform{
     pub write: Arc<RwLock<Vec<String>>>,
     pub read: Arc<RwLock<Vec<String>>>,                             //存放可读节点信息，其中包括写入节点的信息，因为写几点也可读
     pub is_alter: Arc<AtomicUsize>,                                 //当前主从关系版本号， 加1表示发生变动，用于同步连接池状态，如果发生变动写操作需要判断使用的连接是否准确
-    pub platform_config: Option<Platform>,
+    pub platform_config: Option<Platform>,                          // 该配置信息用于保存链接数据库需使用的账号密码、连接池大小信息， 重载配置也不可更改
     pub questions:  Arc<AtomicUsize>,                               //记录当前业务集群所有请求次数
 }
 
@@ -1800,7 +1918,7 @@ impl MysqlConnectionInfo{
 #[derive(Debug)]
 struct ConnectionInfo {
     pool: VecDeque<MysqlConnectionInfo>,                        //mysql连接队列
-    config: Config
+    config: Config                                              // 保存配置信息， 创建链接时需要使用
 }
 
 impl ConnectionInfo {

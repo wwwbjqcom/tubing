@@ -4,12 +4,16 @@ mod mysql;
 mod readvalue;
 use structopt::StructOpt;
 use std::fmt;
+use tracing::{info};
 
 use serde_derive::{Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
 use crate::server::mysql_mp::RouteInfo;
 
+/// 存储客户端使用user配置
+///
+/// 对应配置文件[[user]]模块
 #[derive(Debug, Deserialize, Clone)]
 pub struct UserConfig{
     pub user: String,
@@ -17,21 +21,26 @@ pub struct UserConfig{
     pub platform: String
 }
 
+/// 总配置信息
+///
 #[derive(Debug, Deserialize, Clone)]
 pub struct MyConfig {
-    pub user: String,
-    pub password: String,
-    pub bind: String,
-    pub port: Option<u16>,
-    pub mode: Option<String>,
-    pub server_url: Option<String>,
-    pub hook_id: Option<String>,
-    pub cluster: Option<Vec<String>>,
-    pub auth: bool,
-    pub platform: Vec<Platform>,
-    pub user_info: Vec<UserConfig>,
+    pub user: String,                   // 管理端用户名
+    pub password: String,               // 密码
+    pub bind: String,                   // 监听地址
+    pub port: Option<u16>,              // 监听的端口
+    pub mode: Option<String>,           // 启动模式， 文件配置或者高可用获取的配置
+    pub server_url: Option<String>,     // 高可用地址
+    pub hook_id: Option<String>,        // 高可用获取数据时使用的hook_id
+    pub cluster: Option<Vec<String>>,   // 从高可用获取的集群列表
+    // pub auth: bool,                     // 是否开启审计， 该配置没有使用
+    pub platform: Vec<Platform>,        // 后端集群信息的配置列表
+    pub user_info: Vec<UserConfig>,     // 前端可用的用户列表
 }
 impl MyConfig{
+    /// 在启动初始化是， 如果为mp从高可用获取的模式，会获取到信息执行重制配置
+    ///
+    /// 所有模式为mp, 配置文件里读写节点信息配置多少都无所谓
     pub fn reset_init_config(&mut self, ha_route: &crate::server::mysql_mp::ResponseValue) {
         let mut platform_config_list = self.platform.clone();
         for cluster_route in  &ha_route.value.route{
@@ -83,21 +92,26 @@ impl MyConfig{
         }
         return (None, false)
     }
+
+    pub fn clone_config(&self) -> MyConfig{
+        self.clone()
+    }
 }
 
 
+/// 记录每个platform所属的全部配置项
 #[derive(Debug, Deserialize, Clone)]
 pub struct Platform {
-    pub platform: String,
-    pub platform_sublist: Vec<String>,
-    pub write: Option<String>,
-    pub read: Option<Vec<String>>,
-    pub user: String,
-    pub password: String,
-    pub max: usize,
-    pub min: usize,
-    pub mgr: Option<bool>,
-    pub auth: bool
+    pub platform: String,                   // platform名称
+    pub platform_sublist: Vec<String>,      // 子属性platform名称列表
+    pub write: Option<String>,              // 可写节点信息
+    pub read: Option<Vec<String>>,          // 可读节点列表
+    pub user: String,                       // 连接池使用的用户名
+    pub password: String,                   // 密码
+    pub max: usize,                         // 连接池最大链接数配置
+    pub min: usize,                         // 连接池最小配置
+    pub mgr: Option<bool>,                  // 是否为mgr集群
+    // pub auth: bool                          // 是否开启审计功能
 }
 impl Platform{
     pub fn get_write_host(&self) -> String{
@@ -134,19 +148,21 @@ pub const MIN: &str = "10";
 pub const MAX: &str = "20";
 pub const DEFAULT_HOST_INFO: &str = "127.0.0.1:3306";
 pub const MAX_CONNECTIONS: usize = 1000;
-pub const VERSION: &str = "1.0.61-MysqlBus";
+pub const VERSION: &str = "1.0.62-MysqlBus";
 
+
+/// 创建数据库连接池时所需要的配置信息
 #[derive(Clone, Debug)]
 pub struct Config {
     // pub user: String,
     // pub password: String,
-    pub muser: String,
-    pub mpassword: String,
-    pub program_name: String,
-    pub database: String,
-    pub min: usize,
-    pub max: usize,
-    pub host_info: String,
+    pub muser: String,              // 链接后端db所使用的用户名
+    pub mpassword: String,          // 密码
+    pub program_name: String,       // 客户端名称
+    pub database: String,           // 默认的数据库
+    pub min: usize,                 // 创建的最小链接
+    pub max: usize,                 // 最大链接
+    pub host_info: String,          // 后端数据库地址
 }
 
 impl Config{
@@ -154,7 +170,7 @@ impl Config{
         Config{
             muser: platform_conf.user.clone(),
             mpassword: platform_conf.password.clone(),
-            program_name: String::from("MysqlBus"),
+            program_name: String::from("Tubing"),
             database: String::from("information_schema"),
             min: platform_conf.min.clone(),
             max: platform_conf.max.clone(),
@@ -164,14 +180,7 @@ impl Config{
 }
 
 
-
-
-//#[tokio::main]
-fn main() -> mysql::Result<()> {
-    tracing_subscriber::fmt::try_init()?;
-
-    let cli = Cli::from_args();
-    let config_file = cli.config.unwrap_or("default.toml".to_string());
+pub fn read_config_from_file(config_file: &String) -> MyConfig {
     let mut file = match File::open(&config_file) {
         Ok(f) => f,
         Err(e) => panic!("no such file {} exception:{}", &config_file, e)
@@ -182,8 +191,29 @@ fn main() -> mysql::Result<()> {
         Err(e) => panic!("Error Reading file: {}", e)
     };
     let my_config: MyConfig = toml::from_str(&str_val).unwrap();
+    return my_config
+}
+
+//#[tokio::main]
+fn main() -> mysql::Result<()> {
+    tracing_subscriber::fmt::try_init()?;
+
+    let cli = Cli::from_args();
+    let config_file = cli.config.unwrap_or("default.toml".to_string());
+    // let mut file = match File::open(&config_file) {
+    //     Ok(f) => f,
+    //     Err(e) => panic!("no such file {} exception:{}", &config_file, e)
+    // };
+    // let mut str_val = String::new();
+    // match file.read_to_string(&mut str_val) {
+    //     Ok(s) => s,
+    //     Err(e) => panic!("Error Reading file: {}", e)
+    // };
+    // let my_config: MyConfig = toml::from_str(&str_val).unwrap();
     //let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).await?;
-    server::run(my_config)
+
+    let my_config = read_config_from_file(&config_file);
+    server::run(my_config,config_file)
 }
 
 

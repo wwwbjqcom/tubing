@@ -415,8 +415,9 @@ impl UserPri{
 
     /// 检查用户是否存在， 多个db可能有相同的用户名，所以这里同时匹配platform
     ///
-    /// 当platform位none时代表还没有设置platform， 如果存在用户则直接返回成功
+    /// 当platform为none时代表还没有设置platform， 如果存在用户则直接返回成功
     pub fn check_user_name(&self, user_name: &String, platform: &Option<String>) -> bool{
+        debug!("check user name.....:{}, {}", user_name, &self.user);
         if user_name == &self.user{
             return if let Some(pl) = platform {
                 if pl == &self.platform {
@@ -456,6 +457,7 @@ impl UserPri{
     }
 
     async fn check_user_privileges(&self, check_struct: &CheckPrivileges) -> bool{
+        debug!("check_user_privileges");
         if let Some(user_pri_all) = &self.user_pri{
             for user_pri in user_pri_all{
                 if check_host(&check_struct.host, &user_pri.host){
@@ -468,6 +470,7 @@ impl UserPri{
     }
 
     async fn check_db_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
+        debug!("check_db_privileges");
         if let Some(db_pri_all) = &self.db_pri{
             for db_pri in db_pri_all{
                 if let Some(tbl_db) = &tbl_info.database {
@@ -485,6 +488,7 @@ impl UserPri{
     }
 
     async fn check_table_privileges(&self, check_struct: &CheckPrivileges, tbl_info: &TableInfo) -> bool{
+        debug!("check_table_privileges");
         if let Some(tbl_pri_all) = &self.table_pri{
             for tbl_pri in tbl_pri_all{
                 if check_host(&check_struct.host, &tbl_pri.host) && check_struct.check_cur_sql_table_info(&tbl_pri.db, &tbl_pri.table, tbl_info){
@@ -582,6 +586,7 @@ impl AllUserPri{
         debug!("get all user privileges");
         // 获取platfrom列表， 并通过platfrom从连接池获取相应链接，在查询出所有用户用户信息
         let platform_list = self.platform_pool.get_platform_list().await;
+        debug!("platform list: {:?}", &platform_list);
         self.reload_all_user_info(platform_list).await?;
         //
         let tmp_user_info_list = self.get_user_info_list().await;
@@ -670,7 +675,7 @@ impl AllUserPri{
             self.reload_platform_user_pri(pl.clone(), &new_platform_user_info_list).await?;
             Ok(())
         }else {
-            self.reset_user_info().await;
+            // self.reset_user_info().await;
             Ok(self.get_pris().await?)
         }
     }
@@ -754,20 +759,31 @@ impl AllUserPri{
 
     /// 获取所有用户信息
     async fn reload_all_user_info(&mut self, platform_list: Vec<String>) -> Result<()> {
+        debug!("reload all user info....");
+        let mut tmp_all_info = vec![];
         for platform in platform_list {
+            debug!("reload user info for platform: {}", &platform);
             if let (Some(mut platform_pool_on), _) = self.platform_pool.get_platform_pool(&platform).await {
                 let (mut mysql_conn, mut mysql_conn_pool) = platform_pool_on.get_pool(&SqlStatement::Query,
                                                                                       &"".to_string(), &None,
                                                                                       &platform, false).await?;
                 let one_platform_user_info = self.get_db_all_user_info(&mut mysql_conn, &platform).await?;
+                debug!("{:?}", &one_platform_user_info);
                 mysql_conn_pool.return_pool(mysql_conn, &platform).await?;
 
+                // let mut write_all_info_lock = self.all_user_info.write().await;
                 // 获取写锁， 并把一个platform的用户信息写入列表
-                let mut write_all_info_lock = self.all_user_info.write().await;
-                write_all_info_lock.extend(one_platform_user_info);
-                drop(write_all_info_lock);
+                tmp_all_info.extend(one_platform_user_info);
+                // drop(write_all_info_lock);
             }
         }
+        let mut write_all_info_lock = self.all_user_info.write().await;
+        debug!("get all user info write lock success");
+        debug!("clear all user info");
+        write_all_info_lock.clear();
+        debug!("extend new user info");
+        write_all_info_lock.extend(tmp_all_info);
+
         Ok(())
     }
 
@@ -862,10 +878,15 @@ impl CheckPrivileges{
 
     /// 检查用户操作权限
     pub async fn check_user_privileges(&self, user_privileges: &AllUserPri) -> Result<()>{
+        debug!("start check user privileges");
         let all_pri_read_lock = user_privileges.all_pri.read().await;
+        debug!("get all_pri read lock success");
+        debug!("{:?}", all_pri_read_lock);
         for user_pri in &*all_pri_read_lock{
             //首先检查用户是否存在权限
             if user_pri.check_user_name(&self.user_name, &self.platform) {
+                debug!("check success for user_name");
+                debug!("start check privileges on tble_info:{:?}", &self.cur_sql_table_info);
                 'a: for tble_info in &self.cur_sql_table_info{
                     if self.check_information_schema(tble_info).await{
                         continue 'a;
@@ -911,6 +932,7 @@ impl CheckPrivileges{
     }
 
     async fn check_information_schema(&self, tbl_info: &TableInfo) -> bool{
+        // info!("check infomration_schema:{:?}", tbl_info);
         return if let Some(db) = &tbl_info.database {
             if db == &String::from("information_schema") {
                 true
