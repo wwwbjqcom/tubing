@@ -51,10 +51,10 @@ pub fn run(mut config: MyConfig, config_file: String) -> Result<()> {
         .on_thread_start(|| {
             println!("runtime thread started");
         })
-        .worker_threads(cpus*6)
+        .worker_threads(cpus*2)
         .enable_all()
         .thread_name("my-custom-name")
-        .thread_stack_size(64 * 1024 * 1024 )
+        .thread_stack_size(2 * 1024 * 1024 )
         .build()
         .unwrap();
 
@@ -330,7 +330,7 @@ impl Listener {
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
                 if let Err(err) = handler.run().await {
-                    info!(cause = ?err, "connection error");
+                    // info!(cause = ?err, "connection error");
                 }
             });
         }
