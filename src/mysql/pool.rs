@@ -249,6 +249,11 @@ impl PlatformPool{
         *all_user_info_lock = all_user_info;
         drop(all_user_info_lock);
 
+        // 修改配置信息
+        let mut new_config = self.config.write().await;
+        *new_config = my_config;
+        drop(new_config);
+
         Ok(())
     }
 
@@ -1491,7 +1496,7 @@ pub struct MysqlConnectionInfo {
     pub conn: TcpStream,
     pub cached: String,             //记录使用该连接的线程hash，用于prepare和需要固定连接的操作
     pub last_time: usize,          //记录该mysql连接最后执行命令的时间，用于计算空闲时间，如果没有设置缓存标签在达到200ms空闲时将放回连接池
-    pub is_transaction: bool,        //记录是否还有事务或者锁存在
+    pub is_transaction: bool,       //记录是否还有事务或者锁存在
     pub is_write: bool,            //是否为写入连接
     pub host_info: String
 }
