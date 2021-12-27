@@ -20,6 +20,7 @@ use crate::mysql::scramble::get_sha1_pass;
 use tracing::{debug};
 use crate::readvalue;
 use crate::mysql::pool::PlatformPool;
+use tracing::field::debug;
 
 #[derive(Debug, Clone)]
 pub struct HandShake {
@@ -37,10 +38,10 @@ impl HandShake {
     /// 初始化handshake数据
     ///
     pub fn new() -> HandShake {
-        let capabilities = CLIENT_BASIC_FLAGS | CLIENT_TRANSACTIONS | CAN_CLIENT_COMPRESS;
+        let capabilities = CLIENT_BASIC_FLAGS | CAN_CLIENT_COMPRESS;
         let auth_plugin_data: String = thread_rng()
             .sample_iter(&Alphanumeric)
-            .take(21)
+            .take(20)
             .collect();
         HandShake {
             code: 10,
@@ -64,7 +65,8 @@ impl HandShake {
         buf.push(0);
         buf.extend(self.write_u32(&self.thread_id)?);
         let auth_plugin_data_bytes = self.auth_plugin_data.as_bytes();
-        let auth_plugin_data_len = auth_plugin_data_bytes.len();
+        // auth_plugin_data_bytes.push(0);
+        let auth_plugin_data_len = auth_plugin_data_bytes.len() + 1;
         buf.extend(&auth_plugin_data_bytes[0..8]);
         buf.push(0);
         buf.extend(&self.capabilities.to_le_bytes()[2..]);
@@ -74,6 +76,7 @@ impl HandShake {
         buf.push(auth_plugin_data_len as u8);
         buf.extend(&[0 as u8; 10]);
         buf.extend(&auth_plugin_data_bytes[8..]);
+        buf.push(0);
         buf.extend(self.auth_plugin_name.as_bytes());
         buf.push(0);
         Ok(buf)
@@ -142,13 +145,14 @@ impl HandShake {
             if tmp_db != String::from(""){
                 db = Some(tmp_db)
             }
-            offset += index;
+            offset += index + 1;
             debug!("db: {:?}, offset:{}", &db, &offset);
         }
 
         if client_flags & CLIENT_PLUGIN_AUTH as i32 > 0 {
             let mut index= 0 ;
             for (b,item )in response.buf[offset..].iter().enumerate() {
+
                 if item == &0x00 {
                     index = b;
                     break;
@@ -198,8 +202,10 @@ impl HandShake {
         let new_auth_password;
         debug!("{}", &auth_password);
         if auth_name != &"".to_string(){
+            debug!("auth_name {}", auth_name);
             new_auth_password = get_sha1_pass(&auth_password, auth_name, &self.auth_plugin_data.clone().into_bytes());
         }else {
+            debug!("auth_name is None");
             new_auth_password = get_sha1_pass(&auth_password, &self.auth_plugin_name, &self.auth_plugin_data.clone().into_bytes());
         }
 

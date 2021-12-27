@@ -640,9 +640,11 @@ impl ClientResponse {
                 //     }
                 //
                 // }
-                else if variable.to_lowercase() == String::from("names"){
+                else if variable.to_lowercase() == String::from("names")||
+                variable.to_lowercase() == String::from("character_set_results") {
                     self.send_ok_packet(handler).await?;
-                }else {
+                }
+                else {
                     let error = String::from("only supports set autocommit/platform/names");
                     error!("{}", &error);
                     self.send_error_packet(handler, &error).await?;
