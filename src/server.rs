@@ -5,7 +5,7 @@
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::{self, Duration, sleep};
+use tokio::time::{Duration, sleep};
 use tokio::signal::unix::{signal, SignalKind};
 use tracing::{debug, error, info, instrument};
 use num_cpus;
@@ -47,7 +47,7 @@ pub fn run(mut config: MyConfig, config_file: String) -> Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
     let cpus = num_cpus::get();
-    let mut runtime = Builder::new_multi_thread()
+    let runtime = Builder::new_multi_thread()
         .on_thread_start(|| {
             println!("runtime thread started");
         })
@@ -329,7 +329,7 @@ impl Listener {
             // asynchronous green threads and are executed concurrently.
             tokio::spawn(async move {
                 // Process the connection. If an error is encountered, log it.
-                if let Err(err) = handler.run().await {
+                if let Err(_) = handler.run().await {
                     // info!(cause = ?err, "connection error");
                 }
             });
@@ -400,13 +400,13 @@ pub struct ClassTime{
     class: String,
     times: usize
 }
-impl ClassTime{
-    pub fn new(class_name: String) -> ClassTime{
-        let dt = Local::now();
-        let cur_timestamp = dt.timestamp_millis() as usize;
-        ClassTime{ class: class_name, times: cur_timestamp }
-    }
-}
+// impl ClassTime{
+//     pub fn new(class_name: String) -> ClassTime{
+//         let dt = Local::now();
+//         let cur_timestamp = dt.timestamp_millis() as usize;
+//         ClassTime{ class: class_name, times: cur_timestamp }
+//     }
+// }
 
 /// Per-connection handler. Reads requests from `connection` and applies the
 /// commands to `db`.
@@ -733,9 +733,9 @@ impl Handler {
         Ok(())
     }
 
-    pub async fn save_call_times(&mut self, class_name: String) {
-        self.class_time.push(ClassTime::new(class_name));
-    }
+    // pub async fn save_call_times(&mut self, class_name: String) {
+    //     self.class_time.push(ClassTime::new(class_name));
+    // }
 
     pub async fn save_ops(&mut self, sql_type: &SqlStatement) {
         self.platform_pool_on.save_com_state(sql_type).await;

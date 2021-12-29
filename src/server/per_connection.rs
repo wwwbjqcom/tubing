@@ -3,8 +3,7 @@ use crate::mysql::Result;
 use tokio::time::{sleep, Duration};
 use crate::server::sql_parser::SqlStatement;
 use crate::MyError;
-use tracing::{debug, error,info};
-use crate::server::ClassTime;
+use tracing::{debug, error};
 use chrono::Local;
 
 /// mysql connection

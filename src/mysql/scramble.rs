@@ -7,7 +7,7 @@ use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use std::process;
 use tracing::field::debug;
-use tracing::{debug};
+// use tracing::{debug};
 
 pub fn get_sha1_pass(password: &String, auth_plugin_name: &String, auth_plugin_data: &Vec<u8>) -> Vec<u8> {
     if auth_plugin_name == &String::from("mysql_native_password"){

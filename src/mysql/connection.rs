@@ -14,7 +14,6 @@ use crate::mysql::Result;
 use crate::mysql::connection::response::pack_header;
 use tracing::field::debug;
 use std::collections::HashMap;
-use tracing::{info};
 pub mod pack;
 pub mod response;
 

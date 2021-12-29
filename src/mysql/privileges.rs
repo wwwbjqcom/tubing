@@ -4,14 +4,12 @@
 */
 use crate::mysql::Result;
 use crate::{readvalue, MyError};
-use crate::mysql::connection::AllUserInfo;
 use crate::server::sql_parser::SqlStatement;
 use crate::mysql::pool::{PlatformPool, MysqlConnectionInfo};
 use std::collections::HashMap;
-use tracing::{debug, info};
+use tracing::{debug};
 use tokio::sync::RwLock;
 use std::sync::Arc;
-use serde::de::value::StringDeserializer;
 
 trait CheckSqlType{
     fn check_sql_type(&self, sql_type: &SqlStatement) -> bool;
@@ -747,14 +745,14 @@ impl AllUserPri{
         Ok(tmp_new_user_info_list)
     }
 
-    /// 重制用户信息
-    async fn reset_user_info(&mut self) {
-        // let mut pri_info = self.all_pri.write().await;
-        // pri_info.clear();
-        // drop(pri_info);
-        let mut all_user_info = self.all_user_info.write().await;
-        all_user_info.clear();
-    }
+    // /// 重制用户信息
+    // async fn reset_user_info(&mut self) {
+    //     // let mut pri_info = self.all_pri.write().await;
+    //     // pri_info.clear();
+    //     // drop(pri_info);
+    //     let mut all_user_info = self.all_user_info.write().await;
+    //     all_user_info.clear();
+    // }
 
 
     /// 获取所有用户信息

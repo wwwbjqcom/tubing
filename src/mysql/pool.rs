@@ -20,7 +20,7 @@ use std::collections::{VecDeque, HashMap};
 use crate::{Config, readvalue, Platform, MyConfig, mysql};
 use crate::{MyError};
 use crate::mysql::Result;
-use crate::server::{mysql_mp, ClassTime};
+use crate::server::{mysql_mp};
 use std::net::TcpStream;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 use std::time::{SystemTime};
@@ -35,7 +35,7 @@ use tokio::time::{sleep, Duration};
 use crate::server::sql_parser::SqlStatement;
 use crate::server::mysql_mp::{RouteInfo, ResponseValue};
 use crate::dbengine::admin;
-use crate::mysql::privileges::{MetaColumn, AllUserPri};
+use crate::mysql::privileges::{MetaColumn};
 
 
 enum HealthType{
@@ -191,7 +191,7 @@ impl PlatformPool{
         let mut node_info_lock = self.platform_node_info.write().await;
         'a: loop{
             if let Some(info) = node_info_lock.pop(){
-                'b: for new_info in &new_platform_node_info{
+                for new_info in &new_platform_node_info{
                     //如果都存在继续循环
                     if info.platform == new_info.platform{
                         continue 'a;
@@ -1031,10 +1031,10 @@ pub struct ConnectionsPool {
     com_insert:  Arc<AtomicUsize>,
     min_thread_count: Arc<AtomicUsize>,                          //代表连接池最小线程
     max_thread_count: Arc<AtomicUsize>,                          //最大线连接数
-    panic_count: Arc<AtomicUsize>,                               //记录发生panic连接的数量
-    node_role: Arc<AtomicBool>,                                  //主从角色判断，true为主，flase为从
-    node_state: Arc<AtomicBool>,                                 //节点状态，如果为flase表示宕机
-    host_info: Arc<Mutex<String>>,                                //记录节点信息
+    // panic_count: Arc<AtomicUsize>,                               //记录发生panic连接的数量
+    // node_role: Arc<AtomicBool>,                                  //主从角色判断，true为主，flase为从
+    // node_state: Arc<AtomicBool>,                                 //节点状态，如果为flase表示宕机
+    // host_info: Arc<Mutex<String>>,                                //记录节点信息
     auth: Arc<AtomicBool>,                                       //是否打开sql审计功能
     fuse: Arc<AtomicBool>,                                       //是否开启熔断自我保护功能, 单个子platform连接占用率超过80%就不会再分配连接
     platform_conn_count: Arc<Mutex<HashMap<String, usize>>>,     //记录所有子platform连接分配数
@@ -1058,10 +1058,10 @@ impl ConnectionsPool{
             com_insert: Arc::new(AtomicUsize::new(0)),
             min_thread_count: Arc::new(AtomicUsize::new(conf.min)),
             max_thread_count: Arc::new(AtomicUsize::new(conf.max)),
-            panic_count: Arc::new(AtomicUsize::new(0)),
-            node_role: Arc::new(AtomicBool::new(true)),
-            node_state: Arc::new(AtomicBool::new(true)),
-            host_info: Arc::new(Mutex::new(conf.host_info.clone())),
+            // panic_count: Arc::new(AtomicUsize::new(0)),
+            // node_role: Arc::new(AtomicBool::new(true)),
+            // node_state: Arc::new(AtomicBool::new(true)),
+            // host_info: Arc::new(Mutex::new(conf.host_info.clone())),
             auth: Arc::new(AtomicBool::new(false)),
             fuse: Arc::new(AtomicBool::new(false)),
             platform_conn_count: Arc::new(Mutex::new(HashMap::new())),

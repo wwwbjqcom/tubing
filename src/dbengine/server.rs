@@ -7,7 +7,7 @@
 /// 发送handshake包要求验证，并接受到客户端回包之后进行账号密码验证
 ///
 ///
-use crate::dbengine::{CLIENT_BASIC_FLAGS, CLIENT_TRANSACTIONS, CAN_CLIENT_COMPRESS, CLIENT_PLUGIN_AUTH};
+use crate::dbengine::{CLIENT_BASIC_FLAGS, CAN_CLIENT_COMPRESS, CLIENT_PLUGIN_AUTH};
 use crate::dbengine::{CLIENT_PROTOCOL_41, CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA, CLIENT_CONNECT_WITH_DB};
 use crate::dbengine::UTF8MB4_UNICODE_CI;
 use crate::dbengine::{SERVER_STATUS_AUTOCOMMIT};
@@ -39,10 +39,11 @@ impl HandShake {
     ///
     pub fn new() -> HandShake {
         let capabilities = CLIENT_BASIC_FLAGS | CAN_CLIENT_COMPRESS;
-        let auth_plugin_data: String = thread_rng()
+        let mut auth_plugin_data: String = thread_rng()
             .sample_iter(&Alphanumeric)
             .take(20)
             .collect();
+        // auth_plugin_data = format!("{}0",auth_plugin_data);
         HandShake {
             code: 10,
             server_version: String::from(crate::VERSION),
@@ -64,19 +65,18 @@ impl HandShake {
         buf.extend(self.server_version.as_bytes());
         buf.push(0);
         buf.extend(self.write_u32(&self.thread_id)?);
-        let auth_plugin_data_bytes = self.auth_plugin_data.as_bytes();
-        // auth_plugin_data_bytes.push(0);
-        let auth_plugin_data_len = auth_plugin_data_bytes.len() + 1;
+        let mut auth_plugin_data_bytes = self.auth_plugin_data.as_bytes();
+        let auth_plugin_data_len = auth_plugin_data_bytes.len() ;
         buf.extend(&auth_plugin_data_bytes[0..8]);
         buf.push(0);
         buf.extend(&self.capabilities.to_le_bytes()[2..]);
         buf.push(self.character_set_id);
         buf.extend(self.write_u16(&self.status_flags)?);
         buf.extend(&self.capabilities.to_le_bytes()[0..2]);
-        buf.push(auth_plugin_data_len as u8);
+        buf.push(auth_plugin_data_len as u8 + 1 as u8);
         buf.extend(&[0 as u8; 10]);
         buf.extend(&auth_plugin_data_bytes[8..]);
-        buf.push(0);
+        buf.push(0x00);
         buf.extend(self.auth_plugin_name.as_bytes());
         buf.push(0);
         Ok(buf)
@@ -187,11 +187,13 @@ impl HandShake {
     }
 
     async fn switch_request(&self) -> Vec<u8> {
+        debug!("switch request");
         let mut switch: Vec<u8> = vec![];
         switch.push(0xfe);
         switch.extend(self.auth_plugin_name.as_bytes());
         switch.push(0);
         switch.extend(self.auth_plugin_data.as_bytes());
+        switch.push(0);
         switch
     }
 

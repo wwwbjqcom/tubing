@@ -4,7 +4,6 @@ mod mysql;
 mod readvalue;
 use structopt::StructOpt;
 use std::fmt;
-use tracing::{info};
 
 use serde_derive::{Deserialize};
 use std::fs::File;
@@ -220,35 +219,35 @@ fn main() -> mysql::Result<()> {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "MysqlBus", version = env!("CARGO_PKG_VERSION"), author = env!("CARGO_PKG_AUTHORS"), about = "A Mysql server proxy")]
 struct Cli {
-    #[structopt(name = "port", long = "--port", help="弃用")]
-    port: Option<String>,
-
-    #[structopt(name = "username", long = "--user", help="弃用")]
-    user: Option<String>,
-
-    #[structopt(name = "password", long = "--password", help="弃用")]
-    password: Option<String>,
-
-    #[structopt(name = "conns", long = "--conns", help="弃用")]
-    conns: Option<String>,
-
-    #[structopt(name = "musername", long = "--musername", help="弃用")]
-    muser: Option<String>,
-
-    #[structopt(name = "mpassword", long = "--mpassword", help="弃用")]
-    mpassword: Option<String>,
-
-    #[structopt(name = "mport", long = "--mport", help="弃用")]
-    mport: Option<String>,
-
-    #[structopt(name = "min", long = "--min", help="弃用")]
-    min: Option<String>,
-
-    #[structopt(name = "max", long = "--max", help="弃用")]
-    max: Option<String>,
-
-    #[structopt(name = "host_info", long = "--hostinfo", help="弃用")]
-    host_info: Option<String>,
+    // #[structopt(name = "port", long = "--port", help="弃用")]
+    // port: Option<String>,
+    //
+    // #[structopt(name = "username", long = "--user", help="弃用")]
+    // user: Option<String>,
+    //
+    // #[structopt(name = "password", long = "--password", help="弃用")]
+    // password: Option<String>,
+    //
+    // #[structopt(name = "conns", long = "--conns", help="弃用")]
+    // conns: Option<String>,
+    //
+    // #[structopt(name = "musername", long = "--musername", help="弃用")]
+    // muser: Option<String>,
+    //
+    // #[structopt(name = "mpassword", long = "--mpassword", help="弃用")]
+    // mpassword: Option<String>,
+    //
+    // #[structopt(name = "mport", long = "--mport", help="弃用")]
+    // mport: Option<String>,
+    //
+    // #[structopt(name = "min", long = "--min", help="弃用")]
+    // min: Option<String>,
+    //
+    // #[structopt(name = "max", long = "--max", help="弃用")]
+    // max: Option<String>,
+    //
+    // #[structopt(name = "host_info", long = "--hostinfo", help="弃用")]
+    // host_info: Option<String>,
 
     #[structopt(name = "config", long = "--defaults-file", help="指定配置文件, 通过配置文件配置所有项")]
     config: Option<String>,
