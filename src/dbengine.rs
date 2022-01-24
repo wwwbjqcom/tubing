@@ -83,6 +83,7 @@ pub const UTF8MB4_UNICODE_CI: usize = 224;
 //pub const UTF8MB4_0900_AS_CI: usize = 305;
 //pub const UTF8MB4_BIN: usize = 46;
 
+#[derive(Clone, Debug)]
 pub enum PreparePacketType{
     ComStmtPrepare,
     ComStmtExecute,
@@ -92,6 +93,7 @@ pub enum PreparePacketType{
 }
 
 /// packet 类型
+#[derive(Clone, Debug)]
 pub enum PacketType {
     ComQuery,
     ComQuit,

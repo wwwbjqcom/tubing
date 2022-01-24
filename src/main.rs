@@ -4,11 +4,12 @@ mod mysql;
 mod readvalue;
 use structopt::StructOpt;
 use std::fmt;
-
+use chrono::Local;
 use serde_derive::{Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
 use crate::server::mysql_mp::RouteInfo;
+use crate::dbengine::client::ClassUseTimeAll;
 
 /// 存储客户端使用user配置
 ///
@@ -127,6 +128,18 @@ pub fn info_now_time(t: String) -> String {
     // let a = format!("{} end_time: {}", t, now_time);
     let a = format!("{}", t);
     return a;
+}
+
+pub fn get_now_time() -> usize {
+    let dt = Local::now();
+    let now_time = dt.timestamp_millis() as usize;
+    return now_time;
+}
+
+
+pub fn save_class_info_time(master_info: &mut ClassUseTimeAll, sub_info: &mut ClassUseTimeAll){
+    sub_info.end();
+    master_info.append_sub_class(sub_info.clone());
 }
 
 #[derive(Debug)]
