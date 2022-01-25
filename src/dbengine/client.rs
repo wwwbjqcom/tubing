@@ -242,6 +242,7 @@ impl ClientResponse {
 
         debug!("{}",crate::info_now_time(String::from("execute prepare sql")));
         if !self.check_platform_and_conn(handler, &SqlStatement::Prepare, &mut class_use_info).await?{
+            crate::save_class_info_time(class_use_info_all, &mut class_use_info);
             return Ok(())
         }
         handler.platform_pool_on.save_com_platform_state().await;
@@ -253,6 +254,7 @@ impl ClientResponse {
         debug!("{}",crate::info_now_time(String::from("start and mysql response to client")));
         self.send_mysql_response_packet(handler, &buf, &header, &mut class_use_info).await?;
         if buf[0] == 0x00 || buf[0] == 0xff{
+            crate::save_class_info_time(class_use_info_all, &mut class_use_info);
             return Ok(());
         }
 
@@ -315,7 +317,7 @@ impl ClientResponse {
 
     async fn parse_my_sql(&self, sql: &String, class_use_info_all: &mut ClassUseTimeAll) -> Result<(Vec<TableInfo>, SqlStatement, Option<String>, Vec<Statement>)>{
         //记录调用时间部分
-        let mut class_use_info = ClassUseTimeAll::new(String::from("parse_query_packet"));
+        let mut class_use_info = ClassUseTimeAll::new(String::from("parse_my_sql"));
         //
 
         let dialect = MySqlDialect {};
