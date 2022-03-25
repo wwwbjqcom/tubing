@@ -58,6 +58,11 @@ pub fn run(mut config: MyConfig, config_file: String) -> Result<()> {
         .build()
         .unwrap();
 
+
+    //创建各业务后端连接池
+    let (platform_pool, _) = mysql::pool::PlatformPool::new(&config, &config_file)?;
+    debug!("init thread pool success");
+
     // Concurrently run the server and listen for the `shutdown` signal. The
     // server task runs until an error is encountered, so under normal
     // circumstances, this `select!` statement runs until the `shutdown` signal
@@ -91,9 +96,9 @@ pub fn run(mut config: MyConfig, config_file: String) -> Result<()> {
             debug!("get_platform_route: {:?}", &ha_route);
             config.reset_init_config(&ha_route);
         }
-        //创建各业务后端连接池
-        let (platform_pool, _) = mysql::pool::PlatformPool::new(&config, &config_file)?;
-        debug!("init thread pool success");
+        // //创建各业务后端连接池
+        // let (platform_pool, _) = mysql::pool::PlatformPool::new(&config, &config_file)?;
+        // debug!("init thread pool success");
         debug!("init_config: {:?}", &platform_pool.platform_node_info);
         let mut user_pri = AllUserPri::new(&platform_pool);
         user_pri.get_pris().await?;
