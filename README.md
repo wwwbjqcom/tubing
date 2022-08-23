@@ -113,5 +113,5 @@ reload config:   重新读取配置文件并修改， 需要注意的是只有�
  6. 客户端使用的user_info, 多个platform下不能使用相同的用户名
 
 ## 特别提醒
-该工具已在我司生产环境中的主业务上使用很长一段时间，但仅适配好golang、python、java的mysql框架，而且jdbc也仅适配了8.0版本。rust暂时没有完全兼容mysql的语法解析包，tubing中使用的是我用sqlparse-rs修改支持的mysql， 可能有语法未涉及到，如在使用或测试中遇到问题欢迎提issues或者加qq群(479472450)
+该工具已在我司生产环境中的主业务上使用很长一段时间，但仅适配好golang、python、java的mysql框架，而且jdbc也仅适配了8.0版本。rust暂时没有完全兼容mysql的语法解析包，tubing中使用的是我用sqlparse-rs修改支持的mysql， 可能有语法未涉及到，如在使用或测试中遇到问题欢迎提issues
 
